@@ -19,6 +19,7 @@
         "symfony/yaml": "5.1.*"
     },
     "require-dev": {
+        "symfony/phpunit-bridge": "^5.2"
     },
     "config": {
         "optimize-autoloader": true,
