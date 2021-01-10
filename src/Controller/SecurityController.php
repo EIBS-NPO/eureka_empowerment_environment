@@ -12,16 +12,13 @@ use App\Entity\User;
 class SecurityController extends AbstractController
 {
     /**
-     * @Route("/api/login_check", name="/api/login")
+     * @Route("/security/login", name="login")
      * @return JsonResponse
      */
     public function login(): JsonResponse
     {
-        //todo token non stocké, utilisateur non retenu...!
-        return new JsonResponse([
-            "message" =>"connected"
-        ]);
-       /* return new JsonResponse(['token' => $JWTManager->create($user)]);*/
+
+       // return new JsonResponse(['token' => $JWTManager->create($user)]);
     }
 
     /*public function getTokenUser(UserInterface $user, JWTTokenManagerInterface $JWTManager)

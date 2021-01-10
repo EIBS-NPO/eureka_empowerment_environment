@@ -8,10 +8,11 @@ use Doctrine\ORM\Mapping as ORM;
 use App\Repository\UserRepository;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * @ORM\Entity(repositoryClass=UserRepository::class)
- * @UniqueEntity("email")
+ * @UniqueEntity("email", message="this email already exist for user account")
  *
  */
 class User implements UserInterface
@@ -53,23 +54,28 @@ class User implements UserInterface
      */
     private ?string $email;
 
+    //todo regex for french/belgian phone number
     /**
      * @ORM\Column(type="string", length=13, nullable=true)
      */
     private ?string $phone = null;
 
+    //todo regex for french/belgian phone number
     /**
      * @ORM\Column(type="string", length=13, nullable=true)
      */
     private ?string $mobile = null;
 
+    //todo regex check password safety
     /**
      * @ORM\Column(type="string", length=255)
      * @Assert\Length(min="6", max="20",
      *     minMessage="the password must be between 6 and 20 characters",
-     *     maxMessage="the password must be between 6 and 20 characters)
+     *     maxMessage="the password must be between 6 and 20 characters"
+     * )
      * @Assert\Regex(pattern="/^(?=.*[a-z])(?=.*\d).{6,}$/i",
-     *     message="the password must be at least 6 characters long and include at least one letter and one number")
+     *     message="the password must be at least 6 characters long and include at least one letter and one number"
+     * )
      */
     private ?string $password;
 
@@ -81,6 +87,34 @@ class User implements UserInterface
     public function __construct()
     {
         $this->globalPropertyAttributes = new ArrayCollection();
+    }
+
+    /**
+     * Return an array containing object attributes
+     * @return array
+     */
+    public function serialize(): array
+    {
+        $data = [
+            "id" => $this->id,
+            "roles" => $this->roles,
+            "firstname" => $this->firstname,
+            "lastname" => $this->lastname,
+            "email" => $this->email,
+            "phone" => $this->phone,
+            "mobile" => $this->mobile,
+        ];
+
+        //Check some attributes to see if they are sets
+        if($this->phone){
+            $data["phone"] = $this->phone;
+        }
+
+        if($this->mobile){
+            $data["mobile"] = $this->mobile;
+        }
+
+        return $data;
     }
 
     public function getId(): ?int

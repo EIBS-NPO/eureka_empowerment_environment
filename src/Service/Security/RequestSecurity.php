@@ -83,6 +83,9 @@ class RequestSecurity
 
         //Search for forbidden strings in raw data
         $raw = $request->getContent();
+        if($request->getContentType() === "form"){
+            $raw = urldecode($raw);
+        }
 
         foreach ($this->forbiddenStrings as $forbiddenString) {
             if (!(strpos($raw, $forbiddenString) === false)) {
