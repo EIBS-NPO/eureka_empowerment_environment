@@ -50,6 +50,12 @@ class Organization
      */
     private $phone;
 
+    /**
+     * @ORM\ManyToOne(targetEntity=User::class, inversedBy="organizations")
+     * @ORM\JoinColumn(nullable=false)
+     */
+    private $referent;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -99,6 +105,18 @@ class Organization
     public function setPhone(?string $phone): self
     {
         $this->phone = $phone;
+
+        return $this;
+    }
+
+    public function getReferent(): ?User
+    {
+        return $this->referent;
+    }
+
+    public function setReferent(?User $referent): self
+    {
+        $this->referent = $referent;
 
         return $this;
     }

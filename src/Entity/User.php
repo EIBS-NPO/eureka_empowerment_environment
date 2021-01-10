@@ -84,9 +84,15 @@ class User implements UserInterface
      */
     private $globalPropertyAttributes;
 
+    /**
+     * @ORM\OneToMany(targetEntity=Organization::class, mappedBy="referent")
+     */
+    private $organizations;
+
     public function __construct()
     {
         $this->globalPropertyAttributes = new ArrayCollection();
+        $this->organizations = new ArrayCollection();
     }
 
     /**
@@ -246,6 +252,36 @@ class User implements UserInterface
             // set the owning side to null (unless already changed)
             if ($globalPropertyAttribute->getUser() === $this) {
                 $globalPropertyAttribute->setUser(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection|Organization[]
+     */
+    public function getOrganizations(): Collection
+    {
+        return $this->organizations;
+    }
+
+    public function addOrganization(Organization $organization): self
+    {
+        if (!$this->organizations->contains($organization)) {
+            $this->organizations[] = $organization;
+            $organization->setReferent($this);
+        }
+
+        return $this;
+    }
+
+    public function removeOrganization(Organization $organization): self
+    {
+        if ($this->organizations->removeElement($organization)) {
+            // set the owning side to null (unless already changed)
+            if ($organization->getReferent() === $this) {
+                $organization->setReferent(null);
             }
         }
 
