@@ -97,9 +97,11 @@ class User implements UserInterface
 
     /**
      * Return an array containing object attributes
+     * $context allows to give a context to avoid circular references
+     * @param String|null $context
      * @return array
      */
-    public function serialize(): array
+    public function serialize(String $context = null): array
     {
         $data = [
             "id" => $this->id,
@@ -107,8 +109,6 @@ class User implements UserInterface
             "firstname" => $this->firstname,
             "lastname" => $this->lastname,
             "email" => $this->email,
-            "phone" => $this->phone,
-            "mobile" => $this->mobile,
         ];
 
         //Check some attributes to see if they are sets
@@ -118,6 +118,14 @@ class User implements UserInterface
 
         if($this->mobile){
             $data["mobile"] = $this->mobile;
+        }
+
+        //Check some attributes with contexts to see if they are sets
+        if($this->organizations && $context != "read_organization"){
+            $data["organization"] = [];
+            foreach($this->organizations as $org){
+                array_push($data["organization"], $org->serialize("read_referent"));
+            }
         }
 
         return $data;

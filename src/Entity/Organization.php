@@ -56,6 +56,34 @@ class Organization
      */
     private $referent;
 
+    /**
+     * Return an array containing object attributes
+     * $context allows to give a context to avoid circular references
+     * @param String|null $context
+     * @return array
+     */
+    public function serialize(String $context = null): array
+    {
+        $data = [
+            "id" => $this->id,
+            "type" => $this->type,
+            "name" => $this->name,
+            "email" => $this->email
+        ];
+
+        //Check some attributes to see if they are sets
+        if($this->phone){
+            $data["phone"] = $this->phone;
+        }
+
+        //Check some attributes with contexts to see if they are sets
+        if($this->referent && $context != "read_referent"){
+            $data["referent"] = $this->referent->serialize("read_organization");
+        }
+
+        return $data;
+    }
+
     public function getId(): ?int
     {
         return $this->id;

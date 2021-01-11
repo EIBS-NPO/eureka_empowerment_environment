@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\User;
 use App\Exceptions\SecurityException;
+use App\Service\Request\ParametersValidator;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -29,20 +30,20 @@ class UserController extends AbstractController
 
     private EntityManagerInterface $entityManager;
 
-    private ValidatorInterface $validator;
+    private ParametersValidator $paramValidator;
 
     /**
      * UserController constructor.
      * @param RequestSecurity $requestSecurity
      * @param RequestParameters $requestParameters
      * @param EntityManagerInterface $entityManager
-     * @param ValidatorInterface $validator
+     * @param ParametersValidator $paramValidator
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, EntityManagerInterface $entityManager, ValidatorInterface $validator){
+    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, EntityManagerInterface $entityManager, ParametersValidator $paramValidator){
         $this->requestSecurity = $requestSecurity;
         $this->requestParameters = $requestParameters;
+        $this->paramValidator = $paramValidator;
         $this->entityManager = $entityManager;
-        $this->validator = $validator;
     }
 
     /**
@@ -67,14 +68,19 @@ class UserController extends AbstractController
         $data = $this->requestParameters->getData($request);
 
         //request's required Field
-        $requiredFields = ["email","firstname", "lastname", "password", "roles"];
+        $requiredFields = ["email","firstname", "lastname", "password"];
 
         //create user object
         $user = new User();
 
         //Validate fields
         try{
-            $violationsList = $violationsList = $this->fieldsValidation($user, $requiredFields, true, $data);
+            $violationsList = $violationsList = $this->paramValidator->fieldsValidation(
+                "user",
+                $requiredFields,
+                true,
+                $data
+            );
         }catch(Exception $e){
             return new Response(
                 json_encode(["success" => false, "error" => $e->getMessage()]),
@@ -108,6 +114,7 @@ class UserController extends AbstractController
             $entityManager->persist($user);
             $entityManager->flush();
         }catch(Exception $e){
+            //dd($e);
             return new Response(
                 json_encode(["success" => false, "error" => $e->getMessage()]),
                 $e->getCode(),
@@ -130,7 +137,7 @@ class UserController extends AbstractController
      * @param EntityManagerInterface $entityManager
      * @return Response
      */
-    public function getUserData(Request $request, EntityManagerInterface $entityManager): Response
+    public function getUserData(Request $request): Response
     {
         //cleanXSS
         try {
@@ -145,12 +152,12 @@ class UserController extends AbstractController
         //recover parameters of the request in an array $data
         $data = $this->requestParameters->getData($request);
 
-        $userRepository = $entityManager->getRepository(User::class);
+        $userRepository = $this->entityManager->getRepository(User::class);
         try{
             //verifies the existence of userId or email field for query by criteria
-            if(count($data) > 0 && (isset($data['userId']) || isset($data['email']))){
+            if(count($data) > 0 && (isset($data['id']) || isset($data['email']))){
                 $userData = $userRepository->findBy(
-                    isset($data['userId']) ? ['id' => $data['userId']] : ['email' => $data['email']]
+                    isset($data['id']) ? ['id' => $data['id']] : ['email' => $data['email']]
                 );
             }else { //otherwise we return all users
                 $userData = $userRepository->findAll();
@@ -246,13 +253,13 @@ class UserController extends AbstractController
     }
 
     //todo own access & admin
+
     /**
      * @Route("/user/update", methods="put")
      * @param Request $request
-     * @param EntityManagerInterface $entityManager
      * @return Response
      */
-    public function updateUser(Request $request, EntityManagerInterface $entityManager) : Response
+    public function updateUser(Request $request) : Response
     {
         //cleanXSS
         try{
@@ -276,11 +283,10 @@ class UserController extends AbstractController
                 throw new Exception("user id must be numeric", Response::HTTP_BAD_REQUEST);
             }
 
-            $user = $entityManager->getRepository(User::class)->find($data["id"]);
+            $user = $this->entityManager->getRepository(User::class)->find($data["id"]);
             if ($user == null) {
                 throw new Exception("user not found", Response::HTTP_NOT_FOUND);
             }
-         //   else if(gettype($user) == "array"){ $user = $user[0];}
 
         }catch(\Exception $e){
             return new Response(
@@ -293,7 +299,11 @@ class UserController extends AbstractController
         //validation of optional fields
         $optionalFields = ["email","firstname", "lastname", "phone", "mobile"];
         try{
-            $violationsList = $violationsList = $this->fieldsValidation($user, $optionalFields, false, $data);
+            $violationsList = $violationsList = $this->paramValidator->fieldsValidation(
+                "user",
+                $optionalFields,
+                false,
+                $data);
         }catch(Exception $e){
             return new Response(
                 json_encode(["success" => false, "error" => $e->getMessage()]),
@@ -321,8 +331,8 @@ class UserController extends AbstractController
 
         //persist the new user
         try{
-            $entityManager->persist($user);
-            $entityManager->flush();
+            $this->entityManager->persist($user);
+            $this->entityManager->flush();
         }catch(Exception $e){
             return new Response(
                 json_encode(["success" => false, "error" => $e->getMessage()]),
@@ -347,61 +357,4 @@ class UserController extends AbstractController
         //todo switchUserRole with admin Access
     }
 
-    //todo the following private methods will be moved in the future in a service: parametersValidator
-    /**
-     * @param $email
-     * @return bool
-     * @throws Exception
-     */
-    private function checkUniqueEmail($email) {
-     //   if($field == "email" && count($violations) == 0){
-            $res = false;
-            try{
-                $userTest = $this->entityManager->getRepository(User::class)->findBy(["email" => $email]);
-            }
-            catch(\Exception $e){
-                throw new Exception("this email already exist in database for user account", Response::HTTP_BAD_REQUEST);
-            }
-
-            if ($userTest === null) {
-                $res = true;
-            }
-            return $res;
-      //  }
-    }
-
-    //todo the following private methods will be moved in the future in a service: parametersValidator
-    /**
-     * @param User $user
-     * @param array $fields
-     * @param bool $required
-     * @param array $data
-     * @return array
-     * @throws Exception
-     */
-    private function fieldsValidation(User $user, array $fields, bool $required, array $data) : array{
-        $violationsList = [];
-        foreach($fields as $field){
-            $violations = [];
-            if(!isset($data[$field]) && $required){
-                $data[$field] = null;
-            }
-            if(isset($data[$field])){
-                $violations = $this->validator->validatePropertyValue($user, $field, $data[$field]);
-            }
-
-            //unique email validation
-            if($field == "email" && isset($data["email"]) && count($violations) == 0){
-                $this->checkUniqueEmail($data['email']);
-            }
-
-          //  dd($violations);
-            if(count($violations) > 0 ){
-                foreach($violations as $violation){
-                    $violationsList[] = [$violation->getPropertyPath() => $violation->getMessage()];
-                }
-            }
-        }
-        return $violationsList;
-    }
 }
