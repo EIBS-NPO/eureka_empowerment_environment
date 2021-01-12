@@ -5,6 +5,7 @@ namespace App\Service\Request;
 
 
 use App\Entity\Organization;
+use App\Entity\Project;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
@@ -144,6 +145,9 @@ class ParametersValidator
                 break;
             case "Organization":
                 $object = new Organization();
+                break;
+            case "Project":
+                $object = new Project();
                 break;
             default :
                 $object = null;

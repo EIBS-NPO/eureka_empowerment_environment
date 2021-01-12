@@ -89,10 +89,16 @@ class User implements UserInterface
      */
     private $organizations;
 
+    /**
+     * @ORM\OneToMany(targetEntity=Project::class, mappedBy="creator")
+     */
+    private $projects;
+
     public function __construct()
     {
         $this->globalPropertyAttributes = new ArrayCollection();
         $this->organizations = new ArrayCollection();
+        $this->projects = new ArrayCollection();
     }
 
     /**
@@ -121,7 +127,14 @@ class User implements UserInterface
         }
 
         //Check some attributes with contexts to see if they are sets
-        if($this->organizations && $context != "read_organization"){
+        if($this->projects && $context != "read_project" && $context != "read_organization"){
+            $data["projects"] = [];
+            foreach($this->projects as $project){
+                array_push($data["projects"], $project->serialize("read_creator"));
+            }
+        }
+
+        if($this->organizations && $context != "read_organization" && $context != "read_project"){
             $data["organization"] = [];
             foreach($this->organizations as $org){
                 array_push($data["organization"], $org->serialize("read_referent"));
@@ -290,6 +303,36 @@ class User implements UserInterface
             // set the owning side to null (unless already changed)
             if ($organization->getReferent() === $this) {
                 $organization->setReferent(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection|Project[]
+     */
+    public function getProjects(): Collection
+    {
+        return $this->projects;
+    }
+
+    public function addProject(Project $project): self
+    {
+        if (!$this->projects->contains($project)) {
+            $this->projects[] = $project;
+            $project->setCreator($this);
+        }
+
+        return $this;
+    }
+
+    public function removeProject(Project $project): self
+    {
+        if ($this->projects->removeElement($project)) {
+            // set the owning side to null (unless already changed)
+            if ($project->getCreator() === $this) {
+                $project->setCreator(null);
             }
         }
 

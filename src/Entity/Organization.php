@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\OrganizationRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -57,6 +59,16 @@ class Organization
     private $referent;
 
     /**
+     * @ORM\OneToMany(targetEntity=Project::class, mappedBy="organization")
+     */
+    private $projects;
+
+    public function __construct()
+    {
+        $this->projects = new ArrayCollection();
+    }
+
+    /**
      * Return an array containing object attributes
      * $context allows to give a context to avoid circular references
      * @param String|null $context
@@ -79,6 +91,13 @@ class Organization
         //Check some attributes with contexts to see if they are sets
         if($this->referent && $context != "read_referent"){
             $data["referent"] = $this->referent->serialize("read_organization");
+        }
+
+        if($this->projects && $context != "read_project"){
+            $data["projects"] = [];
+            foreach($this->projects as $project){
+                array_push($data["projects"], $project->serialize("read_organization"));
+            }
         }
 
         return $data;
@@ -145,6 +164,36 @@ class Organization
     public function setReferent(?User $referent): self
     {
         $this->referent = $referent;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection|Project[]
+     */
+    public function getProjects(): Collection
+    {
+        return $this->projects;
+    }
+
+    public function addProject(Project $project): self
+    {
+        if (!$this->projects->contains($project)) {
+            $this->projects[] = $project;
+            $project->setOrganization($this);
+        }
+
+        return $this;
+    }
+
+    public function removeProject(Project $project): self
+    {
+        if ($this->projects->removeElement($project)) {
+            // set the owning side to null (unless already changed)
+            if ($project->getOrganization() === $this) {
+                $project->setOrganization(null);
+            }
+        }
 
         return $this;
     }

@@ -3,21 +3,21 @@
 namespace App\Controller;
 
 use App\Entity\Organization;
+use App\Entity\Project;
 use App\Entity\User;
 use App\Exceptions\SecurityException;
 use App\Service\Request\ParametersValidator;
 use App\Service\Request\RequestParameters;
 use App\Service\Security\RequestSecurity;
+use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
-use PhpParser\Node\Param;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\Validator\Validator\ValidatorInterface;
 
-class OrganizationController extends AbstractController
+class ProjectController extends AbstractController
 {
     private RequestSecurity $requestSecurity;
 
@@ -43,7 +43,7 @@ class OrganizationController extends AbstractController
 
     //todo access role?
     /**
-     * @Route("/organization/create", name="create_organization", methods="post")
+     * @Route("/project/create", name="create_project", methods="post")
      * @param Request $request
      * @return Response
      */
@@ -63,19 +63,20 @@ class OrganizationController extends AbstractController
         $data = $this->requestParameters->getData($request);
 
         //request's required & optional Field
-        $requiredFields = ["userId", "type", "name", "email"];
-        $optionalFields = ["phone", "address"];
+        $requiredFields = ["creatorId", "title", "description", "startDate"];
+        $optionalFields = ["endDate", "orgId"];
 
         //validation user's id and recover userObject
+        //todo dispatch in a methods
         try{
-            if (!isset($data['userId'])) {
-                throw new Exception("UserId required for new organization's referent", Response::HTTP_BAD_REQUEST);
+            if (!isset($data['creatorId'])) {
+                throw new Exception("creatorId required for new organization's referent", Response::HTTP_BAD_REQUEST);
             }
-            if(!is_numeric($data['userId'])){
-                throw new Exception("userId must be numeric", Response::HTTP_BAD_REQUEST);
+            if(!is_numeric($data['creatorId'])){
+                throw new Exception("creatorId must be numeric", Response::HTTP_BAD_REQUEST);
             }
 
-            $user = $this->entityManager->getRepository(User::class)->find($data["userId"]);
+            $user = $this->entityManager->getRepository(User::class)->find($data["creatorId"]);
             if ($user == null) {
                 throw new Exception("user not found", Response::HTTP_NOT_FOUND);
             }
@@ -87,13 +88,83 @@ class OrganizationController extends AbstractController
             );
         }
 
-        //create user object
-        $org = new Organization();
+        //validation startDate & convert to date object
+        //todo dispatch in method or a dateService?
+        try{
+            if (!isset($data['startDate'])) {
+                //todo DateTime now()
+                throw new Exception("startDate required for new project", Response::HTTP_BAD_REQUEST);
+            }
+            //^\d\d\d\d-(0?[1-9]|1[0-2])-(0?[1-9]|[12][0-9]|3[01])$
+            if(!preg_match("#^\d\d\d\d-(0?[1-9]|1[0-2])-(0?[1-9]|[12][0-9]|3[01])$#", $data['startDate'])){
+                throw new Exception("the startDate must be in YYYY-MM-DD format", Response::HTTP_BAD_REQUEST);
+            }
+
+            $data['startDate'] = new DateTime ($data["startDate"]);
+
+        }catch(\Exception $e){
+            return new Response(
+                json_encode(["success" => false, "error" => $e->getMessage()]),
+                $e->getCode(),
+                ["Content-Type" => "application/json"]
+            );
+        }
+
+        //validation endDate & convert to date object
+        //todo control period with startDate
+        //todo dispatch in method or a dateService?
+        if (isset($data['endDate'])) {
+            try {
+                if (!preg_match("#^\d\d\d\d-(0?[1-9]|1[0-2])-(0?[1-9]|[12][0-9]|3[01])$#", $data['endDate'])) {
+                    throw new Exception("the endDate must be in YYYY-MM-DD format", Response::HTTP_BAD_REQUEST);
+                }
+
+                $data['endDate'] = new DateTime ($data["endDate"]);
+
+            } catch (\Exception $e) {
+                return new Response(
+                    json_encode(["success" => false, "error" => $e->getMessage()]),
+                    $e->getCode(),
+                    ["Content-Type" => "application/json"]
+                );
+            }
+        }
+
+        //validation orgId & convert to Organization object
+        //todo control period with startDate
+        //todo dispatch in method or a dateService?
+        if (isset($data['orgId'])) {
+            try {
+                if(!is_numeric($data['orgId'])){
+                    throw new Exception("orgId must be numeric", Response::HTTP_BAD_REQUEST);
+                }
+
+                $org = $this->entityManager->getRepository(Organization::class)->find($data["orgId"]);
+                if ($org == null) {
+                    throw new Exception("organization not found", Response::HTTP_NOT_FOUND);
+                }
+
+                $data['organization'] = $org;
+                array_push($optionalFields, "organization");
+                unset($optionalFields['orgId']);
+                unset($data["orgId"]);
+
+            } catch (\Exception $e) {
+                return new Response(
+                    json_encode(["success" => false, "error" => $e->getMessage()]),
+                    $e->getCode(),
+                    ["Content-Type" => "application/json"]
+                );
+            }
+        }
+
+        //create project object
+        $project = new Project();
 
         //Validate required fields
         try{
             $violationsList = $violationsList = $this->paramValidator->fieldsValidation(
-                "organization",
+                "project",
                 $requiredFields,
                 true,
                 $data
@@ -106,12 +177,13 @@ class OrganizationController extends AbstractController
             );
         }
 
+
         //validate optional field
         try{
             $violationsList = array_merge(
                 $violationsList,
                 $violationsList = $this->paramValidator->fieldsValidation(
-                    "organization",
+                    "project",
                     $optionalFields,
                     false,
                     $data)
@@ -134,22 +206,23 @@ class OrganizationController extends AbstractController
         }
 
         //set organization's validated fields
-        $org->setReferent($user);
-        $org->setEmail($data["email"]);
-        $org->setName($data["name"]);
-        $org->setType($data["type"]);
+        $project->setCreator($user);
+        $project->setTitle($data["title"]);
+        $project->setDescription($data["description"]);
+        $project->setStartDate($data["startDate"]);
 
         //set organization's validated optional fields
+        //todo organization (with id)
         foreach($optionalFields as $field){
             if(isset($data[$field])){
                 $setter = "set".ucfirst($field);
-                $org->$setter($data[$field]);
+                $project->$setter($data[$field]);
             }
         }
 
-        //persist the new organization
+        //persist the new project
         try{
-            $this->entityManager->persist($org);
+            $this->entityManager->persist($project);
             $this->entityManager->flush();
         }catch(Exception $e){
             return new Response(
@@ -159,6 +232,7 @@ class OrganizationController extends AbstractController
             );
         }
 
+        //success
         return new Response(
             json_encode(["success" => true]),
             Response::HTTP_OK,
@@ -167,11 +241,11 @@ class OrganizationController extends AbstractController
     }
 
     /**
-     * @Route("/organization", name="get_organization", methods="get")
+     * @Route("/project", name="get_project", methods="get")
      * @param Request $request
      * @return Response
      */
-    public function getOrganization(Request $request){
+    public function getProject(Request $request): Response {
         //cleanXSS
         try {
             $request = $this->requestSecurity->cleanXSS($request);
@@ -185,15 +259,15 @@ class OrganizationController extends AbstractController
         //recover parameters of the request in an array $data
         $data = $this->requestParameters->getData($request);
 
-        $orgRepository = $this->entityManager->getRepository(Organization::class);
+        $projectRepository = $this->entityManager->getRepository(Project::class);
         try{
             //verifies the existence of userId or email field for query by criteria
-            if(count($data) > 0 && (isset($data['id']) || isset($data['email']))){
-                $orgData = $orgRepository->findBy(
-                    isset($data['id']) ? ['id' => $data['id']] : ['email' => $data['email']]
-                );
+            if(count($data) > 0 && (isset($data['creatorId']) || isset($data['orgId']))){
+                if(isset($data["creatorId"])){$criteria = ['creatorId' => $data['creatorId']];}
+                elseif(isset($data["orgId"])){$criteria = ['organizationId' => $data['orgId']];}
+                $projectData = $projectRepository->findBy($criteria);
             }else { //otherwise we return all users
-                $orgData = $orgRepository->findAll();
+                $projectData = $projectRepository->findAll();
             }
         }
         catch(\Exception $e){
@@ -205,14 +279,14 @@ class OrganizationController extends AbstractController
         }
 
         //serialize all found userObject
-        if (count($orgData) > 0 ) {
-            foreach($orgData as $key => $org){
-                $orgData[$key] = $org->serialize("read_organization");
+        if (count($projectData) > 0 ) {
+            foreach($projectData as $key => $project){
+                $projectData[$key] = $project->serialize("read_project");
             }
         }
         else {
             return new Response(
-                json_encode(["success" => false, "error" => "Organization Not Found"]),
+                json_encode(["success" => false, "error" => "User Not Found"]),
                 Response::HTTP_NOT_FOUND,
                 ["Content-Type" => "application/json"]
             );
@@ -220,7 +294,7 @@ class OrganizationController extends AbstractController
 
         //success
         return new Response(
-            json_encode(["success" => true, "data" => $orgData]),
+            json_encode(["success" => true, "data" => $projectData]),
             Response::HTTP_OK,
             ["content-type" => "application/json"]
         );
