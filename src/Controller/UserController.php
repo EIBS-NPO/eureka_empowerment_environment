@@ -6,7 +6,9 @@ use App\Entity\User;
 use App\Exceptions\SecurityException;
 use App\Service\Request\ParametersValidator;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\ORMException;
 use Exception;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use App\Service\Security\RequestSecurity;
@@ -33,33 +35,40 @@ class UserController extends AbstractController
     private ParametersValidator $paramValidator;
 
     /**
+     * @var LoggerInterface
+     */
+    private LoggerInterface $logger;
+
+    /**
      * UserController constructor.
      * @param RequestSecurity $requestSecurity
      * @param RequestParameters $requestParameters
      * @param EntityManagerInterface $entityManager
      * @param ParametersValidator $paramValidator
+     * @param LoggerInterface $logger
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, EntityManagerInterface $entityManager, ParametersValidator $paramValidator){
+    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, EntityManagerInterface $entityManager, ParametersValidator $paramValidator, LoggerInterface $logger){
         $this->requestSecurity = $requestSecurity;
         $this->requestParameters = $requestParameters;
         $this->paramValidator = $paramValidator;
         $this->entityManager = $entityManager;
+        $this->logger = $logger;
     }
 
     /**
      * @Route("/user/register", name="register", methods="post")
      * @param Request $request
-     * @param EntityManagerInterface $entityManager
      * @param UserPasswordEncoderInterface $encoder
      * @return Response
      */
-    public function register(Request $request, EntityManagerInterface $entityManager, UserPasswordEncoderInterface $encoder): Response
+    public function register(Request $request, UserPasswordEncoderInterface $encoder): Response
     {
         try{
             $request = $this->requestSecurity->cleanXSS($request);
-        }catch(SecurityException $exception){
+        }catch(SecurityException $e){
+            $this->logger->warning($e);
             return new Response(
-                json_encode(["success" => false, "error" => "Potential attack has been detected"]),
+                json_encode(["error" => "ACCESS_FORBIDDEN"]),
                 Response::HTTP_FORBIDDEN,
                 ["Content-Type" => "application/json"]);
         }
@@ -67,33 +76,28 @@ class UserController extends AbstractController
         //place all parameters of the request in an array $data
         $data = $this->requestParameters->getData($request);
 
-        //request's required Field
-        $requiredFields = ["email","firstname", "lastname", "password"];
-
         //create user object
         $user = new User();
 
         //Validate fields
+     //   $this->paramValidator->initValidator($user, $data);
+        $this->paramValidator->initValidator(["email","firstname", "lastname", "password"],null,User::class, $data);
         try{
-            $violationsList = $violationsList = $this->paramValidator->fieldsValidation(
-                "user",
-                $requiredFields,
-                true,
-                $data
-            );
-        }catch(Exception $e){
-            return new Response(
-                json_encode(["success" => false, "error" => $e->getMessage()]),
-                Response::HTTP_BAD_REQUEST,
-                ["Content-Type" => "application/json"]
-            );
-        }
+            $violationsList = $this->paramValidator->checkViolations();
 
-        //return violations
-        if( count($violationsList) > 0 ){
+            //return violations //todo simple message for the front?
+            if( count($violationsList) > 0 ){
+                return new Response(
+                    json_encode(["error" => $violationsList]),
+                    Response::HTTP_BAD_REQUEST,
+                    ["Content-Type" => "application/json"]
+                );
+            }
+        }catch(Exception $e){
+            $this->logger->Error($e->getMessage());
             return new Response(
-                json_encode(["success" => false, "error" => $violationsList]),
-                Response::HTTP_BAD_REQUEST,
+                json_encode(["error" => "SERVER_ERROR"]),
+                $e->getCode(),
                 ["Content-Type" => "application/json"]
             );
         }
@@ -102,27 +106,29 @@ class UserController extends AbstractController
         $user->setFirstname($data['firstname']);
         $user->setLastname($data['lastname']);
         $user->setEmail($data['email']);
-        $user->setRoles(["ROLE_USER"]);
         $user->setPassword($data['password']);
 
         //hash password
         $hash = $encoder->encodePassword($user, $user->getPassword());
         $user->setPassword($hash);
 
+        $user->setRoles(["ROLE_USER"]);
+
         //persist the new user
         try{
-            $entityManager->persist($user);
-            $entityManager->flush();
+            $this->entityManager->persist($user);
+            $this->entityManager->flush();
         }catch(Exception $e){
-            //dd($e);
+            $this->logger->warning($e);
             return new Response(
-                json_encode(["success" => false, "error" => $e->getMessage()]),
+                json_encode(["error" => "ERROR_SERVER"]),
                 $e->getCode(),
                 ["Content-Type" => "application/json"]
             );
         }
 
         //success
+        $this->logger->info("new User registerd with id : " .$user->getId());
         return new Response(
             json_encode(["success" => true]),
             Response::HTTP_OK,
@@ -130,129 +136,56 @@ class UserController extends AbstractController
         );
     }
 
-    //todo add access Owne (& admin ?)
     /**
-     * @Route("/user", name="getUser", methods="get")
+     * @Route("/user", name="getUserProfile", methods="get")
      * @param Request $request
-     * @param EntityManagerInterface $entityManager
      * @return Response
      */
-    public function getUserData(Request $request): Response
+    public function getUserProfile(Request $request): Response
     {
         //cleanXSS
         try {
             $request = $this->requestSecurity->cleanXSS($request);
         }catch(\Exception $e) {
+            $this->logger->warning($e);
             return new Response(
-                json_encode(["success" => false, "error" => "Potential attack has been detected"]),
+                json_encode(["error" => "ACCESS_FORBIDDEN"]),
                 Response::HTTP_FORBIDDEN,
                 ["Content-Type" => "application/json"]);
         }
 
-        //recover parameters of the request in an array $data
-        $data = $this->requestParameters->getData($request);
-
         $userRepository = $this->entityManager->getRepository(User::class);
         try{
-            //verifies the existence of userId or email field for query by criteria
-            if(count($data) > 0 && (isset($data['id']) || isset($data['email']))){
-                $userData = $userRepository->findBy(
-                    isset($data['id']) ? ['id' => $data['id']] : ['email' => $data['email']]
-                );
-            }else { //otherwise we return all users
-                $userData = $userRepository->findAll();
-            }
+            $userData = $userRepository->findBy(["id" => $this->getUser()->getId()]);
         }
         catch(\Exception $e){
+            $this->logger->error($e);
             return new Response(
-                json_encode(["success" => false, "error" => $e->getMessage()]),
+                json_encode(["error" => "ERROR_SERVER"]),
                 $e->getCode(),
                 ["Content-Type" => "application/json"]
             );
         }
 
-        //serialize all found userObject
+        //serialize found userObject
         if (count($userData) > 0 ) {
-            foreach($userData as $key => $user){
-                $userData[$key] = $user->serialize();
-            }
+            $userData = $userData[0]->serialize();
         }
         else {
+            $this->logger->error(Response::HTTP_NOT_FOUND . " | User with " . $this->getUser()->getId() . " Not found.");
             return new Response(
-                json_encode(["success" => false, "error" => "User Not Found"]),
+                json_encode(["error" => "User Not Found"]),
                 Response::HTTP_NOT_FOUND,
                 ["Content-Type" => "application/json"]
             );
         }
 
         return new Response(
-            json_encode(["success" => true, "data" => $userData]),
+            json_encode(["data" => $userData]),
             Response::HTTP_OK,
             ["content-type" => "application/json"]
         );
     }
-
-    /**
-     * @Route("/admin/user/delete", methods="delete")
-     * @param Request $request
-     * @return Response
-     */
-    public function deleteUser(Request $request):Response
-    {
-        try{
-            $request = $this->requestSecurity->cleanXSS($request);
-        }catch(SecurityException $exception){
-            return new Response(
-                json_encode(["success" => false, "error" => "Potential attack has been detected"]),
-                Response::HTTP_FORBIDDEN,
-                ["Content-Type" => "application/json"]);
-        }
-
-        //recover parameters of the request in an array $data
-        $data = $this->requestParameters->getData($request);
-
-        //validation user's id and recover userObject
-        try{
-            if (!isset($data['id'])) {
-                throw new Exception("User id required for update user profil", Response::HTTP_BAD_REQUEST);
-            }
-            if(!is_numeric($data['id'])){
-                throw new Exception("user id must be numeric", Response::HTTP_BAD_REQUEST);
-            }
-
-            $user = $this->entityManager->getRepository(User::class)->find($data["id"]);
-            if ($user == null) {
-                throw new Exception("user not found", Response::HTTP_NOT_FOUND);
-            }
-        }catch(\Exception $e){
-            return new Response(
-                json_encode(["success" => false, "error" => $e->getMessage()]),
-                $e->getCode(),
-                ["Content-Type" => "application/json"]
-            );
-        }
-
-        //deleting the user
-        try{
-            $this->entityManager->remove($user);
-            $this->entityManager->flush();
-        }catch (\Exception $e){
-            return new Response(
-                json_encode(["success" => false, "error" => $e->getMessage()]),
-                $e->getCode(),
-                ["Content-Type" => "application/json"]
-            );
-        }
-
-        //success
-        return new Response(
-            json_encode(["success" => true, "message" => "The user has been deleted"]),
-            Response::HTTP_OK,
-            ["Content-Type" => "application/json"]
-        );
-    }
-
-    //todo own access & admin
 
     /**
      * @Route("/user/update", methods="put")
@@ -264,9 +197,10 @@ class UserController extends AbstractController
         //cleanXSS
         try{
             $request = $this->requestSecurity->cleanXSS($request);
-        }catch(SecurityException $exception){
+        }catch(SecurityException $e){
+            $this->logger->warning($e);
             return new Response(
-                json_encode(["success" => false, "error" => "Potential attack has been detected"]),
+                json_encode(["error" => "ACCESS_FORBIDDEN"]),
                 Response::HTTP_FORBIDDEN,
                 ["Content-Type" => "application/json"]);
         }
@@ -275,22 +209,21 @@ class UserController extends AbstractController
         $data = $this->requestParameters->getData($request);
 
         //validation user's id and recover userObject
+        $userRepository = $this->entityManager->getRepository(User::class);
         try{
-            if (!isset($data['id'])) {
-                throw new Exception("User id required for update user profil", Response::HTTP_BAD_REQUEST);
-            }
-            if(!is_numeric($data['id'])){
-                throw new Exception("user id must be numeric", Response::HTTP_BAD_REQUEST);
-            }
-
-            $user = $this->entityManager->getRepository(User::class)->find($data["id"]);
+            $user = $userRepository->find($this->getUser()->getId());
             if ($user == null) {
-                throw new Exception("user not found", Response::HTTP_NOT_FOUND);
+                $this->logger->error(Response::HTTP_NOT_FOUND . " | User with " . $this->getUser()->getId() . " Not found.");
+                return new Response(
+                    json_encode(["error" => "user not found"]),
+                    Response::HTTP_NOT_FOUND,
+                    ["Content-Type" => "application/json"]
+                );
             }
-
-        }catch(\Exception $e){
+        }catch(Exception $e){
+            $this->logger->error($e);
             return new Response(
-                json_encode(["success" => false, "error" => $e->getMessage()]),
+                json_encode(["error" => "ERROR_SERVER"]),
                 $e->getCode(),
                 ["Content-Type" => "application/json"]
             );
@@ -298,16 +231,14 @@ class UserController extends AbstractController
 
         //validation of optional fields
         $optionalFields = ["email","firstname", "lastname", "phone", "mobile"];
+        $this->paramValidator->initValidator(null,$optionalFields,User::class, $data);
         try{
-            $violationsList = $violationsList = $this->paramValidator->fieldsValidation(
-                "user",
-                $optionalFields,
-                false,
-                $data);
+            $violationsList = $this->paramValidator->checkViolations();
         }catch(Exception $e){
+            $this->logger->error($e);
             return new Response(
-                json_encode(["success" => false, "error" => $e->getMessage()]),
-                Response::HTTP_BAD_REQUEST,
+                json_encode(["error" => "ERROR_SERVER"]),
+                Response::HTTP_INTERNAL_SERVER_ERROR,
                 ["Content-Type" => "application/json"]
             );
         }
@@ -329,32 +260,25 @@ class UserController extends AbstractController
             }
         }
 
-        //persist the new user
+        //persist updated user
         try{
-            $this->entityManager->persist($user);
             $this->entityManager->flush();
         }catch(Exception $e){
+            $this->logger->error($e);
             return new Response(
-                json_encode(["success" => false, "error" => $e->getMessage()]),
+                json_encode(["error" => "ERROR_SERVER"]),
                 $e->getCode(),
                 ["Content-Type" => "application/json"]
             );
         }
 
         //success
+        $this->logger->info("User with id : " .$user->getId(). " successfully updated");
         return new Response(
-            json_encode(["success" => true, "data" => $user->serialize()]),
+            //todo logEvent
+            json_encode(["data" => $user->serialize()]),
             Response::HTTP_OK,
             ["Content-Type" => "application/json"]
         );
     }
-
-    /**
-     * @param $user
-     * @param $role
-     */
-    public function switchUserRole($user, $role){
-        //todo switchUserRole with admin Access
-    }
-
 }
