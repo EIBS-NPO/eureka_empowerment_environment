@@ -11,6 +11,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * @ORM\Entity(repositoryClass=OrganizationRepository::class)
+ * @UniqueEntity("name", message="this organization name already exist")
  */
 class Organization
 {
@@ -32,7 +33,7 @@ class Organization
     private $type;
 
     /**
-     * @ORM\Column(type="string", length=50)
+     * @ORM\Column(type="string", length=50, unique=true)
      * @Assert\NotBlank(message="the firstname is required")
      * @Assert\Length(min="2", max="50",
      *     minMessage="the firstname must be at least 2 characters long",
@@ -93,7 +94,7 @@ class Organization
             $data["referent"] = $this->referent->serialize("read_organization");
         }
 
-        if($this->projects && $context != "read_project"){
+        if($this->projects && $context != "read_project" && $context != "read_organization"){
             $data["projects"] = [];
             foreach($this->projects as $project){
                 array_push($data["projects"], $project->serialize("read_organization"));
