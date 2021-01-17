@@ -9,7 +9,7 @@ use App\Entity\Project;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
-use Symfony\Component\HttpFoundation\Response;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class ParametersValidator
@@ -18,66 +18,77 @@ class ParametersValidator
 
     private EntityManagerInterface $entityManager;
 
-    private array $paramIgnore = [];
-
     /**
-     * description of paramters required for the request
-     * @var array
+     * @var array|null
      */
-    private array $paramRequire = [];
+    private ?array $requiredFields = [];
 
+    private ?array $optionalFields = [];
 
     private array $paramRequest = [];
 
-    private $classInstance;
+    private String $className;
+
+    private LoggerInterface $logger;
 
     /**
-     * ErrorsList for throw Exception
-     * @var array
+     * ParametersValidator constructor.
+     * @param ValidatorInterface $validator
+     * @param EntityManagerInterface $entityManager
+     * @param LoggerInterface $logger
      */
-    private array $errors = [];
-
-    public function __construct(ValidatorInterface $validator, EntityManagerInterface $entityManager){
+    public function __construct(ValidatorInterface $validator, EntityManagerInterface $entityManager, LoggerInterface $logger){
         $this->validator = $validator;
         $this->entityManager = $entityManager;
+        $this->logger = $logger;
     }
 
-    /*private function isRequirePresent(){
-        foreach($this->paramRequire as $paramName => $paramType){
-            if(!array_key_exists($paramName, $this->paramRequest)){
-                $errors[] = "Param missed : $paramName : $paramType";
+    /**
+     * @param array|null $requiredFields
+     * @param array|null $optionalFields
+     * @param $className
+     * @param $paramRequest
+     */
+    public function initValidator(?array $requiredFields, ?array $optionalFields, $className, $paramRequest) :void{
+        $this->requiredFields = $requiredFields;
+        $this->optionalFields = $optionalFields;
+        $this->className = $className;
+        $this->paramRequest = $paramRequest;
+    }
+
+    /**
+     * @return array
+     * @throws Exception
+     */
+    public function checkViolations() :array{
+        $object = $this->instanceClass($this->className);
+        $violations = [];
+        try {
+            if($this->requiredFields != null && count($this->requiredFields) > 0){
+                $violations = $this->fieldsValidation($object, $this->requiredFields, true, $this->paramRequest);
             }
+            if($this->optionalFields != null && count($this->optionalFields) > 0){
+                array_merge($violations, $this->fieldsValidation($object, $this->optionalFields, false, $this->paramRequest));
+            }
+        } catch (Exception $e) {
+            throw new Exception($e->getMessage(), $e->getCode());
         }
-    }
 
-    private function isParamValid(){
-        if(gettype($this->paramRequire[$paramName]) !== $paramType ){
-            $errors[] = "wrong type parameters for $paramName, given :" . gettype($this->paramRequire[$paramName]) . ", expected : $paramType";
-        }
+        return $violations;
     }
-
-    public function setParamIgnore(array $params){
-        $this->paramIgnore = $params;
-    }
-
-    public function setParamRequire(array $params){
-        $this->paramRequire = $params;
-    }
-
-    public function setEntityClass($instance){
-        $this->classInstance = $instance;
-    }*/
 
     //todo the following private methods will be moved in the future in a service: parametersValidator
+
     /**
-     * @param $email
+     * @param String $fieldName
+     * @param $fieldValue
      * @return bool
      * @throws Exception
      */
-    private function checkUniqueEmail($email) {
+    private function checkUniqueField(String $fieldName, $fieldValue) {
         $res = true;
         try{
-            $userTest = $this->entityManager->getRepository(User::class)->findBy(["email" => $email]);
+            $userTest = $this->entityManager->getRepository($this->className)->findBy([$fieldName => $fieldValue]);
         }
         catch(\Exception $e){
             throw new Exception($e->getMessage(), $e->getCode());
@@ -92,37 +103,51 @@ class ParametersValidator
     //todo the following private methods will be moved in the future in a service: parametersValidator
 
     /**
-     * @param String $className
+     * @param $object
      * @param array $fields
      * @param bool $required
      * @param array $data
      * @return array
      * @throws Exception
      */
-    public function fieldsValidation(String $className, array $fields, bool $required, array $data) : array{
-        //todo hand object Field
-        $object = $this->instanceClass($className);
+    public function fieldsValidation($object, array $fields, bool $required, array $data) : array{
         $violationsList = [];
         foreach($fields as $field){
             $violations = [];
             if(!isset($data[$field]) && $required){
-                $data[$field] = null;
+                $data[$field] = "";
             }
             if(isset($data[$field])){
                 $violations = $this->validator->validatePropertyValue($object, $field, $data[$field]);
             }
 
-            if($field == "email" && isset($data["email"]) && count($violations) == 0){
-                if($this->checkUniqueEmail($data['email']) == false){
-                    $violationsList = array_merge(
-                        $violationsList,
-                        ["email" => "this email already exist in database for user account"]
-                    );
+            if($this->className == "App\Entity\User"){
+                if($field == "email" && isset($data["email"]) && count($violations) == 0){
+                    if($this->checkUniqueField('email', $data['email']) == false){
+                        $this->logger->info("this email already exist in database for user account");
+                        $violationsList = array_merge(
+                            $violationsList,
+                            ["email" => "this email already exist in database for user account"]
+                        );
+                    }
+                }
+            }
+            if($this->className == "App\Entity\Organization"){
+                if($field == "name" && isset($data["name"]) && count($violations) == 0){
+                    if($this->checkUniqueField('name', $data['name']) == false){
+                        $this->logger->info("this organization's name already exist in database");
+                        $violationsList = array_merge(
+                            $violationsList,
+                            ["name" => "this organization's name already exist in database"]
+                        );
+                    }
                 }
             }
 
+
             if(count($violations) > 0 ){
                 foreach($violations as $violation){
+                    $this->logger->info($violation);
                     $violationsList = array_merge(
                         $violationsList,
                         [$violation->getPropertyPath() => $violation->getMessage()]
@@ -139,14 +164,14 @@ class ParametersValidator
      * @return Organization|User|null
      */
     private function instanceClass(String $className){
-        switch(ucfirst($className)){
-            case "User":
+        switch($className){
+            case "App\Entity\User":
                 $object  = new User();
                 break;
-            case "Organization":
+            case "App\Entity\Organization":
                 $object = new Organization();
                 break;
-            case "Project":
+            case "App\Entity\Project":
                 $object = new Project();
                 break;
             default :
