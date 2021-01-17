@@ -104,7 +104,6 @@ class resetPassword extends Command
 
         try {
             $user->setPassword($this->passwordEncoder->encodePassword($user, $password));
-            $user->setFirstname("Bobo");
             $this->entityManager->flush();
         } catch (\Exception $e) {
             $output->writeln("An error occurred : ".$e->getMessage());
