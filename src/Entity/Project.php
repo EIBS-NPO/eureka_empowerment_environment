@@ -77,13 +77,16 @@ class Project
             "id" => $this->id,
             "title" => $this->title,
             "description" => $this->description,
-            "creator" => $this->creator->serialize("read_project"),
-            "startDate" => $this->startDate->format('y-m-d')
+            "startDate" => $this->startDate->format('Y-m-d')
         ];
 
         //Check some attributes to see if they are sets
         if($this->endDate){
-            $data["endDate"] = $this->endDate->format('y-m-d');
+            $data["endDate"] = $this->endDate->format('Y-m-d');
+        }
+
+        if($context != "read_by_creator"){
+            $data["creator"] = $this->creator->serialize("read_project");
         }
 
         //Check some attributes with contexts to see if they are sets
