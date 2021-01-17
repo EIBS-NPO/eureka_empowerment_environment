@@ -10,11 +10,23 @@ class RequestParameters
 {
     private array $data = [];
 
+    //todo get query
     public function getData(Request $request){
+
+        switch($request->getMethod()){
+            case "GET":
+               // dd($request->query->all());
+                $this->data = array_merge($this->data, $request->query->all());
+                break;
+            case "POST":
+               // dd($request->request->all());
+                $this->data = array_merge($this->data, $request->request->all());
+                break;
+        }
 
         //extract body data
         switch($request->getContentType()){
-            case "form": //todo regex for validate x-www-urlEncoded format
+            case "form":
                     $this->extractFormContent($request->getContent());
                 break;
             case "json":
