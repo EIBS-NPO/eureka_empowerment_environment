@@ -61,6 +61,11 @@ class Project
     private $organization;
 
     /**
+     * @ORM\Column(type="boolean")
+     */
+    private $isPublic;
+
+    /**
      * Return an array containing object attributes
      * $context allows to give a context to avoid circular references
      * @param String|null $context
@@ -164,6 +169,18 @@ class Project
     public function setOrganization(?Organization $organization): self
     {
         $this->organization = $organization;
+
+        return $this;
+    }
+
+    public function getIsPublic(): ?bool
+    {
+        return $this->isPublic;
+    }
+
+    public function setIsPublic(bool $isPublic): self
+    {
+        $this->isPublic = $isPublic;
 
         return $this;
     }
