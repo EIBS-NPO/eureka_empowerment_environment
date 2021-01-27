@@ -19,6 +19,8 @@ use Symfony\Component\Validator\ConstraintViolationListInterface;
 
 /**
  * Class CommonController
+ * Manages common methods for all other controllers that must inherit them
+ * Supports services whose logging, sending queries, capturing errors and determining responses to return.
  * @package App\Controller
  * @author Thierry FAUCONNIER <th.fauconnier@outlook.fr>
  */
@@ -35,16 +37,33 @@ class CommonController extends AbstractController
     private LoggerInterface $logger;
 
     /**
-     * Attributes
+     * @var Response|null
+     * Methods that can create a response should store it here and return a boolean to indicate the existence of the response.
      */
     protected ?Response $response;
 
-    protected ?Request $request;
+    /**
+     * @var Request
+     * The request a secure faith of XSS risks must be stored here.
+     */
+    protected Request $request;
 
+    /**
+     * @var array
+     * The RequestParameters call must store the query parameters of any type in the dataRequest array. Queries will use this data to define their sending
+     */
     protected array $dataRequest;
 
+    /**
+     * @var array
+     * The data of the sent requests are stored in this table. Each new data will overwrite the previous one. Methods that return data, must return a booleen indicating their existence here.
+     */
     protected array $dataResponse;
 
+    /**
+     * @var array
+     * Storage of dynamic Event message construction for LogEvent Service
+     */
     protected array $eventInfo;
 
     /**
@@ -121,7 +140,7 @@ class CommonController extends AbstractController
         return $entities;
     }
 
-    //todo not really useful
+    //todo not really useful? check it
     /**
      * @param $fields
      * @param $className
@@ -253,7 +272,6 @@ class CommonController extends AbstractController
         return isset($this->response);
     }
 
-    //todo dispatch to paramValidator
     /**
      * @param array $criterias
      * @return bool
@@ -313,8 +331,6 @@ class CommonController extends AbstractController
     public function serverErrorResponse(Exception $e, String $logInfo) :void
     {
         $logInfo .= $logInfo . " | FAILED | ";
-        //todo string cast sur array impossible
-        //$this->logger->log("error",$logInfo . (string)$e->getTrace());
         $this->logger->log("error",$logInfo . $e);
 
         $this->response = new Response(
