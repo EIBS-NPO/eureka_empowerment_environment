@@ -15,8 +15,9 @@ class Project
      * @ORM\Id
      * @ORM\GeneratedValue
      * @ORM\Column(type="integer")
+     * @Assert\Type(type="integer", message="The id is not valid")
      */
-    private $id;
+    private ?int $id;
 
     /**
      * @ORM\Column(type="string", length=50)
@@ -25,7 +26,7 @@ class Project
      *     minMessage="the firstname must be at least 2 characters long",
      *     maxMessage="the firstname must not exceed 50 characters")
      */
-    private $title;
+    private ?string $title;
 
     /**
      * @ORM\Column(type="string", length=255)
@@ -34,36 +35,39 @@ class Project
      *     minMessage="the firstname must be at least 2 characters long",
      *     maxMessage="the firstname must not exceed 255 characters")
      */
-    private $description;
+    private ?string $description;
 
+    //todo add zone horaire
     /**
      * @ORM\Column(type="date")
      * @Assert\NotBlank(message="the startDate is required")
-     * @Assert\Type(type="DateTime", message= "the date must be in the format YYYY-mm-dd")
+     * @Assert\Type(type={"DateTime", "Y-m-d"}, message= "the date must be in the format YYYY-mm-dd")
+     * @Assert\GreaterThanOrEqual("today", message="start date must be today or greater date")
      */
-    private $startDate;
+    private ?\DateTimeInterface $startDate;
 
     /**
      * @ORM\Column(type="date", nullable=true)
-     * @Assert\Type(type="DateTime", message= "the date must be a DateTime Object")
+     * @Assert\Type(type={"DateTime", "Y-m-d"}, message= "the date must be a DateTime Object")
+     * @Assert\GreaterThan(propertyPath="startDate", message="end date must be greater than start date")
      */
-    private $endDate;
+    private ?\DateTimeInterface $endDate = null;
 
     /**
      * @ORM\ManyToOne(targetEntity=User::class, inversedBy="projects")
      * @ORM\JoinColumn(nullable=false)
      */
-    private $creator;
+    private ?User $creator;
 
     /**
      * @ORM\ManyToOne(targetEntity=Organization::class, inversedBy="projects")
      */
-    private $organization;
+    private ?Organization $organization = null;
 
     /**
      * @ORM\Column(type="boolean")
      */
-    private $isPublic;
+    private ?bool $isPublic;
 
     /**
      * Return an array containing object attributes
