@@ -15,7 +15,7 @@ class Project
      * @ORM\Id
      * @ORM\GeneratedValue
      * @ORM\Column(type="integer")
-     * @Assert\Type(type="integer", message="The id is not valid")
+     * @Assert\Type(type="numeric", message=" id is not valid")
      */
     private ?int $id;
 

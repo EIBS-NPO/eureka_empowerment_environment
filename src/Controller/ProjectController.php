@@ -19,7 +19,7 @@ class ProjectController extends CommonController
     //todo access role?
     /**
      * @Route("", name="_post", methods="post")
-     * @param Request $request
+     * @param Request $insecureRequest
      * @return Response
      * @throws \Exception
      */
