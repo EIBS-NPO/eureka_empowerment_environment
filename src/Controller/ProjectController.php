@@ -4,507 +4,226 @@ namespace App\Controller;
 
 use App\Entity\Organization;
 use App\Entity\Project;
-use App\Entity\User;
-use App\Exceptions\SecurityException;
-use App\Service\Request\ParametersValidator;
-use App\Service\Request\RequestParameters;
-use App\Service\Security\RequestSecurity;
 use DateTime;
-use Doctrine\ORM\EntityManagerInterface;
-use Exception;
-use Psr\Log\LoggerInterface;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
-class ProjectController extends AbstractController
+/**
+ * Class ProjectController
+ * @package App\Controller
+ * @Route("/project", name="project")
+ */
+class ProjectController extends CommonController
 {
-    private RequestSecurity $requestSecurity;
-
-    private RequestParameters $requestParameters;
-
-    private EntityManagerInterface $entityManager;
-
-    private ParametersValidator $paramValidator;
-    /**
-     * @var LoggerInterface
-     */
-    private LoggerInterface $logger;
-
-    /**
-     * UserController constructor.
-     * @param RequestSecurity $requestSecurity
-     * @param RequestParameters $requestParameters
-     * @param EntityManagerInterface $entityManager
-     * @param ParametersValidator $paramValidator
-     */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, EntityManagerInterface $entityManager, ParametersValidator $paramValidator, LoggerInterface $logger){
-        $this->requestSecurity = $requestSecurity;
-        $this->requestParameters = $requestParameters;
-        $this->entityManager = $entityManager;
-        $this->paramValidator = $paramValidator;
-        $this->logger = $logger;
-    }
-
     //todo access role?
     /**
-     * @Route("/project/create", name="create_project", methods="post")
+     * @Route("", name="_post", methods="post")
      * @param Request $request
      * @return Response
+     * @throws \Exception
      */
-    public function create(Request $request): Response
+    public function create(Request $insecureRequest): Response
     {
         //cleanXSS
-        try{
-            $request = $this->requestSecurity->cleanXSS($request);
-        }catch(SecurityException $e){
-            $this->logger->warning($e);
-            return new Response(
-                json_encode(["error" => "ACCESS_FORBIDDEN"]),
-                Response::HTTP_FORBIDDEN,
-                ["Content-Type" => "application/json"]);
-        }
+        if($this->cleanXSS($insecureRequest)
+        ) return $this->response;
 
-        //recover parameters of the request in an array $data
-        $data = $this->requestParameters->getData($request);
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+        $this->dataRequest = array_merge($this->dataRequest, ["creator" => $this->getUser()]);
+        $this->dataRequest = array_merge($this->dataRequest, ["isPublic" => false]);
 
-        //validation orgId & convert to Organization object
-        if (isset($data['orgId'])) {
-            try {
-                if(!is_numeric($data['orgId'])){
-                    throw new Exception("orgId must be numeric", Response::HTTP_BAD_REQUEST);
-                }
+        //optional link with an organization : validation orgId & convert to Organization object
+        if (isset($this->dataRequest['orgId'])) {
+            $this->dataRequest["id"] = $this->dataRequest['orgId'];
+            //Validate fields
+            if($this->checkViolations(
+                null,
+                ["id"],
+                Organization::class)
+            ) return $this->response;
 
-                $org = $this->entityManager->getRepository(Organization::class)->find($data["orgId"]);
-                if ($org == null) {
-                    throw new Exception("organization not found", Response::HTTP_NOT_FOUND);
-                }
+            //todo recupe l'org avec id ET check si Id user lié relation member!
+            if($this->getEntities(Organization::class, ["id"] )) return $this->response;
 
-                $data['organization'] = $org;
-                array_push($optionalFields, "organization");
-                unset($optionalFields['orgId']);
-                unset($data["orgId"]);
-
-            } catch (\Exception $e) {
-                $this->logger->error($e);
-                return new Response(
-                    json_encode(["error" => "BAD_REQUEST"]),
-                    Response::HTTP_BAD_REQUEST,
-                    ["Content-Type" => "application/json"]
-                );
+            if(!empty($this->dataResponse)){
+                $this->dataRequest['organization'] = $this->dataResponse[0];
+                unset($this->dataRequest["orgId"]);
+            }else {
+                $this->notFoundResponse();
             }
         }
 
-        //validation user's id and recover userObject
-        try{
-            $user = $this->entityManager->getRepository(User::class)->find($this->getUser()->getId());
-            if ($user == null) {
-                return new Response(
-                    json_encode(["error" => "DATA_NOT_FOUND"]),
-                    Response::HTTP_NOT_FOUND,
-                    ["Content-Type" => "application/json"]
-                );
-            }
-        }catch(\Exception $e){
-            $this->logger->error($e);
-            return new Response(
-                json_encode(["error" => "ERROR_SERVER"]),
-                Response::HTTP_INTERNAL_SERVER_ERROR,
-                ["Content-Type" => "application/json"]
-            );
+        //validate param before
+        //faire setter spécifique dans entité project
+        if(!isset($this->dataRequest['startDate'])){
+            $this->dataRequest['startDate'] = new DateTime ($this->dataRequest["startDate"]);
+        }
+        else {
+            $this->dataRequest['startDate'] = new DateTime("now");
         }
 
-        //validation startDate & convert to date object
-        //todo startDate must be a future date
-        try{
-            if (isset($data['startDate'])) {
-                if (!preg_match("#^\d\d\d\d-(0?[1-9]|1[0-2])-(0?[1-9]|[12][0-9]|3[01])$#", $data['startDate'])) {
-                    throw new Exception("the startDate must be in YYYY-MM-DD format", Response::HTTP_BAD_REQUEST);
-                }
-                $data['startDate'] = new DateTime ($data["startDate"]);
-            }
-            else {
-                $data['startDate'] = new DateTime("now");
-            }
-        }catch(\Exception $e){
-            $this->logger->info($e);
-            return new Response(
-                json_encode(["error" => $e->getMessage()]),
-                $e->getCode(),
-                ["Content-Type" => "application/json"]
-            );
+        if(isset($this->dataRequest['endDate'])){
+            $this->dataRequest['endDate'] = new DateTime ($this->dataRequest["endDate"]);
         }
 
-        //validation endDate & convert to date object
-        //todo control period with startDate, only posterior to the startDate
-        if (isset($data['endDate'])) {
-            try {
-                if (!preg_match("#^\d\d\d\d-(0?[1-9]|1[0-2])-(0?[1-9]|[12][0-9]|3[01])$#", $data['endDate'])) {
-                    throw new Exception("the endDate must be in YYYY-MM-DD format", Response::HTTP_BAD_REQUEST);
-                }
+        ////create new project object && set organization's validated fields
+        $project = $this->makeNewEntity(
+            ["creator", "title", "description", "startDate", "endDate", "organization", "isPublic"],
+            Project::class
+        );
 
-                $data['endDate'] = new DateTime ($data["endDate"]);
-
-            } catch (\Exception $e) {
-                $this->logger->info($e);
-                return new Response(
-                    json_encode(["error" => $e->getMessage()]),
-                    $e->getCode(),
-                    ["Content-Type" => "application/json"]
-                );
-            }
-        }
-
-        //create project object
-        $project = new Project();
-
-        //request's required & optional Field
-        $requiredFields = ["creatorId", "title", "description", "startDate"];
-        $optionalFields = ["endDate", "orgId"];
-        $this->paramValidator->initValidator($requiredFields,$optionalFields,User::class, $data);
-
-        //Validate required fields
-        try{
-            $violationsList = $this->paramValidator->checkViolations();
-        }catch(Exception $e){
-            $this->logger->error($e);
-            return new Response(
-                json_encode(["error" => "ERROR_SERVER"]),
-                Response::HTTP_INTERNAL_SERVER_ERROR,
-                ["Content-Type" => "application/json"]
-            );
-        }
-
-        //return violations
-        if( count($violationsList) > 0 ){
-            return new Response(
-                json_encode(["error" => $violationsList]),
-                Response::HTTP_BAD_REQUEST,
-                ["Content-Type" => "application/json"]
-            );
-        }
-
-        //set organization's validated fields
-        $project->setCreator($user);
-        $project->setTitle($data["title"]);
-        $project->setDescription($data["description"]);
-        $project->setStartDate($data["startDate"]);
-        $project->setIsPublic(false);
-
-        //set project's validated optional fields [endDate or organization]
-        foreach($optionalFields as $field){
-            if(isset($data[$field])){
-                $setter = "set".ucfirst($field);
-                $project->$setter($data[$field]);
-            }
-        }
+        //return potential violations
+        if(isset($this->response)) return $this->response;
 
         //persist the new project
-        try{
-            $this->entityManager->persist($project);
-            $this->entityManager->flush();
-        }catch(Exception $e){
-            $this->logger->error($e);
-            return new Response(
-                json_encode(["error" => "ERROR_SERVER"]),
-                Response::HTTP_INTERNAL_SERVER_ERROR,
-                ["Content-Type" => "application/json"]
-            );
-        }
+        if($this->persistEntity($project)) return $this->response;
 
         //success
-        $this->logger->info("User with id : " .$user->getId(). " has created a Project with id : " .$project->getId());
-        return new Response(
-            json_encode(["success" => true]),
-            Response::HTTP_OK,
-            ["Content-Type" => "application/json"]
-        );
+        return $this->successResponse();
     }
 
     /**
-     * @Route("/project/update", name="update_project", methods="put")
-     * @param Request $request
+     * @Route("", name="_put", methods="put")
+     * @param Request $insecureRequest
      * @return Response
+     * @throws \Exception
      */
-    public function updateProject (Request $request) :Response
+    public function updateProject (Request $insecureRequest) :Response
     {
         //cleanXSS
-        try {
-            $request = $this->requestSecurity->cleanXSS($request);
-        } catch (\Exception $e) {
-            $this->logger->warning($e);
-            return new Response(
-                json_encode(["error" => "ACCESS_FORBIDDEN"]),
-                Response::HTTP_FORBIDDEN,
-                ["Content-Type" => "application/json"]);
+        if($this->cleanXSS($insecureRequest)
+        ) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+        $this->dataRequest = array_merge($this->dataRequest, ["creator" => $this->getUser()->getId()]);
+        if(!isset($this->dataRequest["startDate"])){
+            $this->dataRequest["startDate"] = new DateTime("now");
+        }else {
+            $this->dataRequest["startDate"] = new DateTime($this->dataRequest["startDate"]);
         }
 
-        //recover parameters of the request in an array $data
-        $data = $this->requestParameters->getData($request);
-
-        if (!isset($data["projectId"])) {
-            $this->logger->info(Response::HTTP_NOT_FOUND . "missed param: projectId");
-            return new Response(
-                json_encode(["error" => "project not found"]),
-                Response::HTTP_NOT_FOUND,
-                ["Content-Type" => "application/json"]
-            );
+        if(isset($this->dataRequest["endDate"])){
+            $this->dataRequest["endDate"] = new DateTime($this->dataRequest["endDate"]);
         }
 
-        //validation project's id and recover projectObject
-        $projectRepository = $this->entityManager->getRepository(Project::class);
-        try {
-            $project = $projectRepository->find($data["projectId"]);
-            if ($project == null) {
-                $this->logger->error(Response::HTTP_NOT_FOUND . " | Project with id :" . $data["projectId"] . ", Not found.");
-                return new Response(
-                    json_encode(["error" => "project not found"]),
-                    Response::HTTP_NOT_FOUND,
-                    ["Content-Type" => "application/json"]
-                );
-            }
+        //check if essential criterias are present
+        //todo requete isPresent?
+        if($this->paramValidator->hasAllCriteria(["id"])) return $this->response;
 
+        //validation project's id
+        if($this->checkViolations(
+            null,
+            ["id"],
+            Project::class)
+        ) return $this->response;
 
-            //todo replace in a service?
-            //check if the user is the creator
-            if ($project->getCreator()->getId() != $this->getUser()->getId()) {
-                $this->logger->warning("the user with id : " . $this->getUser()->getId() . " tries to modify a project that does not belong to him and to which he is not assigned");
-                return new Response(
-                    json_encode(["error" => "ACCESS_FORBIDDEN"]),
-                    Response::HTTP_FORBIDDEN,
-                    ["Content-Type" => "application/json"]
-                );
-            }
-            //todo check if the user is assigned
-
-        } catch (Exception $e) {
-            $this->logger->error($e);
-            return new Response(
-                json_encode(["error" => "ERROR_SERVER"]),
-                $e->getCode(),
-                ["Content-Type" => "application/json"]
-            );
-        }
+        //and recover projectObject
+        if($this->getEntities(Project::class, ['id', 'creator'])) return $this->response;
+        $project = $this->dataResponse[0];
 
         //validation orgId & convert to Organization object
-        if (isset($data['orgId'])) {
-            try {
-                if (!is_numeric($data['orgId'])) {
-                    throw new Exception("orgId must be numeric", Response::HTTP_BAD_REQUEST);
-                }
+        if (isset($this->dataRequest['orgId'])) {
 
-                $org = $this->entityManager->getRepository(Organization::class)->find($data["orgId"]);
-                if ($org == null) {
-                    throw new Exception("organization not found", Response::HTTP_NOT_FOUND);
-                }
+            //switch for validation controle (attribute have same name)
+            $this->dataRequest['id'] = $this->dataRequest['orgId'];
+            //validation project's id
+            if($this->checkViolations(
+                null,
+                ["id"],
+                Project::class)
+            ) return $this->response;
 
-                $data['organization'] = $org;
-
-            } catch (\Exception $e) {
-                $this->logger->error($e);
-                return new Response(
-                    json_encode(["error" => "BAD_REQUEST"]),
-                    Response::HTTP_BAD_REQUEST,
-                    ["Content-Type" => "application/json"]
-                );
-            }
-        }
-
-        //validation startDate & convert to date object
-        //todo check only future dates
-        try {
-            if (isset($data['startDate'])) {
-                if (!preg_match("#^\d\d\d\d-(0?[1-9]|1[0-2])-(0?[1-9]|[12][0-9]|3[01])$#", $data['startDate'])) {
-                    throw new Exception("the startDate must be in YYYY-MM-DD format", Response::HTTP_BAD_REQUEST);
-                }
-                $data['startDate'] = new DateTime ($data["startDate"]);
-            } else {
-                $data['startDate'] = new DateTime("now");
-            }
-        } catch (\Exception $e) {
-            $this->logger->info($e);
-            return new Response(
-                json_encode(["error" => $e->getMessage()]),
-                $e->getCode(),
-                ["Content-Type" => "application/json"]
-            );
-        }
-
-        //validation endDate & convert to date object
-        //todo control period with startDate, endate must be posterior
-        if (isset($data['endDate'])) {
-            try {
-                if (!preg_match("#^\d\d\d\d-(0?[1-9]|1[0-2])-(0?[1-9]|[12][0-9]|3[01])$#", $data['endDate'])) {
-                    throw new Exception("the endDate must be in YYYY-MM-DD format", Response::HTTP_BAD_REQUEST);
-                }
-
-                $data['endDate'] = new DateTime ($data["endDate"]);
-
-            } catch (\Exception $e) {
-                $this->logger->info($e);
-                return new Response(
-                    json_encode(["error" => $e->getMessage()]),
-                    $e->getCode(),
-                    ["Content-Type" => "application/json"]
-                );
-            }
-        }
-
-        //request's required & optional Field
-        $optionalFields = ["title", "description", "startDate", "endDate", "isPublic", "organization"];
-        $this->paramValidator->initValidator(null, $optionalFields, User::class, $data);
-
-        //Validate required fields
-        try {
-            $violationsList = $this->paramValidator->checkViolations();
-        } catch (Exception $e) {
-            $this->logger->error($e);
-            return new Response(
-                json_encode(["error" => "ERROR_SERVER"]),
-                Response::HTTP_INTERNAL_SERVER_ERROR,
-                ["Content-Type" => "application/json"]
-            );
-        }
-
-        //return violations
-        if (count($violationsList) > 0) {
-            return new Response(
-                json_encode(["error" => $violationsList]),
-                Response::HTTP_BAD_REQUEST,
-                ["Content-Type" => "application/json"]
-            );
-        }
-
-        //set project's validated optional fields [endDate or organization]
-        foreach ($optionalFields as $field) {
-            if (isset($data[$field])) {
-                $setter = "set" . ucfirst($field);
-                $project->$setter($data[$field]);
-            }
+            if($this->getEntities(Organization::class, ['id'])) return $this->response;
+            $this->dataRequest['organization'] = $this->dataResponse[0];
         }
 
         //persist updated project
-        try {
-            $this->entityManager->flush();
-        } catch (Exception $e) {
-            $this->logger->error($e);
-            return new Response(
-                json_encode(["error" => "ERROR_SERVER"]),
-                Response::HTTP_INTERNAL_SERVER_ERROR,
-                ["Content-Type" => "application/json"]
-            );
+        if(!empty($this->dataResponse)){
+            //set project's validated fields
+            $project = $this->setEntity($project, ["title", "description", "startDate", "endDate", "isPublic", "organization"]);
+
+            //return potential violations
+            if(isset($this->response)) return $this->response;
+
+            //persist updated project
+            if($this->updateEntity($project)) return $this->response;
         }
 
-        //serialize
-        if($project->getCreator()->getId() === $this->getUser()->getId()){
-            $project = $project->serialize("read_by_creator");
-        }
-        else {
-            $project = $project->serialize();
-        }
-
-
-        //success
-        $this->logger->info("User with id : " . $this->getUser()->getId() . " has modified the Project with id : " . $data["projectId"]);
-        return new Response(
-            json_encode(["data" => $project]),
-            Response::HTTP_OK,
-            ["Content-Type" => "application/json"]
-        );
+        $this->dataResponse = [$project];
+        //final response
+        return $this->successResponse();
     }
 
     /**
      * returns all public projects
-     * @Route("/public/projects", name="get_public_projects", methods="get")
-     * @param Request $request
+     * @Route("/public", name="_get_public", methods="get")
+     * @param Request $insecureRequest
      * @return Response
      */
-    public function getProjects(Request $request): Response {
+    public function getProjects(Request $insecureRequest): Response {
         //cleanXSS
-        try {
-            $request = $this->requestSecurity->cleanXSS($request);
-        }catch(\Exception $e) {
-            $this->logger->warning($e);
-            return new Response(
-                json_encode(["success" => false, "error" => "ACCESS_FORBIDDEN"]),
-                Response::HTTP_FORBIDDEN,
-                ["Content-Type" => "application/json"]);
+        if($this->cleanXSS($insecureRequest)
+        ) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+        $this->dataRequest["isPublic"] = true;
+
+        //get one public project
+        if(isset($this->dataRequest["id"])){
+            if($this->checkViolations(
+                null,
+                ["id"],
+                Project::class)
+            ) return $this->response;
+
+            if($this->getEntities(Project::class, ["id", "isPublic"] )) return $this->response;
+        }else {
+            //get all public project
+            if($this->getEntities(Project::class, ["isPublic"] )) return $this->response;
         }
 
-        $projectRepository = $this->entityManager->getRepository(Project::class);
-        try{
-            $projectData = $projectRepository->findBy(["isPublic" => true]);
-        }
-        catch(\Exception $e){
-            $this->logger->error($e);
-            return new Response(
-                json_encode(["error" => "ERROR_SERVER"]),
-                $e->getCode(),
-                ["Content-Type" => "application/json"]
-            );
-        }
-
-        //serialize all found userObject
-        if (count($projectData) > 0 ) {
-            foreach($projectData as $key => $project){
-                $projectData[$key] = $project->serialize("read_project");
-            }
-        }
-
-        //success
-        return new Response(
-            json_encode(["data" => $projectData]),
-            Response::HTTP_OK,
-            ["content-type" => "application/json"]
-        );
+        //success response
+        return $this->successResponse();
     }
 
     /**
      * returns to a user his created projects
-     * @Route("/projects/created", name="get_projects_created", methods="get")
-     * @param Request $request
+     * @Route("/created", name="_get_created", methods="get")
+     * @param Request $insecureRequest
      * @return Response
      */
-    public function getProjectsCreated(Request $request): Response {
+    public function getProjectsCreated(Request $insecureRequest): Response {
         //cleanXSS
-        try {
-            $request = $this->requestSecurity->cleanXSS($request);
-        }catch(\Exception $e) {
-            $this->logger->warning($e);
-            return new Response(
-                json_encode(["success" => false, "error" => "ACCESS_FORBIDDEN"]),
-                Response::HTTP_FORBIDDEN,
-                ["Content-Type" => "application/json"]);
+        if($this->cleanXSS($insecureRequest)
+        ) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+        $this->dataRequest["creator"] = $this->getUser()->getId();
+
+        //get one created project by connected user
+        if(isset($this->dataRequest["id"])){
+            if($this->checkViolations(
+                null,
+                ["id"],
+                Project::class)
+            ) return $this->response;
+
+            if($this->getEntities(Project::class, ["id", "creator"] )) return $this->response;
+        }else {
+            //get all created project by connected user
+            if($this->getEntities(Project::class, ["creator"] )) return $this->response;
         }
 
-        $projectRepository = $this->entityManager->getRepository(Project::class);
-        try{
-            $projectData = $projectRepository->findBy(["creator" => $this->getUser()->getId()]);
-        }
-        catch(\Exception $e){
-            $this->logger->error($e);
-            return new Response(
-                json_encode(["error" => "ERROR_SERVER"]),
-                $e->getCode(),
-                ["Content-Type" => "application/json"]
-            );
-        }
-
-        //serialize all found userObject
-        if (count($projectData) > 0 ) {
-            foreach($projectData as $key => $project){
-                $projectData[$key] = $project->serialize("read_by_creator");
-            }
-        }
-
-        //success
-        return new Response(
-            json_encode(["data" => $projectData]),
-            Response::HTTP_OK,
-            ["content-type" => "application/json"]
-        );
+        //success response
+        return $this->successResponse();
     }
+
+    //todo conroller Followed
 
     //todo request for return projectfollowed by a user,
     // need check isPublic and if user is assigned if the project isn't public
