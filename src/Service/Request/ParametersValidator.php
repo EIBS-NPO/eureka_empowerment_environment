@@ -14,7 +14,7 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class ParametersValidator
 {
-    private ValidatorInterface $validator;
+    public ValidatorInterface $validator;
 
     private EntityManagerInterface $entityManager;
 
@@ -56,29 +56,44 @@ class ParametersValidator
         $this->paramRequest = $paramRequest;
     }
 
+    public function validObject($object, $fields){
+        $violationsList = [];
+        foreach ($fields as $field){
+            $getter = "get".ucfirst($field);
+            $violations = $this->validator->validatePropertyValue($object, $field, $object->$getter());
+            if(count($violations)> 0 ){
+                $violationsList[] = $violations;
+            }
+        }
+        return $violationsList;
+    }
+
     /**
      * @return array
      * @throws Exception
      */
-    public function checkViolations() :array{
-        $object = $this->instanceClass($this->className);
+    public function getViolations($object = null) :array{
+        if($object === null){
+            $object = new $this->className();
+        }
+
         $violations = [];
         try {
             if($this->requiredFields != null && count($this->requiredFields) > 0){
                 $violations = $this->fieldsValidation($object, $this->requiredFields, true, $this->paramRequest);
             }
             if($this->optionalFields != null && count($this->optionalFields) > 0){
-                array_merge($violations, $this->fieldsValidation($object, $this->optionalFields, false, $this->paramRequest));
+                $violations = array_merge($violations, $this->fieldsValidation($object, $this->optionalFields, false, $this->paramRequest));
             }
         } catch (Exception $e) {
+            //todo error cannot create metadata?
             throw new Exception($e->getMessage(), $e->getCode());
         }
-
         return $violations;
     }
 
-    //todo the following private methods will be moved in the future in a service: parametersValidator
-
+    //todo unique orgName with insensiveCase test before
+    //todo maybe don't need, assert do the job
     /**
      * @param String $fieldName
      * @param $fieldValue
@@ -90,7 +105,7 @@ class ParametersValidator
         try{
             $userTest = $this->entityManager->getRepository($this->className)->findBy([$fieldName => $fieldValue]);
         }
-        catch(\Exception $e){
+        catch(Exception $e){
             throw new Exception($e->getMessage(), $e->getCode());
         }
 
@@ -121,18 +136,8 @@ class ParametersValidator
                 $violations = $this->validator->validatePropertyValue($object, $field, $data[$field]);
             }
 
-            if($this->className == "App\Entity\User"){
-                if($field == "email" && isset($data["email"]) && count($violations) == 0){
-                    if($this->checkUniqueField('email', $data['email']) == false){
-                        $this->logger->info("this email already exist in database for user account");
-                        $violationsList = array_merge(
-                            $violationsList,
-                            ["email" => "this email already exist in database for user account"]
-                        );
-                    }
-                }
-            }
-            if($this->className == "App\Entity\Organization"){
+            //todo check if it's necessary, assert probably already check this
+            /*if($this->className == "App\Entity\Organization"){
                 if($field == "name" && isset($data["name"]) && count($violations) == 0){
                     if($this->checkUniqueField('name', $data['name']) == false){
                         $this->logger->info("this organization's name already exist in database");
@@ -142,7 +147,7 @@ class ParametersValidator
                         );
                     }
                 }
-            }
+            }*/
 
 
             if(count($violations) > 0 ){
@@ -155,15 +160,29 @@ class ParametersValidator
                 }
             }
         }
-
         return $violationsList;
+    }
+
+    //todo opti with logger
+    /**
+     * @param array $criterias
+     * @return bool
+     */
+    public function hasAllCriteria(array $criterias) :bool
+    {
+        foreach($criterias as $criteria){
+            if(!isset($this->dataRequest[$criteria])){
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
      * @param String $className
      * @return Organization|User|null
      */
-    private function instanceClass(String $className){
+    /*private function instanceClass(String $className){
         switch($className){
             case "App\Entity\User":
                 $object  = new User();
@@ -178,5 +197,5 @@ class ParametersValidator
                 $object = null;
         }
         return $object;
-    }
+    }*/
 }
