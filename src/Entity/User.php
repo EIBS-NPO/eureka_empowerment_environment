@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Interfaces\Validable;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -21,6 +22,7 @@ class User implements UserInterface
      * @ORM\Id
      * @ORM\GeneratedValue
      * @ORM\Column(type="integer")
+     * @Assert\Type(type="numeric", message="The id is not valid")
      */
     private ?int $id;
 
@@ -94,11 +96,17 @@ class User implements UserInterface
      */
     private $projects;
 
+    /**
+     * @ORM\ManyToMany(targetEntity=Organization::class, inversedBy="membership")
+     */
+    private $memberOf;
+
     public function __construct()
     {
         $this->globalPropertyAttributes = new ArrayCollection();
         $this->organizations = new ArrayCollection();
         $this->projects = new ArrayCollection();
+        $this->memberOf = new ArrayCollection();
     }
 
     /**
@@ -111,7 +119,6 @@ class User implements UserInterface
     {
         $data = [
             "id" => $this->id,
-            "roles" => $this->roles,
             "firstname" => $this->firstname,
             "lastname" => $this->lastname,
             "email" => $this->email,
@@ -126,20 +133,21 @@ class User implements UserInterface
             $data["mobile"] = $this->mobile;
         }
 
+        //todo na aps retourner plus, autres requetes pour plus;
         //Check some attributes with contexts to see if they are sets
-        if($this->projects && $context != "read_project" && $context != "read_organization"){
+        /*if($this->projects && $context != "read_project" && $context != "read_organization"){
             $data["projects"] = [];
             foreach($this->projects as $project){
                 array_push($data["projects"], $project->serialize("read_creator"));
             }
-        }
+        }*/
 
-        if($this->organizations && $context != "read_organization" && $context != "read_project"){
+        /*if($this->organizations && $context != "read_organization" && $context != "read_project"){
             $data["organization"] = [];
             foreach($this->organizations as $org){
                 array_push($data["organization"], $org->serialize("read_referent"));
             }
-        }
+        }*/
 
         return $data;
     }
@@ -339,6 +347,28 @@ class User implements UserInterface
         return $this;
     }
 
+    /**
+     * @return Collection|Organization[]
+     */
+    public function getMemberOf(): Collection
+    {
+        return $this->memberOf;
+    }
 
+    public function addMembership(Organization $membership): self
+    {
+        if (!$this->memberOf->contains($membership)) {
+            $this->memberOf[] = $membership;
+        }
+
+        return $this;
+    }
+
+    public function removeMembership(Organization $membership): self
+    {
+        $this->memberOf->removeElement($membership);
+
+        return $this;
+    }
 
 }

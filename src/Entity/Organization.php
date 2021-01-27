@@ -7,6 +7,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
@@ -19,6 +20,7 @@ class Organization
      * @ORM\Id
      * @ORM\GeneratedValue
      * @ORM\Column(type="integer")
+     * @Assert\Type(type="numeric", message="The id is not valid")
      */
     private $id;
 
@@ -64,9 +66,15 @@ class Organization
      */
     private $projects;
 
+    /**
+     * @ORM\ManyToMany(targetEntity=User::class, mappedBy="memberOf")
+     */
+    private $membership;
+
     public function __construct()
     {
         $this->projects = new ArrayCollection();
+        $this->membership = new ArrayCollection();
     }
 
     /**
@@ -90,7 +98,7 @@ class Organization
         }
 
         //Check some attributes with contexts to see if they are sets
-        if($this->referent && $context != "read_referent"){
+        /*if($this->referent && $context != "read_referent"){
             $data["referent"] = $this->referent->serialize("read_organization");
         }
 
@@ -99,7 +107,7 @@ class Organization
             foreach($this->projects as $project){
                 array_push($data["projects"], $project->serialize("read_organization"));
             }
-        }
+        }*/
 
         return $data;
     }
@@ -162,7 +170,7 @@ class Organization
         return $this->referent;
     }
 
-    public function setReferent(?User $referent): self
+    public function setReferent(?UserInterface $referent): self
     {
         $this->referent = $referent;
 
@@ -194,6 +202,33 @@ class Organization
             if ($project->getOrganization() === $this) {
                 $project->setOrganization(null);
             }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection|User[]
+     */
+    public function getMembership(): Collection
+    {
+        return $this->membership;
+    }
+
+    public function addMembership(User $membership): self
+    {
+        if (!$this->membership->contains($membership)) {
+            $this->membership[] = $membership;
+            $membership->addMembership($this);
+        }
+
+        return $this;
+    }
+
+    public function removeMembership(User $membership): self
+    {
+        if ($this->membership->removeElement($membership)) {
+            $membership->removeMembership($this);
         }
 
         return $this;
