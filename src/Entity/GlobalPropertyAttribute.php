@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use Symfony\Component\Validator\Constraints as Assert;
 use App\Repository\ConfigurationRepository;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -14,6 +15,7 @@ class GlobalPropertyAttribute
      * @ORM\Id
      * @ORM\GeneratedValue
      * @ORM\Column(type="integer")
+     * @Assert\Type(type="integer", message="The id is not valid")
      */
     private $id;
 
