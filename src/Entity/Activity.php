@@ -4,9 +4,11 @@ namespace App\Entity;
 
 use App\Repository\ActivityRepository;
 use Doctrine\ORM\Mapping as ORM;
+use Doctrine\ORM\Mapping\InheritanceType;
 
 /**
  * @ORM\Entity(repositoryClass=ActivityRepository::class)
+ * @InheritanceType("JOINED")
  */
 class Activity
 {
@@ -20,48 +22,66 @@ class Activity
     /**
      * @ORM\Column(type="boolean")
      */
-    private $isPublic;
+    protected $isPublic;
 
     /**
      * @ORM\Column(type="string", length=50)
      */
-    private $title;
+    protected $title;
 
     /**
      * @ORM\Column(type="string", length=255)
      */
-    private $description;
+    protected $description;
 
     /**
      * @ORM\Column(type="date")
      */
-    private $postDate;
+    protected $postDate;
 
     /**
      * @ORM\Column(type="string", length=255)
      */
-    private $summary;
+    protected $summary;
 
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
      */
-    private $illustration;
+    protected $illustration;
 
     /**
      * @ORM\ManyToOne(targetEntity=User::class, inversedBy="activities")
      * @ORM\JoinColumn(nullable=false)
      */
-    private $creator;
+    protected ?User $creator;
 
     /**
      * @ORM\ManyToOne(targetEntity=Project::class, inversedBy="activities")
      */
-    private $project;
+    protected $project;
 
     /**
      * @ORM\ManyToOne(targetEntity=Organization::class, inversedBy="activities")
      */
-    private $organization;
+    protected $organization;
+
+    public function serialize(String $context = null): array
+    {
+        $data = [
+            "id" => $this->id,
+            "title" => $this->title,
+            "description" => $this->description,
+            "summary" => $this->summary,
+            "postDate" => $this->postDate->format('Y-m-d')
+        ];
+
+        //Check some attributes to see if they are sets
+        if($this->illustration){
+            $data["illustration"] = $this->illustration;
+        }
+
+        return $data;
+    }
 
     public function getId(): ?int
     {

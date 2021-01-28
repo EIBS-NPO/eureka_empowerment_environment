@@ -8,14 +8,12 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * @ORM\Entity(repositoryClass=ActivityFileRepository::class)
  */
-class ActivityFile
+class ActivityFile extends Activity
 {
-    /**
-     * @ORM\Id
-     * @ORM\GeneratedValue
-     * @ORM\Column(type="integer")
-     */
-    private $id;
+     //* @ORM\Id
+     //* @ORM\GeneratedValue
+     //* @ORM\Column(type="integer")
+    /*private $id;*/
 
     /**
      * @ORM\Column(type="string", length=255)
@@ -27,9 +25,19 @@ class ActivityFile
      */
     private $fileType;
 
-    public function getId(): ?int
+    /*public function getId(): ?int
     {
         return $this->id;
+    }*/
+
+    public function serialize(String $context = null): array
+    {
+        $data = Parent::serialize();
+        $data = array_merge($data, [
+            "filePath" => $this->filePath,
+            "fileType" => $this->fileType
+        ]);
+        return $data;
     }
 
     public function getFilePath(): ?string
