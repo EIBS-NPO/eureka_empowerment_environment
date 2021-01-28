@@ -101,12 +101,18 @@ class User implements UserInterface
      */
     private $memberOf;
 
+    /**
+     * @ORM\OneToMany(targetEntity=Activity::class, mappedBy="creator")
+     */
+    private $activities;
+
     public function __construct()
     {
         $this->globalPropertyAttributes = new ArrayCollection();
         $this->organizations = new ArrayCollection();
         $this->projects = new ArrayCollection();
         $this->memberOf = new ArrayCollection();
+        $this->activities = new ArrayCollection();
     }
 
     /**
@@ -367,6 +373,36 @@ class User implements UserInterface
     public function removeMembership(Organization $membership): self
     {
         $this->memberOf->removeElement($membership);
+
+        return $this;
+    }
+
+    /**
+     * @return Collection|Activity[]
+     */
+    public function getActivities(): Collection
+    {
+        return $this->activities;
+    }
+
+    public function addActivity(Activity $activity): self
+    {
+        if (!$this->activities->contains($activity)) {
+            $this->activities[] = $activity;
+            $activity->setCreator($this);
+        }
+
+        return $this;
+    }
+
+    public function removeActivity(Activity $activity): self
+    {
+        if ($this->activities->removeElement($activity)) {
+            // set the owning side to null (unless already changed)
+            if ($activity->getCreator() === $this) {
+                $activity->setCreator(null);
+            }
+        }
 
         return $this;
     }

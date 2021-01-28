@@ -70,6 +70,11 @@ class Project
     private ?bool $isPublic;
 
     /**
+     * @ORM\OneToMany(targetEntity=Activity::class, mappedBy="project")
+     */
+    private ?Activity $activities;
+
+    /**
      * Return an array containing object attributes
      * $context allows to give a context to avoid circular references
      * @param String|null $context
@@ -188,6 +193,28 @@ class Project
     public function setIsPublic(bool $isPublic): self
     {
         $this->isPublic = $isPublic;
+
+        return $this;
+    }
+
+    public function getActivities(): ?Activity
+    {
+        return $this->activities;
+    }
+
+    public function setActivities(?Activity $activities): self
+    {
+        // unset the owning side of the relation if necessary
+        if ($activities === null && $this->activities !== null) {
+            $this->activities->setProject(null);
+        }
+
+        // set the owning side of the relation if necessary
+        if ($activities !== null && $activities->getProject() !== $this) {
+            $activities->setProject($this);
+        }
+
+        $this->activities = $activities;
 
         return $this;
     }

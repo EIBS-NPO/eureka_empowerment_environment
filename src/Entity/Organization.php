@@ -59,22 +59,28 @@ class Organization
      * @ORM\ManyToOne(targetEntity=User::class, inversedBy="organizations")
      * @ORM\JoinColumn(nullable=false)
      */
-    private $referent;
+    private ?User $referent;
 
     /**
      * @ORM\OneToMany(targetEntity=Project::class, mappedBy="organization")
      */
-    private $projects;
+    private ArrayCollection $projects;
 
     /**
      * @ORM\ManyToMany(targetEntity=User::class, mappedBy="memberOf")
      */
-    private $membership;
+    private ArrayCollection $membership;
+
+    /**
+     * @ORM\OneToMany(targetEntity=Activity::class, mappedBy="organization")
+     */
+    private ArrayCollection $activities;
 
     public function __construct()
     {
         $this->projects = new ArrayCollection();
         $this->membership = new ArrayCollection();
+        $this->activities = new ArrayCollection();
     }
 
     /**
@@ -229,6 +235,36 @@ class Organization
     {
         if ($this->membership->removeElement($membership)) {
             $membership->removeMembership($this);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection|Activity[]
+     */
+    public function getActivities(): Collection
+    {
+        return $this->activities;
+    }
+
+    public function addActivity(Activity $activity): self
+    {
+        if (!$this->activities->contains($activity)) {
+            $this->activities[] = $activity;
+            $activity->setOrganization($this);
+        }
+
+        return $this;
+    }
+
+    public function removeActivity(Activity $activity): self
+    {
+        if ($this->activities->removeElement($activity)) {
+            // set the owning side to null (unless already changed)
+            if ($activity->getOrganization() === $this) {
+                $activity->setOrganization(null);
+            }
         }
 
         return $this;
