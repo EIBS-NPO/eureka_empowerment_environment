@@ -2,7 +2,6 @@
 
 namespace App\Entity;
 
-use App\Interfaces\Validable;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -26,6 +25,7 @@ class User implements UserInterface
      */
     private ?int $id;
 
+    //todo assert?
     /**
      * @ORM\Column(type="json")
      */
@@ -34,6 +34,7 @@ class User implements UserInterface
     /**
      * @ORM\Column(type="string", length=50)
      * @Assert\NotBlank(message="the firstname is required")
+     * @Assert\Type(type="string", message=" firstname is not valid string")
      * @Assert\Length(min="2", max="50",
      *     minMessage="the firstname must be at least 2 characters long",
      *     maxMessage="the firstname must not exceed 50 characters")
@@ -43,6 +44,7 @@ class User implements UserInterface
     /**
      * @ORM\Column(type="string", length=50)
      * @Assert\NotBlank(message="the lastname is required")
+     * @Assert\Type(type="string", message=" lastname is not valid string")
      * @Assert\Length(min="2", max="50",
      *     minMessage="the lastname must be at least 2 characters long",
      *     maxMessage="the lastname must not exceed 50 characters")
@@ -52,6 +54,7 @@ class User implements UserInterface
     /**
      * @ORM\Column(type="string", length=50, unique=true)
      * @Assert\NotBlank(message="the email is required")
+     * @Assert\Type(type="string", message=" email is not valid string")
      * @Assert\Email(message="invalid email")
      */
     private ?string $email;
@@ -59,18 +62,21 @@ class User implements UserInterface
     //todo regex for french/belgian phone number
     /**
      * @ORM\Column(type="string", length=13, nullable=true)
+     * @Assert\Type(type="string", message=" phone is not valid string")
      */
     private ?string $phone = null;
 
     //todo regex for french/belgian phone number
     /**
      * @ORM\Column(type="string", length=13, nullable=true)
+     * @Assert\Type(type="string", message=" mobile is not valid string")
      */
     private ?string $mobile = null;
 
     //todo regex check password safety
     /**
      * @ORM\Column(type="string", length=255)
+     * @Assert\Type(type="string", message=" password is not valid string")
      * @Assert\Length(min="6", max="20",
      *     minMessage="the password must be between 6 and 20 characters",
      *     maxMessage="the password must be between 6 and 20 characters"
@@ -83,28 +89,58 @@ class User implements UserInterface
 
     /**
      * @ORM\OneToMany(targetEntity=GlobalPropertyAttribute::class, mappedBy="user")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\GlobalPropertyAttribute")
+     *     }
+     * )
      */
     private $globalPropertyAttributes;
 
     /**
      * @ORM\OneToMany(targetEntity=Organization::class, mappedBy="referent")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\Organization")
+     *     }
+     * )
      */
     private $organizations;
 
     /**
      * @ORM\OneToMany(targetEntity=Project::class, mappedBy="creator")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\Project")
+     *     }
+     * )
      */
     private $projects;
 
     /**
      * @ORM\ManyToMany(targetEntity=Organization::class, inversedBy="membership")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\Organization")
+     *     }
+     * )
      */
     private $memberOf;
 
     /**
      * @ORM\OneToMany(targetEntity=Activity::class, mappedBy="creator")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\Activity")
+     *     }
+     * )
      */
     private $activities;
+
+    /**
+     * @ORM\Column(type="string", length=255, nullable=true)
+     */
+    private $picturePath;
 
     public function __construct()
     {
@@ -139,7 +175,11 @@ class User implements UserInterface
             $data["mobile"] = $this->mobile;
         }
 
-        //todo na aps retourner plus, autres requetes pour plus;
+        if($this->picturePath){
+            $data["picture"] = $this->picturePath;
+        }
+
+        //todo deprecated
         //Check some attributes with contexts to see if they are sets
         /*if($this->projects && $context != "read_project" && $context != "read_organization"){
             $data["projects"] = [];
@@ -403,6 +443,18 @@ class User implements UserInterface
                 $activity->setCreator(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getPicturePath(): ?string
+    {
+        return $this->picturePath;
+    }
+
+    public function setPicturePath(?string $picturePath): self
+    {
+        $this->picturePath = $picturePath;
 
         return $this;
     }
