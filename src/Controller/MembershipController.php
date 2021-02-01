@@ -28,7 +28,7 @@ class MembershipController extends CommonController
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
-        if(!$this->dataRequest["orgId"] || !($this->dataRequest["email"])){
+        if(!$this->dataRequest["orgId"] || (!($this->dataRequest["email"]) || !($this->dataRequest["userId"]))){
             return $this->notFoundResponse();
         }
         $this->dataRequest = array_merge($this->dataRequest, ["referent" => $this->getUser()->getId()]);
@@ -36,7 +36,7 @@ class MembershipController extends CommonController
 
         $this->dataRequest["id"] = $this->dataRequest['orgId'];
         //Validate fields
-        if ($this->checkViolations(
+        if ($this->isInvalid(
             ["id"],
             null,
             Organization::class)
@@ -51,7 +51,7 @@ class MembershipController extends CommonController
         unset($this->dataRequest["orgId"]);
 
         //Validate fields
-        if ($this->checkViolations(
+        if ($this->isInvalid(
             ["email"],
             null,
             User::class)
@@ -90,7 +90,7 @@ class MembershipController extends CommonController
 
         $this->dataRequest["id"] = $this->dataRequest['orgId'];
         //Validate fields
-        if ($this->checkViolations(
+        if ($this->isInvalid(
             ["id"],
             null,
             Organization::class)
@@ -107,7 +107,7 @@ class MembershipController extends CommonController
 
         //Validate fields
         $this->dataRequest["id"] = $this->dataRequest['userId'];
-        if ($this->checkViolations(
+        if ($this->isInvalid(
             ["id"],
             null,
             User::class)
