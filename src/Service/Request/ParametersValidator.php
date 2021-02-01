@@ -9,7 +9,9 @@ use App\Entity\Project;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
+use Symfony\Component\HttpFoundation\Response;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class ParametersValidator
@@ -92,31 +94,6 @@ class ParametersValidator
         return $violations;
     }
 
-    //todo unique orgName with insensiveCase test before
-    //todo maybe don't need, assert do the job
-    /**
-     * @param String $fieldName
-     * @param $fieldValue
-     * @return bool
-     * @throws Exception
-     */
-    private function checkUniqueField(String $fieldName, $fieldValue) {
-        $res = true;
-        try{
-            $userTest = $this->entityManager->getRepository($this->className)->findBy([$fieldName => $fieldValue]);
-        }
-        catch(Exception $e){
-            throw new Exception($e->getMessage(), $e->getCode());
-        }
-
-        if ($userTest != null) {
-            $res = false;
-        }
-        return $res;
-    }
-
-    //todo the following private methods will be moved in the future in a service: parametersValidator
-
     /**
      * @param $object
      * @param array $fields
@@ -136,20 +113,6 @@ class ParametersValidator
                 $violations = $this->validator->validatePropertyValue($object, $field, $data[$field]);
             }
 
-            //todo check if it's necessary, assert probably already check this
-            /*if($this->className == "App\Entity\Organization"){
-                if($field == "name" && isset($data["name"]) && count($violations) == 0){
-                    if($this->checkUniqueField('name', $data['name']) == false){
-                        $this->logger->info("this organization's name already exist in database");
-                        $violationsList = array_merge(
-                            $violationsList,
-                            ["name" => "this organization's name already exist in database"]
-                        );
-                    }
-                }
-            }*/
-
-
             if(count($violations) > 0 ){
                 foreach($violations as $violation){
                     $this->logger->info($violation);
@@ -163,20 +126,26 @@ class ParametersValidator
         return $violationsList;
     }
 
-    //todo opti with logger
     /**
      * @param array $criterias
      * @return bool
      */
-    public function hasAllCriteria(array $criterias) :bool
+    /*public function hasAllCriteria(array $criterias) :bool
     {
+        //todo faire retourner une violation plutot qu'une reponse, c'est le CommonController qui construit les reponses
         foreach($criterias as $criteria){
             if(!isset($this->dataRequest[$criteria])){
+                $this->logger->info(Response::HTTP_NOT_FOUND . " | missing parameter: " . $criteria);
+                $this->response =  new Response(
+                    json_encode(["error" => "missing parameter : " . $criteria . " is required "]),
+                    Response::HTTP_BAD_REQUEST,
+                    ["Content-Type" => "application/json"]
+                );
                 return false;
             }
         }
         return true;
-    }
+    }*/
 
     /**
      * @param String $className
