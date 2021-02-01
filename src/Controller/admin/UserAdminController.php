@@ -33,7 +33,7 @@ class UserAdminController extends CommonController
 
         $criteria = null;
         if(isset($this->dataRequest["email"])){
-            if($this->checkViolations(
+            if($this->isInvalid(
                 null,
                 ["email"],
                 User::class)
@@ -41,7 +41,7 @@ class UserAdminController extends CommonController
             $criteria = "email";
         }
         if(isset($this->dataRequest["id"])){
-            if($this->checkViolations(
+            if($this->isInvalid(
                 null,
                 ["id"],
                 User::class)
@@ -70,7 +70,7 @@ class UserAdminController extends CommonController
         $this->dataRequest = $this->requestParameters->getData($this->request);
 
         if(isset($this->dataRequest["id"])){
-            if($this->checkViolations(
+            if($this->isInvalid(
                 null,
                 ["id"],
                 User::class)
