@@ -103,13 +103,15 @@ class CommonController extends AbstractController
         return isset($this->response);
     }
 
+
+    //todo renom ?
     /**
      * @param $requiredFields
      * @param $optionalFields
      * @param $className
      * @return bool
      */
-    public function checkViolations($requiredFields, $optionalFields, $className) :bool
+    public function isInvalid($requiredFields, $optionalFields, $className) :bool
     {
         $this->paramValidator->initValidator($requiredFields, $optionalFields, $className, $this->dataRequest);
         try{
@@ -128,26 +130,17 @@ class CommonController extends AbstractController
         return isset($this->response);
     }
 
-    //todo add context?
     /**
      * @param $entities
      * @return mixed
      */
     public function serialize($entities){
         foreach($entities as $key => $entity){
-            $entities[$key] = $entity->serialize();
+            if(gettype($entity) != "string"){
+                $entities[$key] = $entity->serialize();
+            }
         }
         return $entities;
-    }
-
-    //todo not really useful? check it
-    /**
-     * @param $fields
-     * @param $className
-     * @return mixed
-     */
-    public function makeNewEntity($fields, $className) {
-        return $this->setEntity(new $className(), $fields);
     }
 
     /**
@@ -156,39 +149,16 @@ class CommonController extends AbstractController
      * @return mixed
      */
     public function setEntity($entity, $fields) {
-        foreach($fields as $field){
-            if(isset($this->dataRequest[$field])){
-                $setter = 'set'.ucfirst($field);
-                $entity->$setter($this->dataRequest[$field]);
-            }
-        }
-        $this->isValid($entity, $fields);
-        return $entity;
-    }
 
-    /**
-     * @param $entity
-     * @param $fields
-     */
-    public function isValid($entity, $fields) :void{
-        $violationsList = $this->paramValidator->validObject($entity, $fields);
-        if(count($violationsList) > 0 ){
-            $vList =[];
-            foreach($violationsList as $violations){
-                foreach($violations as $v){
-                    $this->logger->info($v);
-                    $vList = array_merge(
-                        $vList,
-                        [$v->getPropertyPath() => $v->getMessage()]
-                    );
+        if(!isset($this->response)){
+            foreach($fields as $field){
+                if(isset($this->dataRequest[$field])){
+                    $setter = 'set'.ucfirst($field);
+                    $entity->$setter($this->dataRequest[$field]);
                 }
             }
-            $this->response =  new Response(
-                json_encode(["data" => $vList]),
-                Response::HTTP_BAD_REQUEST,
-                ["content-type" => "application/json"]
-            );
         }
+        return $entity;
     }
 
     /**
@@ -222,6 +192,7 @@ class CommonController extends AbstractController
         $logInfo = "PUT | ". get_class($entity) . " | " .$entity->getId();
         try{
             $this->entityManager->flush();
+            $this->dataResponse = [$entity];
             $this->eventInfo =["type" => $this->getClassName($entity), "desc" => "update"];
             $this->logger->info($logInfo . "| UPDATE_SUCCESS");
         }catch(Exception $e){
@@ -241,9 +212,9 @@ class CommonController extends AbstractController
 
         $repository = $this->entityManager->getRepository($className);
         try{
-            //verifies the existence of criteria for query
+            //verifies the existence of criteria and their validity for query
             if(count($this->dataRequest) > 0 ) {
-                if($this->hasAllCriteria($criterias)){
+                if($this->hasAllCriteria($criterias) && !($this->isInvalid($criterias, null, $className))){
                     //initLog
                     foreach ($criterias as $key => $criteria) {
                         $logInfo .= " | by " . $criteria . " : " . $this->dataRequest[$criteria];
@@ -261,14 +232,26 @@ class CommonController extends AbstractController
         catch(Exception $e){
             $this->serverErrorResponse($e, $logInfo);
         }
+        return isset($this->response);
+    }
 
-        if(empty($this->dataResponse)){
-            $logInfo .= " | DATA_NOT_FOUND";
-            $this->response = $this->notFoundResponse();
+    /**
+     * @param String $className
+     * @param String $attributeName
+     * @param String $idKey
+     * @return bool
+     */
+    public function getLinkedEntity(String $className, String $attributeName, String $idKey) :bool {
+        //dd($this->dataRequest);
+        $this->dataRequest = array_merge($this->dataRequest, ["id" => $this->dataRequest[$idKey]]);
+        if($this->getEntities($className, ["id"])){
+            if(!empty($this->dataResponse)){
+                $this->dataRequest[$attributeName] = $this->dataResponse[0];
+                unset($this->dataRequest[$idKey]);
+            }else {
+                $this->notFoundResponse();
+            }
         }
-        else {$logInfo .= " | GET_SUCCESS | " . count($this->dataResponse) . " DATA_FOUND";}
-
-        $this->logger->info($logInfo);
         return isset($this->response);
     }
 
@@ -305,8 +288,11 @@ class CommonController extends AbstractController
         if(empty($this->dataResponse)){
              return $this->notFoundResponse();
         }else {
+            //$logInfo .= " | GET_SUCCESS | " . count($this->dataResponse) . " DATA_FOUND";
             return $this->response =  new Response(
-                json_encode($this->serialize($this->dataResponse)),
+                json_encode(
+                    $this->serialize($this->dataResponse)
+                ),
                 Response::HTTP_OK,
                 ["content-type" => "application/json"]
             );
@@ -318,6 +304,8 @@ class CommonController extends AbstractController
      */
     public function notFoundResponse() :Response{
         return  $this->response =  new Response(
+            //todo stocker/ construire la chaine message log dans le service log
+            //$logInfo .= " | DATA_NOT_FOUND";
             json_encode(["data" => "DATA_NOT_FOUND"]),
             Response::HTTP_OK,
             ["content-type" => "application/json"]
@@ -340,6 +328,7 @@ class CommonController extends AbstractController
         );
     }
 
+    //todo really usefull?
     /**
      * @param $entity
      * @return String
