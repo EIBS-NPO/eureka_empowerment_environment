@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\Organization;
 use App\Entity\Project;
 use DateTime;
+use Exception;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -21,7 +22,7 @@ class ProjectController extends CommonController
      * @Route("", name="_post", methods="post")
      * @param Request $insecureRequest
      * @return Response
-     * @throws \Exception
+     * @throws Exception
      */
     public function create(Request $insecureRequest): Response
     {
@@ -31,51 +32,36 @@ class ProjectController extends CommonController
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
+        // add default required values && convert datetime
         $this->dataRequest = array_merge($this->dataRequest, ["creator" => $this->getUser()]);
-        $this->dataRequest = array_merge($this->dataRequest, ["isPublic" => false]);
-
-        //optional link with an organization : validation orgId & convert to Organization object
-        if (isset($this->dataRequest['orgId'])) {
-            $this->dataRequest["id"] = $this->dataRequest['orgId'];
-            //Validate fields
-            if($this->checkViolations(
-                null,
-                ["id"],
-                Organization::class)
-            ) return $this->response;
-
-            //todo recupe l'org avec id ET check si Id user lié relation member!
-            if($this->getEntities(Organization::class, ["id"] )) return $this->response;
-
-            if(!empty($this->dataResponse)){
-                $this->dataRequest['organization'] = $this->dataResponse[0];
-                unset($this->dataRequest["orgId"]);
-            }else {
-                $this->notFoundResponse();
-            }
+        if(!isset($this->dataRequest["isPublic"])){
+            $this->dataRequest = array_merge($this->dataRequest, ["isPublic" => false]);
         }
-
-        //validate param before
-        //faire setter spécifique dans entité project
-        if(!isset($this->dataRequest['startDate'])){
+        if(isset($this->dataRequest['startDate'])){
             $this->dataRequest['startDate'] = new DateTime ($this->dataRequest["startDate"]);
         }
         else {
-            $this->dataRequest['startDate'] = new DateTime("now");
+            $this->dataRequest = array_merge($this->dataRequest, ['startDate'=> new DateTime("now")]);
         }
-
         if(isset($this->dataRequest['endDate'])){
             $this->dataRequest['endDate'] = new DateTime ($this->dataRequest["endDate"]);
         }
 
-        ////create new project object && set organization's validated fields
-        $project = $this->makeNewEntity(
-            ["creator", "title", "description", "startDate", "endDate", "organization", "isPublic"],
-            Project::class
-        );
+        //optional link with an organization : validation orgId & convert to Organization object
+        if (isset($this->dataRequest['orgId'])) {
+            if($this->getLinkedEntity(Organization::class, "organization", 'orgId')
+            ) return $this->response;
+        }
 
-        //return potential violations
-        if(isset($this->response)) return $this->response;
+        //dataRequest Validations
+        if($this->isInvalid(
+            ["creator", "title", "description", "startDate", "isPublic"],
+            ["endDate", "organization"],
+            Project::class)
+        ) return $this->response;
+
+        //create Activity object && set validated fields
+        $project = $this->setEntity(new Project(), ["creator", "title", "description", "startDate", "endDate", "organization", "isPublic"]);
 
         //persist the new project
         if($this->persistEntity($project)) return $this->response;
@@ -88,7 +74,7 @@ class ProjectController extends CommonController
      * @Route("", name="_put", methods="put")
      * @param Request $insecureRequest
      * @return Response
-     * @throws \Exception
+     * @throws Exception
      */
     public function updateProject (Request $insecureRequest) :Response
     {
@@ -109,50 +95,34 @@ class ProjectController extends CommonController
             $this->dataRequest["endDate"] = new DateTime($this->dataRequest["endDate"]);
         }
 
-        //check if essential criterias are present
-        //todo requete isPresent?
-        if($this->paramValidator->hasAllCriteria(["id"])) return $this->response;
-
-        //validation project's id
-        if($this->checkViolations(
-            null,
-            ["id"],
-            Project::class)
-        ) return $this->response;
-
-        //and recover projectObject
+        //validate id and recover projectObject with currentUser id (creator)
         if($this->getEntities(Project::class, ['id', 'creator'])) return $this->response;
         $project = $this->dataResponse[0];
 
-        //validation orgId & convert to Organization object
+        //potential validation orgId & convert to Organization object
         if (isset($this->dataRequest['orgId'])) {
-
-            //switch for validation controle (attribute have same name)
-            $this->dataRequest['id'] = $this->dataRequest['orgId'];
-            //validation project's id
-            if($this->checkViolations(
-                null,
-                ["id"],
-                Project::class)
+            if($this->getLinkedEntity(Organization::class, "organization", 'orgId')
             ) return $this->response;
-
-            if($this->getEntities(Organization::class, ['id'])) return $this->response;
-            $this->dataRequest['organization'] = $this->dataResponse[0];
         }
 
         //persist updated project
         if(!empty($this->dataResponse)){
+
+            if($this->isInvalid(
+                null,
+                ["title", "description", "startDate", "endDate", "isPublic", "organization"],
+                Organization::class)
+            ) return $this->response;
+
             //set project's validated fields
             $project = $this->setEntity($project, ["title", "description", "startDate", "endDate", "isPublic", "organization"]);
-
-            //return potential violations
-            if(isset($this->response)) return $this->response;
 
             //persist updated project
             if($this->updateEntity($project)) return $this->response;
         }
+        //todo check, useless, now udpate, do this
+        //$this->dataResponse = [$project];
 
-        $this->dataResponse = [$project];
         //final response
         return $this->successResponse();
     }
@@ -174,14 +144,8 @@ class ProjectController extends CommonController
 
         //get one public project
         if(isset($this->dataRequest["id"])){
-            if($this->checkViolations(
-                null,
-                ["id"],
-                Project::class)
-            ) return $this->response;
-
             if($this->getEntities(Project::class, ["id", "isPublic"] )) return $this->response;
-        }else {
+        } else {
             //get all public project
             if($this->getEntities(Project::class, ["isPublic"] )) return $this->response;
         }
@@ -207,12 +171,6 @@ class ProjectController extends CommonController
 
         //get one created project by connected user
         if(isset($this->dataRequest["id"])){
-            if($this->checkViolations(
-                null,
-                ["id"],
-                Project::class)
-            ) return $this->response;
-
             if($this->getEntities(Project::class, ["id", "creator"] )) return $this->response;
         }else {
             //get all created project by connected user
@@ -223,7 +181,7 @@ class ProjectController extends CommonController
         return $this->successResponse();
     }
 
-    //todo conroller Followed
+    //todo controller Followed
 
     //todo request for return projectfollowed by a user,
     // need check isPublic and if user is assigned if the project isn't public

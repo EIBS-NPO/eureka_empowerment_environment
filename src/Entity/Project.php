@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Repository\ProjectRepository;
+use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -23,8 +24,8 @@ class Project
      * @ORM\Column(type="string", length=50)
      * @Assert\NotBlank(message="the title is required")
      * @Assert\Length(min="2", max="50",
-     *     minMessage="the firstname must be at least 2 characters long",
-     *     maxMessage="the firstname must not exceed 50 characters")
+     *     minMessage="the title must be at least 2 characters long",
+     *     maxMessage="the title must not exceed 50 characters")
      */
     private ?string $title;
 
@@ -32,19 +33,19 @@ class Project
      * @ORM\Column(type="string", length=255)
      * @Assert\NotBlank(message="the description is required")
      * @Assert\Length(min="2", max="255",
-     *     minMessage="the firstname must be at least 2 characters long",
-     *     maxMessage="the firstname must not exceed 255 characters")
+     *     minMessage="the description must be at least 2 characters long",
+     *     maxMessage="the description must not exceed 255 characters")
      */
     private ?string $description;
 
-    //todo add zone horaire
+    //todo add timezone
     /**
      * @ORM\Column(type="date")
      * @Assert\NotBlank(message="the startDate is required")
-     * @Assert\Type(type={"DateTime", "Y-m-d"}, message= "the date must be in the format YYYY-mm-dd")
+     * @Assert\Type(type={"DateTime", "Y-m-d"}, message= "the date must be in the format Y-m-d")
      * @Assert\GreaterThanOrEqual("today", message="start date must be today or greater date")
      */
-    private ?\DateTimeInterface $startDate;
+    private ?\DateTimeInterface $startDate = null;
 
     /**
      * @ORM\Column(type="date", nullable=true)
@@ -56,23 +57,36 @@ class Project
     /**
      * @ORM\ManyToOne(targetEntity=User::class, inversedBy="projects")
      * @ORM\JoinColumn(nullable=false)
+     * @Assert\Type(type="App\Entity\User")
      */
     private ?User $creator;
 
     /**
      * @ORM\ManyToOne(targetEntity=Organization::class, inversedBy="projects")
+     * @Assert\Type(type="App\Entity\Organization")
      */
     private ?Organization $organization = null;
 
     /**
      * @ORM\Column(type="boolean")
+     * @Assert\Type(type="bool", message=" isPublic not valid boolean")
      */
     private ?bool $isPublic;
 
     /**
      * @ORM\OneToMany(targetEntity=Activity::class, mappedBy="project")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\Activity")
+     *     }
+     * )
      */
-    private ?Activity $activities;
+    private $activities;
+
+    public function __construct()
+    {
+        $this->activities = new ArrayCollection();
+    }
 
     /**
      * Return an array containing object attributes
