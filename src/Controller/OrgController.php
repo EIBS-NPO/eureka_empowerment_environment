@@ -31,14 +31,15 @@ class OrgController extends CommonController
 
         //todo add address optional
 
-        //create Organization object && set validated fields
-        $org = $this->makeNewEntity(
-            ["referent", "type", "name", "email", "phone"],
-            Organization::class
-        );
+        //dataRequest Validations
+        if($this->isInvalid(
+            ["name", "type", "email", "referent"],
+            ["phone"],
+            Organization::class)
+        ) return $this->response;
 
-        //return potential violations
-        if(isset($this->response)) return $this->response;
+        //create user object && set validated fields
+        $org = $this->setEntity(new Organization(),["name", "type", "email", "referent", "phone"]);
 
         //persist the new organization
         if($this->persistEntity($org)) return $this->response;
@@ -62,7 +63,7 @@ class OrgController extends CommonController
         $this->dataRequest = $this->requestParameters->getData($this->request);
 
         //Validate fields
-        if($this->checkViolations(
+        if($this->isInvalid(
             null,
             ["id"],
             Organization::class)
@@ -89,14 +90,8 @@ class OrgController extends CommonController
         $this->dataRequest = $this->requestParameters->getData($this->request);
         $this->dataRequest["referent"] = $this->getUser()->getId();
 
-        //Validate fields
+        //validation requestParam and recover organization(s)
         if(isset($this->dataRequest['id'])){
-            if($this->checkViolations(
-                null,
-                ["id"],
-                Organization::class)
-            ) return $this->response;
-
             if($this->getEntities(Organization::class, ["id", "referent"] )) return $this->response;
         }else {
             if($this->getEntities(Organization::class, ["referent"] )) return $this->response;
@@ -123,24 +118,18 @@ class OrgController extends CommonController
         $this->dataRequest = $this->requestParameters->getData($this->request);
         $this->dataRequest = array_merge($this->dataRequest, ["referent" => $this->getUser()->getId()]);
 
-        //Validate id fields
-        if($this->checkViolations(
-            ["id"],
-            null,
-            Organization::class)
-        ) return $this->response;
-
-        //todo check orgAccess
-
-        //get query organization object by organization's id && referent's id
+        //validation for paramRequest && get query organization object by organization's id && referent's id
         if($this->getEntities(Organization::class, ["id", "referent"] )) return $this->response;
 
         if(!empty($this->dataResponse)){
+            if($this->isInvalid(
+                null,
+                ["type", "name", "email", "phone"],
+                Organization::class)
+            ) return $this->response;
+
             //set organization's validated fields
             $org = $this->setEntity($this->dataResponse[0], ["type", "name", "email", "phone"]);
-
-            //return potential violations
-            if(isset($this->response)) return $this->response;
 
             //persist updated org
             if($this->updateEntity($org)) return $this->response;

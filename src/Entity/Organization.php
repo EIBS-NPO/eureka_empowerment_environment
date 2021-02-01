@@ -26,20 +26,20 @@ class Organization
 
     /**
      * @ORM\Column(type="string", length=50)
-     * @Assert\NotBlank(message="the firstname is required")
+     * @Assert\NotBlank(message="the type is required")
      * @Assert\Length(min="2", max="50",
-     *     minMessage="the firstname must be at least 2 characters long",
-     *     maxMessage="the firstname must not exceed 50 characters")
+     *     minMessage="the type must be at least 2 characters long",
+     *     maxMessage="the type must not exceed 50 characters")
      *
      */
     private $type;
 
     /**
      * @ORM\Column(type="string", length=50, unique=true)
-     * @Assert\NotBlank(message="the firstname is required")
+     * @Assert\NotBlank(message="the name is required")
      * @Assert\Length(min="2", max="50",
-     *     minMessage="the firstname must be at least 2 characters long",
-     *     maxMessage="the firstname must not exceed 50 characters")
+     *     minMessage="the name must be at least 2 characters long",
+     *     maxMessage="the name must not exceed 50 characters")
      */
     private $name;
 
@@ -64,17 +64,17 @@ class Organization
     /**
      * @ORM\OneToMany(targetEntity=Project::class, mappedBy="organization")
      */
-    private ArrayCollection $projects;
+    private $projects = null;
 
     /**
      * @ORM\ManyToMany(targetEntity=User::class, mappedBy="memberOf")
      */
-    private ArrayCollection $membership;
+    private $membership = null;
 
     /**
      * @ORM\OneToMany(targetEntity=Activity::class, mappedBy="organization")
      */
-    private ArrayCollection $activities;
+    private $activities = null;
 
     public function __construct()
     {
@@ -103,6 +103,7 @@ class Organization
             $data["phone"] = $this->phone;
         }
 
+        //todo deprecated
         //Check some attributes with contexts to see if they are sets
         /*if($this->referent && $context != "read_referent"){
             $data["referent"] = $this->referent->serialize("read_organization");
