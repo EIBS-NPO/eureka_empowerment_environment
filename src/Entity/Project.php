@@ -57,7 +57,7 @@ class Project
     /**
      * @ORM\ManyToOne(targetEntity=User::class, inversedBy="projects")
      * @ORM\JoinColumn(nullable=false)
-     * @Assert\Type(type="App\Entity\User")
+     * @Assert\Type(type={"App\Entity\User", "integer"})
      */
     private ?User $creator;
 
