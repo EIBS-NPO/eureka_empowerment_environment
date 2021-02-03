@@ -19,3 +19,4 @@
 ###< lexik/jwt-authentication-bundle ###
 
 /src/uploads
+config/secrets/prod/prod.decrypt.private.php
