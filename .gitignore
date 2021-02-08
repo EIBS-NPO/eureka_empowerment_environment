@@ -3,6 +3,7 @@
 ###> symfony/framework-bundle ###
 /.env
 /.env.local
+/.env.prod
 /var/
 /vendor/
 ###< symfony/framework-bundle ###
@@ -12,8 +13,6 @@
 .phpunit.result.cache
 /phpunit.xml
 ###< symfony/phpunit-bridge ###
-<<<<<<< Updated upstream
-=======
 
 ###> lexik/jwt-authentication-bundle ###
 /config/jwt/*.pem
@@ -21,4 +20,3 @@
 
 /src/uploads
 config/secrets/prod/prod.decrypt.private.php
->>>>>>> Stashed changes

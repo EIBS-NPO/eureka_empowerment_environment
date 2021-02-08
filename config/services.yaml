@@ -4,6 +4,7 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices/configuration.html#application-related-configuration
 parameters:
+    pictures_directory: '%kernel.project_dir%/src/uploads/pictures'
 
 services:
     # default configuration for services in *this* file
@@ -27,5 +28,16 @@ services:
         resource: '../src/Controller/'
         tags: ['controller.service_arguments']
 
+    App\Service\PictureUploader:
+        arguments:
+            $targetDirectory: '%pictures_directory%'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
+#    App\Event\Listener\JWTCreatedListener:
+#        tags:
+#            - {
+#                name: kernel.event_listener,
+#                event: lexik_jwt_authentication.on_jwt_created,
+#                method: onJWTCreated
+#            }
