@@ -12,3 +12,13 @@
 .phpunit.result.cache
 /phpunit.xml
 ###< symfony/phpunit-bridge ###
+<<<<<<< Updated upstream
+=======
+
+###> lexik/jwt-authentication-bundle ###
+/config/jwt/*.pem
+###< lexik/jwt-authentication-bundle ###
+
+/src/uploads
+config/secrets/prod/prod.decrypt.private.php
+>>>>>>> Stashed changes
