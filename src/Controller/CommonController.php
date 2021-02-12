@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\Organization;
 use App\Exceptions\SecurityException;
 use App\Service\LogEvents;
+use App\Service\PictureHandler;
 use Psr\Log\LoggerInterface;
 use App\Service\Request\ParametersValidator;
 use App\Service\Request\RequestParameters;
@@ -31,6 +32,7 @@ class CommonController extends AbstractController
      */
     protected RequestSecurity $requestSecurity;
     protected RequestParameters $requestParameters;
+    protected PictureHandler $picHandler;
     protected EntityManagerInterface $entityManager;
     protected ParametersValidator $paramValidator;
     private LogEvents $logEvents;
@@ -72,12 +74,14 @@ class CommonController extends AbstractController
      * @param RequestParameters $requestParameters
      * @param EntityManagerInterface $entityManager
      * @param ParametersValidator $paramValidator
+     * @param PictureHandler $picHandler
      * @param LoggerInterface $logger
      * @param LogEvents $logEvents
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, EntityManagerInterface $entityManager, ParametersValidator $paramValidator, LoggerInterface $logger, LogEvents $logEvents){
+    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, EntityManagerInterface $entityManager, ParametersValidator $paramValidator, PictureHandler $picHandler, LoggerInterface $logger, LogEvents $logEvents){
             $this->requestSecurity = $requestSecurity;
             $this->requestParameters = $requestParameters;
+            $this->picHandler = $picHandler;
             $this->entityManager = $entityManager;
             $this->paramValidator = $paramValidator;
             $this->logger = $logger;
@@ -132,12 +136,13 @@ class CommonController extends AbstractController
 
     /**
      * @param $entities
+     * @param String|null $context
      * @return mixed
      */
-    public function serialize($entities){
+    public function serialize($entities, String $context = null){
         foreach($entities as $key => $entity){
             if(gettype($entity) != "string"){
-                $entities[$key] = $entity->serialize();
+                $entities[$key] = $entity->serialize($context);
             }
         }
         return $entities;
@@ -232,7 +237,17 @@ class CommonController extends AbstractController
         catch(Exception $e){
             $this->serverErrorResponse($e, $logInfo);
         }
+
         return isset($this->response);
+    }
+
+    //todo logg for pics
+    public function setPicture($entity) {
+        if($entity->getPicturePath() !== null){
+            $file_path =  $this->getClassName($entity) .'/'. $entity->getPicturePath();
+            $entity->setPictureFile($this->picHandler->getPic($file_path));
+        }
+        return $entity;
     }
 
     /**
@@ -242,9 +257,8 @@ class CommonController extends AbstractController
      * @return bool
      */
     public function getLinkedEntity(String $className, String $attributeName, String $idKey) :bool {
-        //dd($this->dataRequest);
         $this->dataRequest = array_merge($this->dataRequest, ["id" => $this->dataRequest[$idKey]]);
-        if($this->getEntities($className, ["id"])){
+        if(!$this->getEntities($className, ["id"])){
             if(!empty($this->dataResponse)){
                 $this->dataRequest[$attributeName] = $this->dataResponse[0];
                 unset($this->dataRequest[$idKey]);
@@ -278,7 +292,7 @@ class CommonController extends AbstractController
     /**
      * @return Response
      */
-    public function successResponse() : Response {
+    public function successResponse(String $context = null) : Response {
         if(isset($this->eventInfo)){
             //handle case when userInterface isn't used (register)
             !$this->getUser() ? $user = $this->dataResponse[0] : $user = $this->getUser();
@@ -291,7 +305,7 @@ class CommonController extends AbstractController
             //$logInfo .= " | GET_SUCCESS | " . count($this->dataResponse) . " DATA_FOUND";
             return $this->response =  new Response(
                 json_encode(
-                    $this->serialize($this->dataResponse)
+                    $this->serialize($this->dataResponse, $context)
                 ),
                 Response::HTTP_OK,
                 ["content-type" => "application/json"]
@@ -306,7 +320,7 @@ class CommonController extends AbstractController
         return  $this->response =  new Response(
             //todo stocker/ construire la chaine message log dans le service log
             //$logInfo .= " | DATA_NOT_FOUND";
-            json_encode(["data" => "DATA_NOT_FOUND"]),
+            json_encode(["DATA_NOT_FOUND"]),
             Response::HTTP_OK,
             ["content-type" => "application/json"]
         );
@@ -334,7 +348,7 @@ class CommonController extends AbstractController
      * @return String
      */
     public function getClassName($entity) :String {
-        $namespace = explode("/", get_class($entity));
+        $namespace = explode("\\", get_class($entity));
         return end($namespace);
     }
 }

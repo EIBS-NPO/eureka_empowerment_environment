@@ -142,6 +142,11 @@ class User implements UserInterface
      */
     private $picturePath;
 
+    /**
+     * base64_encode(picture)
+     */
+    private $pictureFile;
+
     public function __construct()
     {
         $this->globalPropertyAttributes = new ArrayCollection();
@@ -175,8 +180,8 @@ class User implements UserInterface
             $data["mobile"] = $this->mobile;
         }
 
-        if($this->picturePath){
-            $data["picture"] = $this->picturePath;
+        if($this->pictureFile){
+            $data["picture"] = $this->pictureFile;
         }
 
         //todo deprecated
@@ -458,5 +463,23 @@ class User implements UserInterface
 
         return $this;
     }
+
+    /**
+     * @return mixed
+     */
+    public function getPictureFile()
+    {
+        return $this->pictureFile;
+    }
+
+    /**
+     * @param mixed $pictureFile
+     */
+    public function setPictureFile($pictureFile): void
+    {
+        $this->pictureFile = $pictureFile;
+    }
+
+
 
 }
