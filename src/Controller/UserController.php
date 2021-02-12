@@ -3,7 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\User;
-use App\Service\PictureUploader;
+use App\Service\PictureHandler;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -71,6 +71,9 @@ class UserController extends CommonController
         //get request
         if($this->getEntities(User::class, ["id"])) return $this->response;
 
+        //download picture
+        $this->dataResponse[0] = $this->setPicture($this->dataResponse[0]);
+
         //final response
         return $this->successResponse();
     }
@@ -116,11 +119,11 @@ class UserController extends CommonController
     //todo if user have already apicture, delete the old pic
     /**
      * @param Request $insecureRequest
-     * @param PictureUploader $picUploader
+     * @param PictureHandler $picUploader
      * @return Response|null
      * @Route("/picture", name="_picture_post", methods="post")
      */
-    public function uploadPicProfil(Request $insecureRequest, PictureUploader $picUploader){
+    public function uploadPicProfil(Request $insecureRequest, PictureHandler $picUploader){
 
         //cleanXSS
         if($this->cleanXSS($insecureRequest)

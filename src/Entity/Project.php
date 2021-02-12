@@ -43,14 +43,14 @@ class Project
      * @ORM\Column(type="date")
      * @Assert\NotBlank(message="the startDate is required")
      * @Assert\Type(type={"DateTime", "Y-m-d"}, message= "the date must be in the format Y-m-d")
-     * @Assert\GreaterThanOrEqual("today", message="start date must be today or greater date")
+     * @Assert\LessThanOrEqual(propertyPath="endDate", message="start date must be less or equal than end date")
      */
     private ?\DateTimeInterface $startDate = null;
 
     /**
      * @ORM\Column(type="date", nullable=true)
      * @Assert\Type(type={"DateTime", "Y-m-d"}, message= "the date must be a DateTime Object")
-     * @Assert\GreaterThan(propertyPath="startDate", message="end date must be greater than start date")
+     * @Assert\GreaterThanOrEqual(propertyPath="startDate", message="end date must be greater or equal than start date")
      */
     private ?\DateTimeInterface $endDate = null;
 
@@ -108,13 +108,17 @@ class Project
             $data["endDate"] = $this->endDate->format('Y-m-d');
         }
 
-        if($context != "read_by_creator"){
+        if($context != "creator"){
             $data["creator"] = $this->creator->serialize("read_project");
         }
 
         //Check some attributes with contexts to see if they are sets
         if($this->organization && $context != "read_organization"){
             $data["organization"] = $this->organization->serialize("read_project");
+        }
+
+        if($context != "public"){
+            $data['isPublic'] = $this->getIsPublic();
         }
 
 

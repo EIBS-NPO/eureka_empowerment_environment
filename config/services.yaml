@@ -28,7 +28,7 @@ services:
         resource: '../src/Controller/'
         tags: ['controller.service_arguments']
 
-    App\Service\PictureUploader:
+    App\Service\PictureHandler:
         arguments:
             $targetDirectory: '%pictures_directory%'
 

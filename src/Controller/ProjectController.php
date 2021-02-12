@@ -32,6 +32,7 @@ class ProjectController extends CommonController
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
+
         // add default required values && convert datetime
         $this->dataRequest = array_merge($this->dataRequest, ["creator" => $this->getUser()]);
         if(!isset($this->dataRequest["isPublic"])){
@@ -39,9 +40,6 @@ class ProjectController extends CommonController
         }
         if(isset($this->dataRequest['startDate'])){
             $this->dataRequest['startDate'] = new DateTime ($this->dataRequest["startDate"]);
-        }
-        else {
-            $this->dataRequest = array_merge($this->dataRequest, ['startDate'=> new DateTime("now")]);
         }
         if(isset($this->dataRequest['endDate'])){
             $this->dataRequest['endDate'] = new DateTime ($this->dataRequest["endDate"]);
@@ -60,7 +58,8 @@ class ProjectController extends CommonController
             Project::class)
         ) return $this->response;
 
-        //create Activity object && set validated fields
+
+        //create project object && set validated fields
         $project = $this->setEntity(new Project(), ["creator", "title", "description", "startDate", "endDate", "organization", "isPublic"]);
 
         //persist the new project
@@ -133,7 +132,7 @@ class ProjectController extends CommonController
      * @param Request $insecureRequest
      * @return Response
      */
-    public function getProjects(Request $insecureRequest): Response {
+    public function getPublicProjects(Request $insecureRequest): Response {
         //cleanXSS
         if($this->cleanXSS($insecureRequest)
         ) return $this->response;
@@ -141,6 +140,9 @@ class ProjectController extends CommonController
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
         $this->dataRequest["isPublic"] = true;
+
+        //todo switch sur dataRequest['context'] => 'public' || 'creator' || 'assigned'
+        //todo for dispatch the good request by access rules.
 
         //get one public project
         if(isset($this->dataRequest["id"])){
@@ -156,26 +158,40 @@ class ProjectController extends CommonController
 
     /**
      * returns to a user his created projects
-     * @Route("/created", name="_get_created", methods="get")
+     * @Route("", name="_get", methods="get")
      * @param Request $insecureRequest
      * @return Response
      */
-    public function getProjectsCreated(Request $insecureRequest): Response {
+    public function getProjects(Request $insecureRequest): Response {
         //cleanXSS
         if($this->cleanXSS($insecureRequest)
         ) return $this->response;
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest["creator"] = $this->getUser()->getId();
 
-        //get one created project by connected user
-        if(isset($this->dataRequest["id"])){
-            if($this->getEntities(Project::class, ["id", "creator"] )) return $this->response;
-        }else {
-            //get all created project by connected user
-            if($this->getEntities(Project::class, ["creator"] )) return $this->response;
+        //todo maybe change assigned context, 'cause it'snt created for now
+        $criterias = [];
+        switch($this->dataRequest['context']){
+            case 'assigned':
+                $this->dataRequest["assigned"] = $this->getUser()->getId();
+                $criterias[]='assigned';
+                break;
+            case 'creator':
+                $this->dataRequest["creator"] = $this->getUser()->getId();
+                $criterias[]='creator';
+                break;
+            default:
+                $this->dataRequest["isPublic"] = true;
+                $criterias[]="isPublic";
         }
+
+        //if query for only one
+        if(isset($this->dataRequest["id"])) {
+            $criterias[] = 'id';
+        }
+
+        if($this->getEntities(Project::class, $criterias )) return $this->response;
 
         //success response
         return $this->successResponse();
