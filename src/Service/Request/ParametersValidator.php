@@ -71,6 +71,7 @@ class ParametersValidator
     }
 
     /**
+     * @param null $object
      * @return array
      * @throws Exception
      */
@@ -125,46 +126,4 @@ class ParametersValidator
         }
         return $violationsList;
     }
-
-    /**
-     * @param array $criterias
-     * @return bool
-     */
-    /*public function hasAllCriteria(array $criterias) :bool
-    {
-        //todo faire retourner une violation plutot qu'une reponse, c'est le CommonController qui construit les reponses
-        foreach($criterias as $criteria){
-            if(!isset($this->dataRequest[$criteria])){
-                $this->logger->info(Response::HTTP_NOT_FOUND . " | missing parameter: " . $criteria);
-                $this->response =  new Response(
-                    json_encode(["error" => "missing parameter : " . $criteria . " is required "]),
-                    Response::HTTP_BAD_REQUEST,
-                    ["Content-Type" => "application/json"]
-                );
-                return false;
-            }
-        }
-        return true;
-    }*/
-
-    /**
-     * @param String $className
-     * @return Organization|User|null
-     */
-    /*private function instanceClass(String $className){
-        switch($className){
-            case "App\Entity\User":
-                $object  = new User();
-                break;
-            case "App\Entity\Organization":
-                $object = new Organization();
-                break;
-            case "App\Entity\Project":
-                $object = new Project();
-                break;
-            default :
-                $object = null;
-        }
-        return $object;
-    }*/
 }
