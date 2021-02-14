@@ -121,7 +121,7 @@ class UserController extends CommonController
     /**
      * @param Request $insecureRequest
      * @return Response
-     * @Route("/picture", name="_picture_post", methods="post")
+     * @Route("/picture", name="_picture_put", methods="post")
      */
     public function putPicture(Request $insecureRequest ) :Response {
 
@@ -144,7 +144,8 @@ class UserController extends CommonController
 
         //todo gestion des files dans la requête
         // todo content-type getResponse()->setContentType('image/jpeg')
-        if($this->uploadPicture($user, $insecureRequest->files->get('image'))) return $this->response;
+        //if($this->uploadPicture($user, $insecureRequest->files->get('image'))) return $this->response;
+        if($this->uploadPicture($user, $this->dataRequest['image'])) return $this->response;
         //$this->dataRequest["picturePath"] = $picUploader->upload($user, $insecureRequest->files->get('image'));
 
         if($this->isInvalid(
@@ -167,11 +168,12 @@ class UserController extends CommonController
     }
 
     /**
+     * @deprecated
      * @param Request $insecureRequest
      * @return Response
      * @Route("/picture", name="_picture_get", methods="get")
      */
-    public function getPicProfil(Request $insecureRequest) :Response
+    /*public function getPicProfil(Request $insecureRequest) :Response
     {
         //cleanXSS
         if($this->cleanXSS($insecureRequest)
@@ -195,7 +197,7 @@ class UserController extends CommonController
             return $this->notFoundResponse();
         }
         return $this->successResponse();
-    }
+    }*/
 
     //todo particular methods for email and password => need refresh token
     public function resetPassword(){}

@@ -76,6 +76,16 @@ class Organization
      */
     private $activities = null;
 
+    /**
+     * @ORM\Column(type="string", length=255, nullable=true)
+     */
+    private $picturePath;
+
+    /**
+     * base64_encode(picture)
+     */
+    private $pictureFile;
+
     public function __construct()
     {
         $this->projects = new ArrayCollection();
@@ -95,12 +105,17 @@ class Organization
             "id" => $this->id,
             "type" => $this->type,
             "name" => $this->name,
-            "email" => $this->email
+            "email" => $this->email,
+            "referent" => $this->referent->serialize()
         ];
 
         //Check some attributes to see if they are sets
         if($this->phone){
             $data["phone"] = $this->phone;
+        }
+
+        if($this->pictureFile){
+            $data["picture"] = $this->pictureFile;
         }
 
         //todo deprecated
@@ -270,4 +285,34 @@ class Organization
 
         return $this;
     }
+
+    public function getPicturePath(): ?string
+    {
+        return $this->picturePath;
+    }
+
+    public function setPicturePath(?string $picturePath): self
+    {
+        $this->picturePath = $picturePath;
+
+        return $this;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getPictureFile()
+    {
+        return $this->pictureFile;
+    }
+
+    /**
+     * @param mixed $pictureFile
+     */
+    public function setPictureFile($pictureFile): void
+    {
+        $this->pictureFile = $pictureFile;
+    }
+
+
 }

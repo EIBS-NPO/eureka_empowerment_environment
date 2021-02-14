@@ -480,6 +480,4 @@ class User implements UserInterface
         $this->pictureFile = $pictureFile;
     }
 
-
-
 }

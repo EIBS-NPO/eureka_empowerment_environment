@@ -18,6 +18,7 @@ class RequestParameters
                 break;
             case "POST":
                 $this->data = array_merge($this->data, $request->request->all());
+                $this->data = array_merge($this->data, $request->files->all());
                 break;
         }
 

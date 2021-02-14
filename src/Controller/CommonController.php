@@ -42,6 +42,8 @@ class CommonController extends AbstractController
     //todo dispatch in LoggerService
     private $logInfo = "";
 
+    //todo maybe add context here?
+
     /**
      * @var Response|null
      * Methods that can create a response should store it here and return a boolean to indicate the existence of the response.
@@ -253,7 +255,13 @@ class CommonController extends AbstractController
      */
     public function loadPicture($entity) {
         $className = $this->getClassName($entity);
-        $this->logInfo .= " GET | picture | for $className id: ".$entity->getId(). " by user id : " . $this->getUser()->getId();
+        $this->logInfo .= " GET | picture | for $className id: ".$entity->getId();
+        if($this->getuser()){
+            $this->logInfo .= " by user id : " . $this->getUser()->getId();
+        }else {
+            $this->logInfo .= " by anonymous user ";
+        }
+
         if($entity->getPicturePath() !== null){
             try {
                 $img = $this->picHandler->getPic($className, $entity->getPicturePath());
