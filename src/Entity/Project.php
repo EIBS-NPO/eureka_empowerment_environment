@@ -111,6 +111,7 @@ class Project
             "title" => $this->title,
             "description" => $this->description,
             "startDate" => $this->startDate->format('Y-m-d'),
+            "creator" => $this->creator->serialize()
         ];
 
         //Check some attributes to see if they are sets
@@ -122,9 +123,9 @@ class Project
             $data["picture"] = $this->pictureFile;
         }
 
-        if($context != "creator"){
+        /*if($context != "creator"){
             $data["creator"] = $this->creator->serialize("read_project");
-        }
+        }*/
 
         //Check some attributes with contexts to see if they are sets
         if($this->organization && $context != "read_organization"){

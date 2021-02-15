@@ -121,8 +121,6 @@ class ProjectController extends CommonController
             //persist updated project
             if($this->updateEntity($project)) return $this->response;
         }
-        //todo check, useless, now udpate, do this
-        //$this->dataResponse = [$project];
 
         //final response
         return $this->successResponse();

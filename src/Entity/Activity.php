@@ -19,14 +19,14 @@ class Activity
      * @ORM\Column(type="integer")
      * @Assert\Type(type="numeric", message=" id is not valid")
      */
-    private $id;
+    private ?int $id;
 
     /**
      * @ORM\Column(type="boolean")
      * @Assert\NotBlank(message="isPublic is required")
      * @Assert\Type(type="bool", message=" isPublic not valid boolean")
      */
-    protected $isPublic;
+    protected ?bool $isPublic;
 
     /**
      * @ORM\Column(type="string", length=50)
@@ -36,7 +36,7 @@ class Activity
      *     minMessage="the title must be at least 2 characters long",
      *     maxMessage="the title must not exceed 50 characters")
      */
-    protected $title;
+    protected ?string $title;
 
     /**
      * @ORM\Column(type="string", length=255)
@@ -46,7 +46,7 @@ class Activity
      *     minMessage="the description must be at least 2 characters long",
      *     maxMessage="the description must not exceed 255 characters")
      */
-    protected $description;
+    protected ?string $description;
 
     //todo add timezone
     /**
@@ -55,39 +55,43 @@ class Activity
      * @Assert\Type(type={"DateTime", "Y-m-d"}, message= "the date must be in the format YYYY-mm-dd")
      * @Assert\GreaterThanOrEqual("today", message="post date must be today or greater date")
      */
-    protected $postDate;
+    protected ?\DateTimeInterface $postDate;
 
     /**
      * @ORM\Column(type="string", length=255)
      * @Assert\Type(type="string", message=" summary is not valid string")
      */
-    protected $summary;
-
-    /**
-     * @ORM\Column(type="string", length=255, nullable=true)
-     * @Assert\Type(type="string", message=" illustration is not valid string")
-     */
-    protected $illustration;
+    protected ?string $summary;
 
     /**
      * @ORM\ManyToOne(targetEntity=User::class, inversedBy="activities")
      * @ORM\JoinColumn(nullable=false)
      * @Assert\NotBlank(message="the creator is required")
-     * @Assert\Type(type="App\Entity\User")
+     * @Assert\Type(type={"App\Entity\User", "integer"})
      */
     protected ?User $creator = null;
 
     /**
      * @ORM\ManyToOne(targetEntity=Project::class, inversedBy="activities")
-     * @Assert\Type(type="App\Entity\Project")
+     * @Assert\Type(type={"App\Entity\Project", "integer"})
      */
     protected ?Project $project = null;
 
     /**
      * @ORM\ManyToOne(targetEntity=Organization::class, inversedBy="activities")
-     * @Assert\Type(type="App\Entity\Organization")
+     * @Assert\Type(type={"App\Entity\Organization", "integer"})
      */
     protected ?Organization $organization = null;
+
+    /**
+     * @ORM\Column(type="string", length=255, nullable=true)
+     */
+    private ?string $picturePath;
+
+    /**
+     * base64_encode(picture)
+     */
+    private $pictureFile;
 
     public function serialize(String $context = null): array
     {
@@ -97,12 +101,13 @@ class Activity
             "description" => $this->description,
             "summary" => $this->summary,
             "postDate" => $this->postDate->format('Y-m-d'),
-            "isPublic" => $this->isPublic
+            "isPublic" => $this->isPublic,
+            "creator" => $this->creator->serialize()
         ];
 
         //Check some attributes to see if they are sets
-        if($this->illustration){
-            $data["illustration"] = $this->illustration;
+        if($this->pictureFile){
+            $data["picture"] = $this->pictureFile;
         }
         if($this->project){
             $data["project"] = $this->project->getId();
@@ -179,18 +184,6 @@ class Activity
         return $this;
     }
 
-    public function getIllustration(): ?string
-    {
-        return $this->illustration;
-    }
-
-    public function setIllustration(?string $illustration): self
-    {
-        $this->illustration = $illustration;
-
-        return $this;
-    }
-
     public function getCreator(): ?User
     {
         return $this->creator;
@@ -226,4 +219,33 @@ class Activity
 
         return $this;
     }
+
+    public function getPicturePath(): ?string
+    {
+        return $this->picturePath;
+    }
+
+    public function setPicturePath(?string $picturePath): self
+    {
+        $this->picturePath = $picturePath;
+
+        return $this;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getPictureFile()
+    {
+        return $this->pictureFile;
+    }
+
+    /**
+     * @param mixed $pictureFile
+     */
+    public function setPictureFile($pictureFile): void
+    {
+        $this->pictureFile = $pictureFile;
+    }
+
 }
