@@ -31,11 +31,13 @@ class PictureHandler
 
     public function upload($className, UploadedFile $file)
     {
+        //todo check mime limitation config etc... and config jpa
         $originalFilename = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
         $safeFilename = $this->slugger->slug($originalFilename);
         $fileName = $safeFilename.'-'.uniqid().'.'.$file->guessExtension();
 
         try {
+            //todo move with permission use chmod after move
             $file->move($this->getFileDir($className), $fileName);
         } catch (FileException $e) {
             throw new Exception("Failed: an error occurred while uploading the file", 500);
