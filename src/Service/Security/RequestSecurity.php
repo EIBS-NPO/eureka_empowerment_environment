@@ -4,7 +4,6 @@ namespace App\Service\Security;
 
 use App\Exceptions\SecurityException;
 use App\Service\Configuration\ConfigurationHandler;
-use mysql_xdevapi\Exception;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Security\Core\User\UserInterface;
 

@@ -72,7 +72,7 @@ class UserController extends CommonController
         if($this->getEntities(User::class, ["id"])) return $this->response;
 
         //download picture
-        $this->dataResponse[0] = $this->setPicture($this->dataResponse[0]);
+        $this->dataResponse = [$this->loadPicture($this->dataResponse[0])];
 
         //final response
         return $this->successResponse();
@@ -117,13 +117,13 @@ class UserController extends CommonController
     }
 
     //todo if user have already apicture, delete the old pic
+
     /**
      * @param Request $insecureRequest
-     * @param PictureHandler $picUploader
-     * @return Response|null
-     * @Route("/picture", name="_picture_post", methods="post")
+     * @return Response
+     * @Route("/picture", name="_picture_put", methods="post")
      */
-    public function uploadPicProfil(Request $insecureRequest, PictureHandler $picUploader){
+    public function putPicture(Request $insecureRequest ) :Response {
 
         //cleanXSS
         if($this->cleanXSS($insecureRequest)
@@ -133,7 +133,7 @@ class UserController extends CommonController
         $this->dataRequest = $this->requestParameters->getData($this->request);
         $this->dataRequest = array_merge($this->dataRequest, ["id" => $this->getUser()->getId()]);
 
-        //todo controle with assert for image and configLimite
+        //todo controle with assert for image and configLimite (dans pictureHandler,( ou fileHandler)
         /*if(!isset($this->dataRequest["picture"])) {
 
         }*/
@@ -142,7 +142,11 @@ class UserController extends CommonController
         if($this->getEntities(User::class, ["id"] )) return $this->response;
         $user = $this->dataResponse[0];
 
-        $this->dataRequest["picturePath"] = $picUploader->upload($insecureRequest->files->get('image'));
+        //todo gestion des files dans la requête
+        // todo content-type getResponse()->setContentType('image/jpeg')
+        //if($this->uploadPicture($user, $insecureRequest->files->get('image'))) return $this->response;
+        if($this->uploadPicture($user, $this->dataRequest['image'])) return $this->response;
+        //$this->dataRequest["picturePath"] = $picUploader->upload($user, $insecureRequest->files->get('image'));
 
         if($this->isInvalid(
             null,
@@ -156,16 +160,20 @@ class UserController extends CommonController
         //persist updated project
         if($this->updateEntity($user)) return $this->response;
 
+        //download picture
+        $this->dataResponse = [$this->loadPicture($user)];
+
         //final response
         return $this->successResponse();
     }
 
     /**
+     * @deprecated
      * @param Request $insecureRequest
      * @return Response
      * @Route("/picture", name="_picture_get", methods="get")
      */
-    public function getPicProfil(Request $insecureRequest) :Response
+    /*public function getPicProfil(Request $insecureRequest) :Response
     {
         //cleanXSS
         if($this->cleanXSS($insecureRequest)
@@ -189,7 +197,7 @@ class UserController extends CommonController
             return $this->notFoundResponse();
         }
         return $this->successResponse();
-    }
+    }*/
 
     //todo particular methods for email and password => need refresh token
     public function resetPassword(){}

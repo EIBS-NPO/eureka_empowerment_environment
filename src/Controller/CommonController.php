@@ -13,6 +13,7 @@ use App\Service\Security\RequestSecurity;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -37,6 +38,11 @@ class CommonController extends AbstractController
     protected ParametersValidator $paramValidator;
     private LogEvents $logEvents;
     private LoggerInterface $logger;
+
+    //todo dispatch in LoggerService
+    private $logInfo = "";
+
+    //todo maybe add context here?
 
     /**
      * @var Response|null
@@ -172,7 +178,7 @@ class CommonController extends AbstractController
      */
     public function persistEntity($entity) :bool
     {
-        $logInfo = "POST | " . get_class($entity);
+        $this->logInfo = "POST | " . get_class($entity);
         //persist the new entity
         try{
             $this->entityManager->persist($entity);
@@ -180,10 +186,10 @@ class CommonController extends AbstractController
             $this->dataResponse = [$entity];
 
             $this->eventInfo =["type" => $this->getClassName($entity), "desc" => "new registration"];
-            $this->logger->info( $logInfo . "| REGISTRATION_SUCCESS | new id: " .$entity->getId());
+            $this->logInfo .= "| REGISTRATION_SUCCESS | new id: " .$entity->getId();
 
         }catch(Exception $e){
-            $this->serverErrorResponse($e, $logInfo);
+            $this->serverErrorResponse($e, $this->logInfo);
         }
         return isset($this->response);
     }
@@ -194,14 +200,14 @@ class CommonController extends AbstractController
      */
     public function updateEntity($entity) :bool
     {
-        $logInfo = "PUT | ". get_class($entity) . " | " .$entity->getId();
+        $this->logInfo .= "PUT | ". get_class($entity) . " | " .$entity->getId();
         try{
             $this->entityManager->flush();
             $this->dataResponse = [$entity];
             $this->eventInfo =["type" => $this->getClassName($entity), "desc" => "update"];
-            $this->logger->info($logInfo . "| UPDATE_SUCCESS");
+            $this->logInfo .= "| UPDATE_SUCCESS";
         }catch(Exception $e){
-            $this->serverErrorResponse($e, $logInfo);
+            $this->serverErrorResponse($e, $this->logInfo);
         }
         return isset($this->response);
     }
@@ -213,7 +219,7 @@ class CommonController extends AbstractController
      */
     public function getEntities(String $className, array $criterias) :bool {
         //initLog
-        $logInfo = 'GET | ' .  $className;
+        $this->logInfo .= ' GET | ' .  $className;
 
         $repository = $this->entityManager->getRepository($className);
         try{
@@ -222,7 +228,7 @@ class CommonController extends AbstractController
                 if($this->hasAllCriteria($criterias) && !($this->isInvalid($criterias, null, $className))){
                     //initLog
                     foreach ($criterias as $key => $criteria) {
-                        $logInfo .= " | by " . $criteria . " : " . $this->dataRequest[$criteria];
+                        $this->logInfo .= " | by " . $criteria . " : " . $this->dataRequest[$criteria];
                         $criterias[$criteria] = $this->dataRequest[$criteria];
                         unset($criterias[$key]);
                     }
@@ -230,24 +236,69 @@ class CommonController extends AbstractController
                 }
             }else { //otherwise we return all users
                 //initLog
-                $logInfo .= " | ALL";
+                $this->logInfo .= " | ALL";
                 $this->dataResponse = $repository->findAll();
             }
         }
         catch(Exception $e){
-            $this->serverErrorResponse($e, $logInfo);
+            $this->serverErrorResponse($e, $this->logInfo);
         }
 
         return isset($this->response);
     }
 
     //todo logg for pics
-    public function setPicture($entity) {
+
+    /**
+     * @param $entity
+     * @return mixed
+     */
+    public function loadPicture($entity) {
+        $className = $this->getClassName($entity);
+        $this->logInfo .= " GET | picture | for $className id: ".$entity->getId();
+        if($this->getuser()){
+            $this->logInfo .= " by user id : " . $this->getUser()->getId();
+        }else {
+            $this->logInfo .= " by anonymous user ";
+        }
+
         if($entity->getPicturePath() !== null){
-            $file_path =  $this->getClassName($entity) .'/'. $entity->getPicturePath();
-            $entity->setPictureFile($this->picHandler->getPic($file_path));
+            try {
+                $img = $this->picHandler->getPic($className, $entity->getPicturePath());
+                $entity->setPictureFile($img);
+            }catch(Exception $e){
+                $this->serverErrorResponse($e, $this->logInfo);
+            }
         }
         return $entity;
+    }
+
+    /**
+     * @param $entity
+     * @param UploadedFile $file
+     * @return bool
+     */
+    public function uploadPicture($entity, UploadedFile $file){
+        $className = $this->getClassName($entity);
+        $this->logInfo .= " PUT | picture | for $className id: ".$entity->getId(). " by user id : " . $this->getUser()->getId();
+
+        try{
+            //uploading file in his directory
+            $newPicPath= $this->picHandler->upload($className, $file);
+            $this->dataRequest["picturePath"] = $newPicPath;
+            $this->logInfo .= " | new Picture add $newPicPath ";
+
+            //if a picture already exist, need to remove it
+            if($entity->getPicturePath() !== null){
+                $oldPic =$entity->getPicturePath();
+                $this->picHandler->removeFile($className, $entity->getPicturePath());
+                $this->logInfo .= " | old picture removed $oldPic ";
+            }
+        }catch(Exception $e){
+            $this->serverErrorResponse($e, $this->logInfo);
+        }
+
+        return isset($this->response);
     }
 
     /**
@@ -290,6 +341,7 @@ class CommonController extends AbstractController
     }
 
     /**
+     * @param String|null $context
      * @return Response
      */
     public function successResponse(String $context = null) : Response {
@@ -302,7 +354,8 @@ class CommonController extends AbstractController
         if(empty($this->dataResponse)){
              return $this->notFoundResponse();
         }else {
-            //$logInfo .= " | GET_SUCCESS | " . count($this->dataResponse) . " DATA_FOUND";
+            $this->logInfo .= " | GET_SUCCESS | " . count($this->dataResponse) . " DATA_FOUND";
+            $this->logger->info($this->logInfo);
             return $this->response =  new Response(
                 json_encode(
                     $this->serialize($this->dataResponse, $context)
@@ -335,6 +388,7 @@ class CommonController extends AbstractController
         $logInfo .= $logInfo . " | FAILED | ";
         $this->logger->log("error",$logInfo . $e);
 
+        //todo message un peu plus précis? ou pas...
         $this->response = new Response(
             json_encode(["error" => "ERROR_SERVER"]),
             Response::HTTP_INTERNAL_SERVER_ERROR,

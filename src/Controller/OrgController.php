@@ -48,6 +48,11 @@ class OrgController extends CommonController
         return $this->successResponse();
     }
 
+
+
+
+
+
     /**
      * @Route("/public", name="_get_public", methods="get")
      * @param Request $insecureRequest
@@ -72,6 +77,11 @@ class OrgController extends CommonController
         //get query
         if($this->getEntities(Organization::class, ["id"] )) return $this->response;
 
+        //download picture
+        foreach($this->dataResponse as $key => $org){
+            $this->dataResponse[$key] = $this->loadPicture($org);
+        }
+
         //success response
         return $this->successResponse();
     }
@@ -95,6 +105,11 @@ class OrgController extends CommonController
             if($this->getEntities(Organization::class, ["id", "referent"] )) return $this->response;
         }else {
             if($this->getEntities(Organization::class, ["referent"] )) return $this->response;
+        }
+
+        //download picture
+        foreach($this->dataResponse as $key => $org){
+            $this->dataResponse[$key] = $this->loadPicture($org);
         }
 
         //success response
@@ -134,6 +149,54 @@ class OrgController extends CommonController
             //persist updated org
             if($this->updateEntity($org)) return $this->response;
         }
+
+        //final response
+        return $this->successResponse();
+    }
+
+    /**
+     * @param Request $insecureRequest
+     * @return Response
+     * @Route("/picture", name="_picture_put", methods="post")
+     */
+    public function putPicture(Request $insecureRequest ) :Response {
+
+        //cleanXSS
+        if($this->cleanXSS($insecureRequest)
+        ) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+        $this->dataRequest = array_merge($this->dataRequest, ["referent" => $this->getUser()->getId()]);
+
+        //todo controle with assert for image and configLimite (dans pictureHandler,( ou fileHandler)
+        /*if(!isset($this->dataRequest["picture"])) {
+
+        }*/
+
+        //get query
+        if($this->getEntities(Organization::class, ['id', 'referent'])) return $this->response;
+        $org = $this->dataResponse[0];
+
+        //todo gestion des files dans la requête
+        // todo content-type getResponse()->setContentType('image/jpeg')
+
+        if($this->uploadPicture($org, $this->dataRequest['image'])) return $this->response;
+
+        if($this->isInvalid(
+            null,
+            ["picturePath"],
+            Organization::class)
+        ) return $this->response;
+
+        //set project's validated fields
+        $project = $this->setEntity($org, ["picturePath"]);
+
+        //persist updated project
+        if($this->updateEntity($project)) return $this->response;
+
+        //download picture
+        $this->dataResponse = [$this->loadPicture($project)];
 
         //final response
         return $this->successResponse();

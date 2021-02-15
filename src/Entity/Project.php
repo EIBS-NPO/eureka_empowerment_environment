@@ -63,7 +63,7 @@ class Project
 
     /**
      * @ORM\ManyToOne(targetEntity=Organization::class, inversedBy="projects")
-     * @Assert\Type(type="App\Entity\Organization")
+     * @Assert\Type(type={"App\Entity\Organization", "integer"})
      */
     private ?Organization $organization = null;
 
@@ -83,6 +83,16 @@ class Project
      */
     private $activities;
 
+    /**
+     * @ORM\Column(type="string", length=255, nullable=true)
+     */
+    private $picturePath;
+
+    /**
+     * base64_encode(picture)
+     */
+    private $pictureFile;
+
     public function __construct()
     {
         $this->activities = new ArrayCollection();
@@ -100,7 +110,8 @@ class Project
             "id" => $this->id,
             "title" => $this->title,
             "description" => $this->description,
-            "startDate" => $this->startDate->format('Y-m-d')
+            "startDate" => $this->startDate->format('Y-m-d'),
+            "creator" => $this->creator->serialize()
         ];
 
         //Check some attributes to see if they are sets
@@ -108,9 +119,13 @@ class Project
             $data["endDate"] = $this->endDate->format('Y-m-d');
         }
 
-        if($context != "creator"){
-            $data["creator"] = $this->creator->serialize("read_project");
+        if($this->pictureFile){
+            $data["picture"] = $this->pictureFile;
         }
+
+        /*if($context != "creator"){
+            $data["creator"] = $this->creator->serialize("read_project");
+        }*/
 
         //Check some attributes with contexts to see if they are sets
         if($this->organization && $context != "read_organization"){
@@ -236,4 +251,34 @@ class Project
 
         return $this;
     }
+
+    public function getPicturePath(): ?string
+    {
+        return $this->picturePath;
+    }
+
+    public function setPicturePath(?string $picturePath): self
+    {
+        $this->picturePath = $picturePath;
+
+        return $this;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getPictureFile()
+    {
+        return $this->pictureFile;
+    }
+
+    /**
+     * @param mixed $pictureFile
+     */
+    public function setPictureFile($pictureFile): void
+    {
+        $this->pictureFile = $pictureFile;
+    }
+
+
 }

@@ -7,6 +7,8 @@ use Symfony\Component\HttpFoundation\File\Exception\FileException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\String\Slugger\SluggerInterface;
 
+//todo ajout des gestion de config pour les limite fichier
+//s'inspirer de RequestSecurity
 class PictureHandler
 {
     private String $targetDirectory;
@@ -18,32 +20,56 @@ class PictureHandler
         $this->slugger = $slugger;
     }
 
-    public function upload(UploadedFile $file)
+    /**
+     * just short className like "User", or "Organization" to direct the correct files's folder
+     * @param $className
+     * @return String
+     */
+    public function getFileDir($className) :String {
+        return $this->targetDirectory.'/'.$className .'/';
+    }
+
+    public function upload($className, UploadedFile $file)
     {
+        //todo check mime limitation config etc... and config jpa
         $originalFilename = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
         $safeFilename = $this->slugger->slug($originalFilename);
         $fileName = $safeFilename.'-'.uniqid().'.'.$file->guessExtension();
 
         try {
-            $file->move($this->getTargetDirectory(), $fileName);
+            //todo move with permission use chmod after move
+            $file->move($this->getFileDir($className), $fileName);
         } catch (FileException $e) {
-            // ... handle exception if something happens during file upload
+            throw new Exception("Failed: an error occurred while uploading the file", 500);
         }
 
         return $fileName;
     }
 
-    public function getPic($file_path)
+    public function getPic($className, $file_path)
     {
-        $file_dir =  $this->targetDirectory.'/' . $file_path;
+        $fileDir =  $this->getFileDir($className).'/' . $file_path;
         //   $path2 = $destination .'/'. $this->dataRequest["pic"] .".png";
 
-        if (file_exists($file_dir)){
+        //todo pour génériser, reconnaitre filer image et fichier bureau
+        if (file_exists($fileDir)){
           //  $img = file_get_contents($file_dir);
-            return base64_encode(file_get_contents($file_dir));
+            return base64_encode(file_get_contents($fileDir));
         }
         else {
             return "no found data";
+        }
+    }
+
+    public function removeFile($className, $file_path){
+        $fileDir =  $this->getFileDir($className).'/' . $file_path;
+        if (file_exists($fileDir)){
+            //  $img = file_get_contents($file_dir);
+           /* try{*/
+                unlink ( $fileDir );
+            /*}catch(e Exception){
+
+            }*/
         }
     }
 }

@@ -69,6 +69,10 @@ class ProjectController extends CommonController
         return $this->successResponse();
     }
 
+
+
+
+
     /**
      * @Route("", name="_put", methods="put")
      * @param Request $insecureRequest
@@ -84,9 +88,7 @@ class ProjectController extends CommonController
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
         $this->dataRequest = array_merge($this->dataRequest, ["creator" => $this->getUser()->getId()]);
-        if(!isset($this->dataRequest["startDate"])){
-            $this->dataRequest["startDate"] = new DateTime("now");
-        }else {
+        if(isset($this->dataRequest["startDate"])){
             $this->dataRequest["startDate"] = new DateTime($this->dataRequest["startDate"]);
         }
 
@@ -119,12 +121,64 @@ class ProjectController extends CommonController
             //persist updated project
             if($this->updateEntity($project)) return $this->response;
         }
-        //todo check, useless, now udpate, do this
-        //$this->dataResponse = [$project];
 
         //final response
         return $this->successResponse();
     }
+
+
+
+
+    /**
+     * @param Request $insecureRequest
+     * @return Response
+     * @Route("/picture", name="_picture_put", methods="post")
+     */
+    public function putPicture(Request $insecureRequest ) :Response {
+
+        //cleanXSS
+        if($this->cleanXSS($insecureRequest)
+        ) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+        $this->dataRequest = array_merge($this->dataRequest, ["creator" => $this->getUser()->getId()]);
+
+        //todo controle with assert for image and configLimite (dans pictureHandler,( ou fileHandler)
+        /*if(!isset($this->dataRequest["picture"])) {
+
+        }*/
+
+        //get query
+        if($this->getEntities(Project::class, ['id', 'creator'])) return $this->response;
+        $project = $this->dataResponse[0];
+
+        //todo gestion des files dans la requête
+        // todo content-type getResponse()->setContentType('image/jpeg')
+
+        if($this->uploadPicture($project, $this->dataRequest['image'])) return $this->response;
+
+        if($this->isInvalid(
+            null,
+            ["picturePath"],
+            Project::class)
+        ) return $this->response;
+
+        //set project's validated fields
+        $project = $this->setEntity($project, ["picturePath"]);
+
+        //persist updated project
+        if($this->updateEntity($project)) return $this->response;
+
+        //download picture
+        $this->dataResponse = [$this->loadPicture($project)];
+
+        //final response
+        return $this->successResponse();
+    }
+
+
+
 
     /**
      * returns all public projects
@@ -150,6 +204,11 @@ class ProjectController extends CommonController
         } else {
             //get all public project
             if($this->getEntities(Project::class, ["isPublic"] )) return $this->response;
+        }
+
+        //download picture
+        foreach($this->dataResponse as $key => $project){
+            $this->dataResponse[$key] = $this->loadPicture($project);
         }
 
         //success response
@@ -192,6 +251,11 @@ class ProjectController extends CommonController
         }
 
         if($this->getEntities(Project::class, $criterias )) return $this->response;
+
+        //download picture
+        foreach($this->dataResponse as $key => $project){
+            $this->dataResponse[$key] = $this->loadPicture($project);
+        }
 
         //success response
         return $this->successResponse();
