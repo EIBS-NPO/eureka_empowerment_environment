@@ -20,3 +20,5 @@
 
 /src/uploads
 config/secrets/prod/prod.decrypt.private.php
+
+/public/.htaccess
