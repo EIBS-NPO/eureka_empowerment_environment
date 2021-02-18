@@ -349,7 +349,9 @@ class CommonController extends AbstractController
             //handle case when userInterface isn't used (register)
             !$this->getUser() ? $user = $this->dataResponse[0] : $user = $this->getUser();
 
-            $this->logEvents->addEvents($user, $this->dataResponse[0]->getId(), $this->eventInfo["type"], $this->eventInfo["desc"]);
+            //todo getId don't work on array return by membership requests
+            //rework logging...
+        //    $this->logEvents->addEvents($user, $this->dataResponse[0]->getId(), $this->eventInfo["type"], $this->eventInfo["desc"]);
         }
         if(empty($this->dataResponse)){
              return $this->notFoundResponse();

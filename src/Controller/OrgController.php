@@ -34,12 +34,12 @@ class OrgController extends CommonController
         //dataRequest Validations
         if($this->isInvalid(
             ["name", "type", "email", "referent"],
-            ["phone"],
+            ["phone", 'description'],
             Organization::class)
         ) return $this->response;
 
         //create user object && set validated fields
-        $org = $this->setEntity(new Organization(),["name", "type", "email", "referent", "phone"]);
+        $org = $this->setEntity(new Organization(),["name", "type", "email", "description", "referent", "phone"]);
 
         //persist the new organization
         if($this->persistEntity($org)) return $this->response;
@@ -139,12 +139,12 @@ class OrgController extends CommonController
         if(!empty($this->dataResponse)){
             if($this->isInvalid(
                 null,
-                ["type", "name", "email", "phone"],
+                ["type", "name", "description", "email", "phone"],
                 Organization::class)
             ) return $this->response;
 
             //set organization's validated fields
-            $org = $this->setEntity($this->dataResponse[0], ["type", "name", "email", "phone"]);
+            $org = $this->setEntity($this->dataResponse[0], ["type", "name", "description", "email", "phone"]);
 
             //persist updated org
             if($this->updateEntity($org)) return $this->response;

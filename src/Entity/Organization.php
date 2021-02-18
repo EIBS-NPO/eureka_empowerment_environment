@@ -22,7 +22,7 @@ class Organization
      * @ORM\Column(type="integer")
      * @Assert\Type(type="numeric", message="The id is not valid")
      */
-    private $id;
+    private ?int $id;
 
     /**
      * @ORM\Column(type="string", length=50)
@@ -86,6 +86,11 @@ class Organization
      */
     private $pictureFile;
 
+    /**
+     * @ORM\Column(type="json")
+     */
+    private $description = [];
+
     public function __construct()
     {
         $this->projects = new ArrayCollection();
@@ -117,6 +122,22 @@ class Organization
         if($this->pictureFile){
             $data["picture"] = $this->pictureFile;
         }
+
+        if($this->description){
+
+            $data["description"] = $this->description;
+        }
+
+        if(!$this->membership->isEmpty()){
+            $data["membership"] = $this->membership->toArray();
+        }
+
+        /*if(count($this->membership) > 0 ){
+            $data["membership"] = [];
+            foreach($this->membership as $member){
+                array_push($data["membership"], $member->serialize());
+            }
+        }*/
 
         //todo deprecated
         //Check some attributes with contexts to see if they are sets
@@ -312,6 +333,18 @@ class Organization
     public function setPictureFile($pictureFile): void
     {
         $this->pictureFile = $pictureFile;
+    }
+
+    public function getDescription(): ?array
+    {
+        return $this->description;
+    }
+
+    public function setDescription(array $description): self
+    {
+        $this->description = $description;
+
+        return $this;
     }
 
 
