@@ -29,15 +29,6 @@ class Project
      */
     private ?string $title;
 
-    /**
-     * @ORM\Column(type="string", length=255)
-     * @Assert\NotBlank(message="the description is required")
-     * @Assert\Length(min="2", max="255",
-     *     minMessage="the description must be at least 2 characters long",
-     *     maxMessage="the description must not exceed 255 characters")
-     */
-    private ?string $description;
-
     //todo add timezone
     /**
      * @ORM\Column(type="date")
@@ -92,6 +83,11 @@ class Project
      * base64_encode(picture)
      */
     private $pictureFile;
+
+    /**
+     * @ORM\Column(type="json")
+     */
+    private $description = [];
 
     public function __construct()
     {
@@ -158,16 +154,20 @@ class Project
         return $this;
     }
 
-    public function getDescription(): ?string
+    /**
+     * @return array
+     */
+    public function getDescription(): array
     {
         return $this->description;
     }
 
-    public function setDescription(string $description): self
+    /**
+     * @param array $description
+     */
+    public function setDescription(array $description): void
     {
         $this->description = $description;
-
-        return $this;
     }
 
     public function getStartDate(): ?\DateTimeInterface

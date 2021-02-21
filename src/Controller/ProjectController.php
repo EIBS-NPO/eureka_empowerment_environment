@@ -96,31 +96,30 @@ class ProjectController extends CommonController
             $this->dataRequest["endDate"] = new DateTime($this->dataRequest["endDate"]);
         }
 
+      //  dd($this->dataRequest);
         //validate id and recover projectObject with currentUser id (creator)
         if($this->getEntities(Project::class, ['id', 'creator'])) return $this->response;
         $project = $this->dataResponse[0];
 
-        //potential validation orgId & convert to Organization object
-        if (isset($this->dataRequest['orgId'])) {
-            if($this->getLinkedEntity(Organization::class, "organization", 'orgId')
-            ) return $this->response;
+        //Link or unlink with an org
+        if($this->dataRequest['orgId'] === null){
+            $this->dataRequest['organization'] = null;
+        }else {
+            if($this->getLinkedEntity(Organization::class, "organization", 'orgId')  ) return $this->response;
         }
+
+        //validity control
+        if($this->isInvalid(
+            null,
+            ["title", "description", "startDate", "endDate", "isPublic", "organization"],
+            Project::class)
+        ) return $this->response;
+
+        //set project's validated fields
+        $project = $this->setEntity($project, ["title", "description", "startDate", "endDate", "isPublic", "organization"]);
 
         //persist updated project
-        if(!empty($this->dataResponse)){
-
-            if($this->isInvalid(
-                null,
-                ["title", "description", "startDate", "endDate", "isPublic", "organization"],
-                Organization::class)
-            ) return $this->response;
-
-            //set project's validated fields
-            $project = $this->setEntity($project, ["title", "description", "startDate", "endDate", "isPublic", "organization"]);
-
-            //persist updated project
-            if($this->updateEntity($project)) return $this->response;
-        }
+        if($this->updateEntity($project)) return $this->response;
 
         //final response
         return $this->successResponse();
@@ -231,7 +230,7 @@ class ProjectController extends CommonController
 
         //todo maybe change assigned context, 'cause it'snt created for now
         $criterias = [];
-        switch($this->dataRequest['context']){
+        switch($this->dataRequest['ctx']){
             case 'assigned':
                 $this->dataRequest["assigned"] = $this->getUser()->getId();
                 $criterias[]='assigned';

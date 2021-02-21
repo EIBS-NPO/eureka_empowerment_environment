@@ -19,6 +19,15 @@ class ActivityRepository extends ServiceEntityRepository
         parent::__construct($registry, Activity::class);
     }
 
+    public function getActivityDType($id){
+        return $this->createQueryBuilder('qb')
+            ->select('qb.dtype')
+            ->andWhere('qb.id = :id')
+            ->setParameter('id', $id)
+            ->getQuery()
+            ->getResult();
+    }
+
     // /**
     //  * @return Activity[] Returns an array of Activity objects
     //  */

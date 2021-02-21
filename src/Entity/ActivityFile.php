@@ -25,16 +25,24 @@ class ActivityFile extends Activity
      */
     private $fileType;
 
-    /*public function getId(): ?int
-    {
-        return $this->id;
-    }*/
+    /**
+     * @ORM\Column(type="string", length=255)
+     */
+    private $checksum;
+
+    private $file;
+
+    /**
+     * @ORM\Column(type="integer")
+     */
+    private $size;
 
     public function serialize(String $context = null): array
     {
         $data = Parent::serialize();
         $data = array_merge($data, [
             "filePath" => $this->filePath,
+            "size" => $this->size,
             "fileType" => $this->fileType
         ]);
         return $data;
@@ -63,4 +71,56 @@ class ActivityFile extends Activity
 
         return $this;
     }
+
+    public function setForActivity($activity){
+        $this->id = $activity->getId();
+        $this->isPublic = $activity->getIsPublic();
+        $this->title = $activity->getTitle();
+        $this->summary = $activity->getSummary();
+        $this->postDate = $activity->getPostDate();
+        $this->creator = $activity->getCreator();
+        $this->project = $activity->getProject();
+        $this->organization = $activity->getOrganization();
+    }
+
+    public function getChecksum(): ?string
+    {
+        return $this->checksum;
+    }
+
+    public function setChecksum(?string $checksum): self
+    {
+        $this->checksum = $checksum;
+
+        return $this;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getFile()
+    {
+        return $this->file;
+    }
+
+    /**
+     * @param mixed $file
+     */
+    public function setFile($file): void
+    {
+        $this->file = $file;
+    }
+
+    public function getSize(): ?int
+    {
+        return $this->size;
+    }
+
+    public function setSize(int $size): self
+    {
+        $this->size = $size;
+
+        return $this;
+    }
+
 }

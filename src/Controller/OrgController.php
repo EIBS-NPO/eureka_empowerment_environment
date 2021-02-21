@@ -133,6 +133,7 @@ class OrgController extends CommonController
         $this->dataRequest = $this->requestParameters->getData($this->request);
         $this->dataRequest = array_merge($this->dataRequest, ["referent" => $this->getUser()->getId()]);
 
+     //   dd($this->dataRequest);
         //validation for paramRequest && get query organization object by organization's id && referent's id
         if($this->getEntities(Organization::class, ["id", "referent"] )) return $this->response;
 
@@ -190,13 +191,13 @@ class OrgController extends CommonController
         ) return $this->response;
 
         //set project's validated fields
-        $project = $this->setEntity($org, ["picturePath"]);
+        $org = $this->setEntity($org, ["picturePath"]);
 
         //persist updated project
-        if($this->updateEntity($project)) return $this->response;
+        if($this->updateEntity($org)) return $this->response;
 
         //download picture
-        $this->dataResponse = [$this->loadPicture($project)];
+        $this->dataResponse = [$this->loadPicture($org)];
 
         //final response
         return $this->successResponse();

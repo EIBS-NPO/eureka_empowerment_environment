@@ -13,6 +13,7 @@ class RequestParameters
     public function getData(Request $request){
 
         switch($request->getMethod()){
+            case "DELETE":
             case "GET":
                 $this->data = array_merge($this->data, $request->query->all());
                 break;
