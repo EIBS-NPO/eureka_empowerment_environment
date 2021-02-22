@@ -16,7 +16,7 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class resetPassword extends Command
 {
-    protected static $defaultName = 'user:resetPassword';
+    protected static $defaultName = 'user:reset_password';
 
     private EntityManagerInterface $entityManager;
 
@@ -28,6 +28,7 @@ class resetPassword extends Command
      * Create constructor.
      * @param EntityManagerInterface $entityManager
      * @param UserPasswordEncoderInterface $passwordEncoder
+     * @param ValidatorInterface $validator
      */
     public function __construct(EntityManagerInterface $entityManager, UserPasswordEncoderInterface $passwordEncoder, ValidatorInterface $validator)
     {
@@ -47,7 +48,6 @@ class resetPassword extends Command
             ->setHelp("This command allows you to reset a user'spassword...")
             //Add optional argument for passing the username
             ->addArgument("email", InputArgument::OPTIONAL, "The email of the user to reset his password", null)
-     //       ->addArgument("password", InputArgument::OPTIONAL, "The password of the user", null)
             ->addArgument("password", InputArgument::OPTIONAL, "The new password", null)
             ->addArgument("confirmPassword", InputArgument::OPTIONAL, "The new password repeated for control", null);
     }

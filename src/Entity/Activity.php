@@ -19,7 +19,7 @@ class Activity
      * @ORM\Column(type="integer")
      * @Assert\Type(type="numeric", message=" id is not valid")
      */
-    private ?int $id;
+    protected ?int $id;
 
     /**
      * @ORM\Column(type="boolean")
@@ -38,16 +38,6 @@ class Activity
      */
     protected ?string $title;
 
-    /**
-     * @ORM\Column(type="string", length=255)
-     * @Assert\NotBlank(message="the description is required")
-     * @Assert\Type(type="string", message=" description is not valid string")
-     * @Assert\Length(min="2", max="255",
-     *     minMessage="the description must be at least 2 characters long",
-     *     maxMessage="the description must not exceed 255 characters")
-     */
-    protected ?string $description;
-
     //todo add timezone
     /**
      * @ORM\Column(type="date")
@@ -58,10 +48,9 @@ class Activity
     protected ?\DateTimeInterface $postDate;
 
     /**
-     * @ORM\Column(type="string", length=255)
-     * @Assert\Type(type="string", message=" summary is not valid string")
+     * @ORM\Column(type="json")
      */
-    protected ?string $summary;
+    protected $summary = [];
 
     /**
      * @ORM\ManyToOne(targetEntity=User::class, inversedBy="activities")
@@ -98,11 +87,10 @@ class Activity
         $data = [
             "id" => $this->id,
             "title" => $this->title,
-            "description" => $this->description,
             "summary" => $this->summary,
             "postDate" => $this->postDate->format('Y-m-d'),
             "isPublic" => $this->isPublic,
-            "creator" => $this->creator->serialize()
+            "creator" => $this->creator->serialize(),
         ];
 
         //Check some attributes to see if they are sets
@@ -148,18 +136,6 @@ class Activity
         return $this;
     }
 
-    public function getDescription(): ?string
-    {
-        return $this->description;
-    }
-
-    public function setDescription(string $description): self
-    {
-        $this->description = $description;
-
-        return $this;
-    }
-
     public function getPostDate(): ?\DateTimeInterface
     {
         return $this->postDate;
@@ -172,16 +148,20 @@ class Activity
         return $this;
     }
 
-    public function getSummary(): ?string
+    /**
+     * @return array
+     */
+    public function getSummary(): array
     {
         return $this->summary;
     }
 
-    public function setSummary(string $summary): self
+    /**
+     * @param array $summary
+     */
+    public function setSummary(array $summary): void
     {
         $this->summary = $summary;
-
-        return $this;
     }
 
     public function getCreator(): ?User

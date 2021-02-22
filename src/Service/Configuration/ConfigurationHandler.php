@@ -105,4 +105,8 @@ class ConfigurationHandler
         }
         return $config[$propertyKey]->getPropertyValue();
     }
+
+    public function getConfigTab(string $propertyKey) {
+        return $this->GPARespository->findBy(["propertyKey" => $propertyKey]);
+    }
 }

@@ -2,10 +2,12 @@
 
 namespace App\Controller;
 
+use App\Entity\Activity;
+use App\Entity\ActivityFile;
 use App\Entity\Organization;
 use App\Exceptions\SecurityException;
 use App\Service\LogEvents;
-use App\Service\PictureHandler;
+use App\Service\FileHandler;
 use Psr\Log\LoggerInterface;
 use App\Service\Request\ParametersValidator;
 use App\Service\Request\RequestParameters;
@@ -33,7 +35,7 @@ class CommonController extends AbstractController
      */
     protected RequestSecurity $requestSecurity;
     protected RequestParameters $requestParameters;
-    protected PictureHandler $picHandler;
+    protected FileHandler $fileHandler;
     protected EntityManagerInterface $entityManager;
     protected ParametersValidator $paramValidator;
     private LogEvents $logEvents;
@@ -80,14 +82,14 @@ class CommonController extends AbstractController
      * @param RequestParameters $requestParameters
      * @param EntityManagerInterface $entityManager
      * @param ParametersValidator $paramValidator
-     * @param PictureHandler $picHandler
+     * @param FileHandler $picHandler
      * @param LoggerInterface $logger
      * @param LogEvents $logEvents
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, EntityManagerInterface $entityManager, ParametersValidator $paramValidator, PictureHandler $picHandler, LoggerInterface $logger, LogEvents $logEvents){
+    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, EntityManagerInterface $entityManager, ParametersValidator $paramValidator, FileHandler $picHandler, LoggerInterface $logger, LogEvents $logEvents){
             $this->requestSecurity = $requestSecurity;
             $this->requestParameters = $requestParameters;
-            $this->picHandler = $picHandler;
+            $this->fileHandler = $picHandler;
             $this->entityManager = $entityManager;
             $this->paramValidator = $paramValidator;
             $this->logger = $logger;
@@ -161,14 +163,14 @@ class CommonController extends AbstractController
      */
     public function setEntity($entity, $fields) {
 
-        if(!isset($this->response)){
+      //  if(!isset($this->response)){
             foreach($fields as $field){
-                if(isset($this->dataRequest[$field])){
+                if(isset($this->dataRequest[$field]) || $this->dataRequest[$field] === null){
                     $setter = 'set'.ucfirst($field);
                     $entity->$setter($this->dataRequest[$field]);
                 }
             }
-        }
+    //    }
         return $entity;
     }
 
@@ -187,6 +189,23 @@ class CommonController extends AbstractController
 
             $this->eventInfo =["type" => $this->getClassName($entity), "desc" => "new registration"];
             $this->logInfo .= "| REGISTRATION_SUCCESS | new id: " .$entity->getId();
+
+        }catch(Exception $e){
+            $this->serverErrorResponse($e, $this->logInfo);
+        }
+        return isset($this->response);
+    }
+
+    public function deleteEntity($entity) :bool {
+        $this->logInfo = "DELETE | " . get_class($entity);
+        //persist the new entity
+        try{
+            $this->entityManager->remove($entity);
+            $this->entityManager->flush();
+            $this->dataResponse = ["success"];
+
+            $this->eventInfo =["type" => $this->getClassName($entity), "desc" => "delete"];
+            $this->logInfo .= "| DELETE_SUCCESS | id: " .$entity->getId();
 
         }catch(Exception $e){
             $this->serverErrorResponse($e, $this->logInfo);
@@ -264,7 +283,7 @@ class CommonController extends AbstractController
 
         if($entity->getPicturePath() !== null){
             try {
-                $img = $this->picHandler->getPic($className, $entity->getPicturePath());
+                $img = $this->fileHandler->getPic($className, $entity->getPicturePath());
                 $entity->setPictureFile($img);
             }catch(Exception $e){
                 $this->serverErrorResponse($e, $this->logInfo);
@@ -273,6 +292,7 @@ class CommonController extends AbstractController
         return $entity;
     }
 
+    //todo controle, mime & chmod dans pictureHandle( a renomm fileHandler? )
     /**
      * @param $entity
      * @param UploadedFile $file
@@ -284,20 +304,78 @@ class CommonController extends AbstractController
 
         try{
             //uploading file in his directory
-            $newPicPath= $this->picHandler->upload($className, $file);
+            $newPicPath= $this->fileHandler->upload($className, $file);
             $this->dataRequest["picturePath"] = $newPicPath;
             $this->logInfo .= " | new Picture add $newPicPath ";
 
             //if a picture already exist, need to remove it
             if($entity->getPicturePath() !== null){
                 $oldPic =$entity->getPicturePath();
-                $this->picHandler->removeFile($className, $entity->getPicturePath());
+                $this->fileHandler->removeFile($className, $entity->getPicturePath());
                 $this->logInfo .= " | old picture removed $oldPic ";
             }
         }catch(Exception $e){
             $this->serverErrorResponse($e, $this->logInfo);
         }
 
+        return isset($this->response);
+    }
+
+    public function uploadFile(ActivityFile $activityFile, UploadedFile $file) {
+        $this->logInfo .= " PUT | file | for Activity id: ".$activityFile->getId(). " by user id : " . $this->getUser()->getId();
+
+        try{
+            $activityFile->setFileType($file->guessExtension());
+            $activityFile->setSize($file->getSize());
+
+            try{
+                $newFilePath= $this->fileHandler->upload("Activity", $file);
+            }catch (Exception $e){
+                return $this->BadMediaResponse($e->getMessage());
+            }
+
+            $activityFile->setFilePath($newFilePath);
+            $activityFile->setChecksum($this->fileHandler->getChecksum("Activity", $newFilePath));
+
+            $this->dataResponse = [$activityFile];
+
+            $this->logInfo .= " | new File added $newFilePath ";
+
+        }catch(Exception $e){
+            $this->serverErrorResponse($e, $this->logInfo);
+        }
+
+        return isset($this->response);
+    }
+
+    /**
+     * @param ActivityFile $activityFile
+     * @return mixed
+     */
+    public function getFile(ActivityFile $activityFile) : bool {
+        $className = $this->getClassName($activityFile);
+        $this->logInfo .= " GET | picture | for $className id: ".$activityFile->getId();
+        if($this->getuser()){
+            $this->logInfo .= " by user id : " . $this->getUser()->getId();
+        }else {
+            $this->logInfo .= " by anonymous user ";
+        }
+
+        if($activityFile->getFilePath() !== null){
+            $check1 = $this->fileHandler->getChecksum($className, $activityFile->getFilePath());
+            if($check1 !== $activityFile->getChecksum()){
+                return $this->CorruptResponse("File integrity cannot be guaranteed");
+            }
+
+            try {
+                //todo change name of getPic methode
+          //      stream_($this->fileHandler->getFile($className, $activityFile->getFilePath()));
+                $this->dataResponse = [$this->fileHandler->getFile($className, $activityFile->getFilePath())];
+             //   $activityFile->setFile($file);
+            }catch(Exception $e){
+                $this->serverErrorResponse($e, $this->logInfo);
+            }
+        }
         return isset($this->response);
     }
 
@@ -349,7 +427,9 @@ class CommonController extends AbstractController
             //handle case when userInterface isn't used (register)
             !$this->getUser() ? $user = $this->dataResponse[0] : $user = $this->getUser();
 
-            $this->logEvents->addEvents($user, $this->dataResponse[0]->getId(), $this->eventInfo["type"], $this->eventInfo["desc"]);
+            //todo getId don't work on array return by membership requests
+            //rework logging...
+        //    $this->logEvents->addEvents($user, $this->dataResponse[0]->getId(), $this->eventInfo["type"], $this->eventInfo["desc"]);
         }
         if(empty($this->dataResponse)){
              return $this->notFoundResponse();
@@ -379,6 +459,30 @@ class CommonController extends AbstractController
         );
     }
 
+    public function BadRequestResponse(Array $violations) :Response{
+        return  $this->response =  new Response(
+            json_encode($violations),
+            Response::HTTP_BAD_REQUEST,
+            ["content-type" => "application/json"]
+        );
+    }
+
+    public function BadMediaResponse($message) :Response{
+        return  $this->response =  new Response(
+            json_encode($message),
+            Response::HTTP_UNSUPPORTED_MEDIA_TYPE,
+            ["content-type" => "application/json"]
+        );
+    }
+
+    public function CorruptResponse(String $message) :Response{
+        return  $this->response =  new Response(
+            json_encode($message),
+            Response::HTTP_UNAUTHORIZED,
+            ["content-type" => "application/json"]
+        );
+    }
+
     /**
      * @param Exception $e
      * @param String $logInfo
@@ -389,6 +493,7 @@ class CommonController extends AbstractController
         $this->logger->log("error",$logInfo . $e);
 
         //todo message un peu plus précis? ou pas...
+        //genre les violations?
         $this->response = new Response(
             json_encode(["error" => "ERROR_SERVER"]),
             Response::HTTP_INTERNAL_SERVER_ERROR,

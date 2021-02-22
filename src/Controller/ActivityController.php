@@ -228,7 +228,7 @@ class ActivityController extends CommonController
         //todo maybe change assigned context, 'cause it'snt created for now
         //todo can be placed une CommonController
         $criterias = [];
-        switch($this->dataRequest['context']){
+        switch($this->dataRequest['cxt']){
             case 'assigned':
                 $this->dataRequest["assigned"] = $this->getUser()->getId();
                 $criterias[]='assigned';
