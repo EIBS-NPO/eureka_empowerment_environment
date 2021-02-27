@@ -83,16 +83,16 @@ class ActivityFile extends Activity
         return $this;
     }
 
-    public function setForActivity($activity){
-        $this->setId($activity->getId());
-        $this->setIsPublic($activity->getIsPublic());
-        $this->setTitle($activity->getTitle());
-        $this->setSummary($activity->getSummary());
-        $this->setPostDate($activity->getPostDate());
-        $this->setPicturePath($activity->getPicturePath());
-        $this->setCreator($activity->getCreator());
-        $this->setProject($activity->getProject());
-        $this->setOrganization($activity->getOrganization());
+    public function setForActivity(Activity $activity){
+       // $this->setId($activity->getId());
+        $this->isPublic = $activity->getIsPublic();
+        $this->title = $activity->getTitle();
+        $this->summary = $activity->getSummary();
+        $this->postDate = $activity->getPostDate();
+        $this->picturePath = $activity->getPicturePath();
+        $this->creator = $activity->getCreator();
+        $this->project = $activity->getProject();
+        $this->organization = $activity->getOrganization();
     }
 
     public function getChecksum(): ?string

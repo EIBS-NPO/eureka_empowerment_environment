@@ -57,10 +57,7 @@ class FileHandler
      */
     public function upload(String $fileDir, String $uniqName, UploadedFile $file) :void
     {
-        //todo les pictures prennent du chmod? why not? but comment supprimer les fichier après?
         try {
-            //todo move with permission use chmod after move
-    //        dd($this->targetDirectory.$fileDir);
             $file->move($this->targetDirectory.$fileDir, $uniqName);
             chmod($this->targetDirectory.$fileDir ."/". $uniqName, 0644);
 
@@ -82,11 +79,6 @@ class FileHandler
         if (!file_exists($fileDir)){
             throw new NoFileException("File not found");
         }
- //       dd($fileDir);
-        //return $fileDir;
-        //todo download file
-     //   return base64_encode(file_get_contents($fileDir));
-    //    return new File($fileDir);
         return $fileDir;
     }
 
@@ -96,12 +88,9 @@ class FileHandler
      */
     public function getPic($filePath)
     {
-     //   $this->targetDirectory.$fileDir, $uniqName
+
         $fileDir = $this->targetDirectory.$filePath;
-//dd($fileDir);
-        //   $path2 = $destination .'/'. $this->dataRequest["pic"] .".png";
-        //todo permission denied, du chmod. :°
-        //todo pour génériser, reconnaitre filer image et fichier bureau
+
         if (file_exists($fileDir)){
             return base64_encode(file_get_contents($fileDir));
         }
@@ -116,12 +105,7 @@ class FileHandler
     public function removeFile($filePath){
         $fileDir = $this->targetDirectory.$filePath;
         if (file_exists($fileDir)){
-            //  $img = file_get_contents($file_dir);
-           /* try{*/
                 unlink( $fileDir );
-            /*}catch(e Exception){
-
-            }*/
         }
     }
 
@@ -152,9 +136,9 @@ class FileHandler
      * @throws Exception
      */
     public function isAllowedMime(UploadedFile $file) :void{
-        if(!array_search($file->getMimeType(), $this->allowedMime)){
-            $tm = $file->getMimeType();
-            throw new Exception($tm ,415);
+        if(!(array_search($file->getMimeType(), $this->allowedMime) !== false)){
+            $msg = $file->getMimeType() . "not allowed";
+            throw new Exception($msg ,415);
         }
     }
 

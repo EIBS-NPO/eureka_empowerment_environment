@@ -107,6 +107,19 @@ class Activity
         return $data;
     }
 
+    public function setFromActivityFile(ActivityFile $activityFile){
+       // $this->id($activityFile->getId());
+        $this->isPublic = $activityFile->getIsPublic();
+        $this->title = $activityFile->getTitle();
+        $this->summary = $activityFile->getSummary();
+        $this->postDate = $activityFile->getPostDate();
+        $this->picturePath = $activityFile->getPicturePath();
+        $this->creator = $activityFile->getCreator();
+        $this->project = $activityFile->getProject();
+        $this->organization = $activityFile->getOrganization();
+    }
+
+
     public function getId(): ?int
     {
         return $this->id;

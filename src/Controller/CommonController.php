@@ -221,6 +221,7 @@ class CommonController extends AbstractController
         try{
             $this->entityManager->remove($entity);
             $this->entityManager->flush();
+            $this->dataResponse = ["success"];
 
         }catch(Exception $e){
             $this->logService->logError($e,$this->getUser(),"error");
@@ -388,6 +389,7 @@ class CommonController extends AbstractController
      */
     public function uploadFile(ActivityFile $activityFile, UploadedFile $file) {
 
+
         //check if Mime is allowed
         try{
             $this->fileHandler->isAllowedMime($file);
@@ -419,9 +421,6 @@ class CommonController extends AbstractController
             $this->logService->logEvent($this->getUser(),$activityFile->getId(), $this->getClassName($activityFile), "SERVER_ERROR : upload_File FAILED");
             $this->serverErrorResponse($e, "An error occurred");
         }
-
-        $this->logService->logInfo("ActivityFile id " . $activityFile->getId() . " uploaded File " );
-        $this->logService->logEvent($this->getUser(),$activityFile->getId(), $this->getClassName($activityFile), "uploaded file");
 
         return isset($this->response);
     }

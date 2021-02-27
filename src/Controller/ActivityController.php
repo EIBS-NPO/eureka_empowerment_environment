@@ -96,6 +96,7 @@ class ActivityController extends CommonController
 
         //validate id and recover activityObject with currentUser id (creator)
         if($this->getEntities(Activity::class, ['id', 'creator'])) return $this->response;
+    //    dd($this->dataResponse);
         $project = $this->dataResponse[0];
 
         //Link or unlink with an org
@@ -263,6 +264,28 @@ class ActivityController extends CommonController
         }
 
         //success response
+        return $this->successResponse();
+    }
+
+    /**
+     * @param Request $insecureRequest
+     * @return Response
+     * @Route("", name="_delete", methods="delete")
+     */
+    public function remove(Request $insecureRequest) : Response {
+        //cleanXSS
+        if($this->cleanXSS($insecureRequest)
+        ) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+        if(!isset($this->dataRequest['id'])) return $this->BadRequestResponse(["missing parameter : id is required. "]);
+        $this->dataRequest = array_merge($this->dataRequest, ["creator" => $this->getUser()->getId()]);
+
+        if($this->getEntities(Activity::class, ['id', 'creator'])) return $this->response;
+
+        if($this->deleteEntity($this->dataResponse[0])) return $this->response;
+
         return $this->successResponse();
     }
 }
