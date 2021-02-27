@@ -7,6 +7,7 @@ namespace App\Service\Request;
 use App\Entity\Organization;
 use App\Entity\Project;
 use App\Entity\User;
+use App\Exceptions\ViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Symfony\Component\HttpFoundation\Response;
@@ -71,27 +72,30 @@ class ParametersValidator
     }
 
     /**
-     * @return array
-     * @throws Exception
+     * @param null $object
+     * @return void
+     * @throws ViolationException
      */
-    public function getViolations($object = null) :array{
+    public function getViolations($object = null) :void {
         if($object === null){
             $object = new $this->className();
         }
 
         $violations = [];
-        try {
-            if($this->requiredFields != null && count($this->requiredFields) > 0){
-                $violations = $this->fieldsValidation($object, $this->requiredFields, true, $this->paramRequest);
-            }
-            if($this->optionalFields != null && count($this->optionalFields) > 0){
-                $violations = array_merge($violations, $this->fieldsValidation($object, $this->optionalFields, false, $this->paramRequest));
-            }
-        } catch (Exception $e) {
-            //todo error cannot create metadata?
-            throw new Exception($e->getMessage(), $e->getCode());
+
+        //check required fileds
+        if($this->requiredFields != null && count($this->requiredFields) > 0){
+            $violations = $this->fieldsValidation($object, $this->requiredFields, true, $this->paramRequest);
         }
-        return $violations;
+
+        //check optional fileds
+        if($this->optionalFields != null && count($this->optionalFields) > 0){
+            $violations = array_merge($violations, $this->fieldsValidation($object, $this->optionalFields, false, $this->paramRequest));
+        }
+
+        if( count($violations) > 0 ){
+            throw new ViolationException($violations);
+        }
     }
 
     /**
@@ -100,7 +104,6 @@ class ParametersValidator
      * @param bool $required
      * @param array $data
      * @return array
-     * @throws Exception
      */
     public function fieldsValidation($object, array $fields, bool $required, array $data) : array{
         $violationsList = [];

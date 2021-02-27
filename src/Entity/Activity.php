@@ -19,14 +19,14 @@ class Activity
      * @ORM\Column(type="integer")
      * @Assert\Type(type="numeric", message=" id is not valid")
      */
-    protected ?int $id;
+    protected  $id;
 
     /**
      * @ORM\Column(type="boolean")
      * @Assert\NotBlank(message="isPublic is required")
      * @Assert\Type(type="bool", message=" isPublic not valid boolean")
      */
-    protected ?bool $isPublic;
+    protected  $isPublic;
 
     /**
      * @ORM\Column(type="string", length=50)
@@ -36,7 +36,7 @@ class Activity
      *     minMessage="the title must be at least 2 characters long",
      *     maxMessage="the title must not exceed 50 characters")
      */
-    protected ?string $title;
+    protected $title;
 
     //todo add timezone
     /**
@@ -45,7 +45,7 @@ class Activity
      * @Assert\Type(type={"DateTime", "Y-m-d"}, message= "the date must be in the format YYYY-mm-dd")
      * @Assert\GreaterThanOrEqual("today", message="post date must be today or greater date")
      */
-    protected ?\DateTimeInterface $postDate;
+    protected $postDate;
 
     /**
      * @ORM\Column(type="json")
@@ -75,12 +75,12 @@ class Activity
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
      */
-    private ?string $picturePath;
+    protected $picturePath;
 
     /**
      * base64_encode(picture)
      */
-    private $pictureFile;
+    protected $pictureFile;
 
     public function serialize(String $context = null): array
     {
@@ -98,10 +98,10 @@ class Activity
             $data["picture"] = $this->pictureFile;
         }
         if($this->project){
-            $data["project"] = $this->project->getId();
+            $data["project"] = $this->project->serialize();
         }
         if($this->organization){
-            $data["organization"] = $this->organization->getId();
+            $data["organization"] = $this->organization->serialize();
         }
 
         return $data;
@@ -110,6 +110,14 @@ class Activity
     public function getId(): ?int
     {
         return $this->id;
+    }
+
+    /**
+     * @param mixed $id
+     */
+    public function setId($id): void
+    {
+        $this->id = $id;
     }
 
     public function getIsPublic(): ?bool

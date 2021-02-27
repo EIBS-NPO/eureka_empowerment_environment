@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\Activity;
+use App\Entity\ActivityFile;
 use App\Entity\Organization;
 use App\Entity\Project;
 use DateTime;
@@ -23,7 +24,7 @@ class ActivityController extends CommonController
      * @param Request $insecureRequest
      * @return Response
      */
-    public function postFile(Request $insecureRequest): Response
+    public function create(Request $insecureRequest): Response
     {
         //cleanXSS
         if($this->cleanXSS($insecureRequest)
@@ -33,6 +34,7 @@ class ActivityController extends CommonController
         $this->dataRequest = $this->requestParameters->getData($this->request);
         $this->dataRequest = array_merge($this->dataRequest, ["creator" => $this->getUser()]);
         $this->dataRequest = array_merge($this->dataRequest, ["postDate" => New \DateTime("now")]);
+        if(!isset($this->dataRequest['isPublic'])){$this->dataRequest = array_merge($this->dataRequest, ["isPublic" => false]);}
 
         //optional link with an organization : validation orgId & convert to Organization object
         if (isset($this->dataRequest['orgId'])) {
@@ -50,7 +52,7 @@ class ActivityController extends CommonController
 
         //dataRequest Validations
         if($this->isInvalid(
-            ["title", "description", "summary", "postDate", "isPublic", "creator"],
+            ["title", "description", "summary", "postDate", "creator"],
             ["organization", "project"],
             Activity::class)
         ) return $this->response;
@@ -96,10 +98,18 @@ class ActivityController extends CommonController
         if($this->getEntities(Activity::class, ['id', 'creator'])) return $this->response;
         $project = $this->dataResponse[0];
 
-        //potential validation orgId & convert to Organization object
-        if (isset($this->dataRequest['orgId'])) {
-            if($this->getLinkedEntity(Organization::class, "organization", 'orgId')
-            ) return $this->response;
+        //Link or unlink with an org
+        if(!isset($this->dataRequest['orgId'])){
+            $this->dataRequest['organization'] = null;
+        }else {
+            if($this->getLinkedEntity(Organization::class, "organization", 'orgId')  ) return $this->response;
+        }
+
+        //Link or unlink with an project
+        if(!isset($this->dataRequest['projectId'])){
+            $this->dataRequest['project'] = null;
+        }else {
+            if($this->getLinkedEntity(Project::class, "project", 'projectId')  ) return $this->response;
         }
 
         //persist updated project
@@ -107,12 +117,12 @@ class ActivityController extends CommonController
 
             if($this->isInvalid(
                 null,
-                ["title", "description", "summary", "isPublic", "organization"],
+                ["title", "description", "summary", "isPublic", "organization", "project"],
                 Organization::class)
             ) return $this->response;
 
             //set project's validated fields
-            $project = $this->setEntity($project, ["title", "description", "summary", "isPublic", "organization"]);
+            $project = $this->setEntity($project, ["title", "description", "summary", "isPublic", "organization", "project"]);
 
             //persist updated project
             if($this->updateEntity($project)) return $this->response;
@@ -149,9 +159,6 @@ class ActivityController extends CommonController
         if($this->getEntities(Activity::class, ['id', 'creator'])) return $this->response;
         $activity = $this->dataResponse[0];
 
-        //todo gestion des files dans la requête
-        // todo content-type getResponse()->setContentType('image/jpeg')
-
         if($this->uploadPicture($activity, $this->dataRequest['image'])) return $this->response;
 
         if($this->isInvalid(
@@ -161,7 +168,7 @@ class ActivityController extends CommonController
         ) return $this->response;
 
         //set project's validated fields
-        $project = $this->setEntity($activity, ["picturePath"]);
+        $activity = $this->setEntity($activity, ["picturePath"]);
 
         //persist updated project
         if($this->updateEntity($activity)) return $this->response;
@@ -211,6 +218,7 @@ class ActivityController extends CommonController
         return $this->successResponse();
     }
 
+    //todo puisque heritage, fusionner activityController et activityFile controller?
     /**
      * returns to a user his created projects
      * @Route("", name="_get", methods="get")
@@ -248,7 +256,7 @@ class ActivityController extends CommonController
         }
 
         if($this->getEntities(Activity::class, $criterias )) return $this->response;
-
+//dd($this->dataResponse);
         //download picture
         foreach($this->dataResponse as $key => $activity){
             $this->dataResponse[$key] = $this->loadPicture($activity);

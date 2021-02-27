@@ -4,24 +4,29 @@ namespace App\Entity;
 
 use App\Repository\ActivityFileRepository;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * @ORM\Entity(repositoryClass=ActivityFileRepository::class)
  */
 class ActivityFile extends Activity
 {
-     //* @ORM\Id
-     //* @ORM\GeneratedValue
-     //* @ORM\Column(type="integer")
-    /*private $id;*/
 
     /**
-     * @ORM\Column(type="string", length=255)
+     * @ORM\Id
+     * @ORM\GeneratedValue
+     * @ORM\Column(type="integer")
+     * @Assert\Type(type="numeric", message=" id is not valid")
      */
-    private $filePath;
+    protected  $id;
 
     /**
-     * @ORM\Column(type="string", length=10)
+     * @ORM\Column(type="string", length=13)
+     */
+    private $uniqId;
+
+    /**
+     * @ORM\Column(type="string", length=50)
      */
     private $fileType;
 
@@ -37,27 +42,33 @@ class ActivityFile extends Activity
      */
     private $size;
 
+    /**
+     * @ORM\Column(type="string", length=255)
+     */
+    private $filename;
+
     public function serialize(String $context = null): array
     {
         $data = Parent::serialize();
         $data = array_merge($data, [
-            "filePath" => $this->filePath,
+            "filename" => $this->filename,
+            "fileType" => $this->fileType,
             "size" => $this->size,
-            "fileType" => $this->fileType
         ]);
         return $data;
     }
 
-    public function getFilePath(): ?string
+    public function getId(): ?int
     {
-        return $this->filePath;
+        return $this->id;
     }
 
-    public function setFilePath(string $filePath): self
+    /**
+     * @param mixed $id
+     */
+    public function setId($id): void
     {
-        $this->filePath = $filePath;
-
-        return $this;
+        $this->id = $id;
     }
 
     public function getFileType(): ?string
@@ -73,14 +84,15 @@ class ActivityFile extends Activity
     }
 
     public function setForActivity($activity){
-        $this->id = $activity->getId();
-        $this->isPublic = $activity->getIsPublic();
-        $this->title = $activity->getTitle();
-        $this->summary = $activity->getSummary();
-        $this->postDate = $activity->getPostDate();
-        $this->creator = $activity->getCreator();
-        $this->project = $activity->getProject();
-        $this->organization = $activity->getOrganization();
+        $this->setId($activity->getId());
+        $this->setIsPublic($activity->getIsPublic());
+        $this->setTitle($activity->getTitle());
+        $this->setSummary($activity->getSummary());
+        $this->setPostDate($activity->getPostDate());
+        $this->setPicturePath($activity->getPicturePath());
+        $this->setCreator($activity->getCreator());
+        $this->setProject($activity->getProject());
+        $this->setOrganization($activity->getOrganization());
     }
 
     public function getChecksum(): ?string
@@ -123,4 +135,27 @@ class ActivityFile extends Activity
         return $this;
     }
 
+    public function getFilename(): ?string
+    {
+        return $this->filename;
+    }
+
+    public function setFilename(string $filename): self
+    {
+        $this->filename = $filename;
+
+        return $this;
+    }
+
+    public function getUniqId(): ?string
+    {
+        return $this->uniqId;
+    }
+
+    public function setUniqId(string $uniqId): self
+    {
+        $this->uniqId = $uniqId;
+
+        return $this;
+    }
 }

@@ -17,6 +17,7 @@ class RequestParameters
             case "GET":
                 $this->data = array_merge($this->data, $request->query->all());
                 break;
+            case "PUT":
             case "POST":
                 $this->data = array_merge($this->data, $request->request->all());
                 $this->data = array_merge($this->data, $request->files->all());

@@ -59,12 +59,6 @@ class Project
     private ?Organization $organization = null;
 
     /**
-     * @ORM\Column(type="boolean")
-     * @Assert\Type(type="bool", message=" isPublic not valid boolean")
-     */
-    private ?bool $isPublic;
-
-    /**
      * @ORM\OneToMany(targetEntity=Activity::class, mappedBy="project")
      * @Assert\Collection(
      *     fields={
@@ -127,12 +121,6 @@ class Project
         if($this->organization && $context != "read_organization"){
             $data["organization"] = $this->organization->serialize("read_project");
         }
-
-        if($context != "public"){
-            $data['isPublic'] = $this->getIsPublic();
-        }
-
-
 
         return $data;
     }
@@ -218,19 +206,10 @@ class Project
         return $this;
     }
 
-    public function getIsPublic(): ?bool
-    {
-        return $this->isPublic;
-    }
-
-    public function setIsPublic(bool $isPublic): self
-    {
-        $this->isPublic = $isPublic;
-
-        return $this;
-    }
-
-    public function getActivities(): ?Activity
+    /**
+     * @return ArrayCollection
+     */
+    public function getActivities(): ArrayCollection
     {
         return $this->activities;
     }

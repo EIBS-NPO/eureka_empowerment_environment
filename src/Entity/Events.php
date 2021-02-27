@@ -22,7 +22,7 @@ class Events
 
     /**
      * @ORM\ManyToOne(targetEntity=User::class)
-     * @ORM\JoinColumn(nullable=false)
+     * @ORM\JoinColumn(nullable=true)
      */
     private ?UserInterface $actor;
 
@@ -53,12 +53,12 @@ class Events
         return $this->id;
     }
 
-    public function getActor(): ?UserInterface
+    public function getActor()
     {
         return $this->actor;
     }
 
-    public function setActor(UserInterface $actor): self
+    public function setActor(?UserInterface $actor): self
     {
         $this->actor = $actor;
 

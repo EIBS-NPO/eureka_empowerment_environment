@@ -50,7 +50,16 @@ class gpaTypeMime extends Command
         $gpaRepo = $this->entityManager->getRepository(GlobalPropertyAttribute::class);
 
         try{
-            $gpaTab = $gpaRepo->findBy(["propertyKey" => "mime.type.allowed"]);
+            $gpa = $gpaRepo->findBy(["propertyKey" => "mime.type.allowed"]);
+            if(empty($gpa)){
+                $gpa = New GlobalPropertyAttribute();
+                $gpa->setPropertyKey("mime.type.allowed")
+                    ->setDescription("Type MIME allowed for uplaoding files")
+                    ->setScope("GLOBAL");
+            }else{
+                $gpa = $gpa[0];
+            }
+
         }catch (\Exception $e) {
             $output->writeln("An error occurred : " . $e->getMessage());
             return Command::FAILURE;
@@ -58,38 +67,32 @@ class gpaTypeMime extends Command
 
         do {
             $mime = $helper->ask($input, $output, $mimeQ);
-            try {
-                $isExist = false;
-                foreach ($gpaTab as $gpa) {
-                    if ($gpa->getPropertyValue() === $mime) {
-                        $output->writeln("This type Mime already exist in GPA");
-                        $isExist = true;
-                    }
-                }
-                if(!$isExist){
-                    try{
-                        $gpa = New GlobalPropertyAttribute();
-                        $gpa->setPropertyKey("mime.type.allowed")
-                            ->setDescription("Type MIME allowed for uplaoding files")
-                            ->setScope("GLOBAL")
-                            ->setPropertyValue($mime);
-                        $this->entityManager->persist($gpa);
-                        $this->entityManager->flush();
-                        $gpaTab[] = $gpa;
-                        $output->writeln("The MIME type has been successfully updated");
-                    } catch (\Exception $e) {
-                        $output->writeln("An error occurred : " . $e->getMessage());
-                        return Command::FAILURE;
-                    }
-                }
-            } catch (\Exception $e) {
-                $output->writeln("An error occurred : " . $e->getMessage());
-                return Command::FAILURE;
+            if($gpa->hasValue($mime)){
+                $output->writeln("This type Mime already add to the list or exist in GPA");
+            }
+            else{
+                $gpa->setValue($mime);
+                $output->writeln($mime . " add for update. ");
             }
             $quit = $helper->ask($input, $output, $quitQ);
         }while($quit == "y");
 
+        if(count($gpa->getPropertyValue())>0){
+            try{
+                if($gpa->getId() === null ){
+                    $this->entityManager->persist($gpa);
+                }
+                $this->entityManager->flush();
+                $output->writeln("GPA type Mime successfully updated. ");
+
+            } catch (\Exception $e) {
+                $output->writeln("An error occurred : " . $e->getMessage());
+                return Command::FAILURE;
+            }
+        }
+
         $output->writeln(self::$defaultName ." [OFF]");
+
         return Command::SUCCESS;
     }
 }

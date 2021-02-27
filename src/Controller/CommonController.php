@@ -2,20 +2,21 @@
 
 namespace App\Controller;
 
-use App\Entity\Activity;
 use App\Entity\ActivityFile;
-use App\Entity\Organization;
 use App\Exceptions\SecurityException;
-use App\Service\LogEvents;
+use App\Exceptions\ViolationException;
+use App\Service\LogService;
 use App\Service\FileHandler;
-use Psr\Log\LoggerInterface;
 use App\Service\Request\ParametersValidator;
 use App\Service\Request\RequestParameters;
 use App\Service\Security\RequestSecurity;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\File\Exception\NoFileException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -38,8 +39,6 @@ class CommonController extends AbstractController
     protected FileHandler $fileHandler;
     protected EntityManagerInterface $entityManager;
     protected ParametersValidator $paramValidator;
-    private LogEvents $logEvents;
-    private LoggerInterface $logger;
 
     //todo dispatch in LoggerService
     private $logInfo = "";
@@ -77,23 +76,27 @@ class CommonController extends AbstractController
     protected array $eventInfo;
 
     /**
+     * Logger service to trace error and user actions
+     * @var LogService
+     */
+    protected LogService $logService;
+
+    /**
      * CommonController constructor.
      * @param RequestSecurity $requestSecurity
      * @param RequestParameters $requestParameters
      * @param EntityManagerInterface $entityManager
      * @param ParametersValidator $paramValidator
      * @param FileHandler $picHandler
-     * @param LoggerInterface $logger
-     * @param LogEvents $logEvents
+     * @param LogService $logService
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, EntityManagerInterface $entityManager, ParametersValidator $paramValidator, FileHandler $picHandler, LoggerInterface $logger, LogEvents $logEvents){
+    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, EntityManagerInterface $entityManager, ParametersValidator $paramValidator, FileHandler $picHandler, LogService $logService){
             $this->requestSecurity = $requestSecurity;
             $this->requestParameters = $requestParameters;
             $this->fileHandler = $picHandler;
             $this->entityManager = $entityManager;
             $this->paramValidator = $paramValidator;
-            $this->logger = $logger;
-            $this->logEvents = $logEvents;
+            $this->logService = $logService;
         }
 
     /**
@@ -106,7 +109,10 @@ class CommonController extends AbstractController
         try {
             $this->request = $this->requestSecurity->cleanXSS($request);
         } catch (SecurityException $e) {
-            $this->logger->warning($e);
+
+            //todo test log
+            $this->logService->logError($e,$this->getUser(), "WARNING");
+
             $this->response = new Response(
                 json_encode(["error" => "ACCESS_FORBIDDEN"]),
                 Response::HTTP_FORBIDDEN,
@@ -116,7 +122,8 @@ class CommonController extends AbstractController
     }
 
 
-    //todo renom ?
+
+    //todo just trhow?
     /**
      * @param $requiredFields
      * @param $optionalFields
@@ -127,20 +134,18 @@ class CommonController extends AbstractController
     {
         $this->paramValidator->initValidator($requiredFields, $optionalFields, $className, $this->dataRequest);
         try{
-            $violationsList = $this->paramValidator->getViolations();
+            $this->paramValidator->getViolations();
 
-            if( count($violationsList) > 0 ){
-                $this->response = new Response(
-                    json_encode(["error" => $violationsList]),
-                    Response::HTTP_BAD_REQUEST,
-                    ["Content-Type" => "application/json"]
-                );
-            }
-        }catch(Exception $e){
-            $this->serverErrorResponse($e, "");
+        }catch(ViolationException $e){
+            $this->logService->logError($e, $this->getUser(), "ERROR");
+
+            $this->BadRequestResponse($e->getViolationsList());
         }
         return isset($this->response);
     }
+
+
+
 
     /**
      * @param $entities
@@ -156,23 +161,27 @@ class CommonController extends AbstractController
         return $entities;
     }
 
+
+
+
     /**
      * @param $entity
      * @param $fields
      * @return mixed
      */
-    public function setEntity($entity, $fields) {
-
-      //  if(!isset($this->response)){
+    public function setEntity($entity, $fields)
+    {
             foreach($fields as $field){
-                if(isset($this->dataRequest[$field]) || $this->dataRequest[$field] === null){
+                if(isset($this->dataRequest[$field])) {
                     $setter = 'set'.ucfirst($field);
                     $entity->$setter($this->dataRequest[$field]);
                 }
             }
-    //    }
         return $entity;
     }
+
+
+
 
     /**
      * @param $entity
@@ -180,38 +189,55 @@ class CommonController extends AbstractController
      */
     public function persistEntity($entity) :bool
     {
-        $this->logInfo = "POST | " . get_class($entity);
-        //persist the new entity
         try{
             $this->entityManager->persist($entity);
             $this->entityManager->flush();
             $this->dataResponse = [$entity];
 
-            $this->eventInfo =["type" => $this->getClassName($entity), "desc" => "new registration"];
-            $this->logInfo .= "| REGISTRATION_SUCCESS | new id: " .$entity->getId();
-
         }catch(Exception $e){
-            $this->serverErrorResponse($e, $this->logInfo);
+            $this->logService->logError($e,$this->getUser(),"error");
+            $this->serverErrorResponse($e, "An error occured");
         }
+
+        $this->logService->logInfo($this->getClassName($entity) ." ". $entity->getid() ." was created. " );
+
+        $this->logService->logEvent($this->getUser(),$entity->getId(), $this->getClassName($entity), "new Registration");
+
         return isset($this->response);
     }
 
-    public function deleteEntity($entity) :bool {
-        $this->logInfo = "DELETE | " . get_class($entity);
-        //persist the new entity
+
+
+
+
+    /**
+     * @param $entity
+     * @return bool
+     */
+    public function deleteEntity($entity) :bool
+    {
+        $id = $entity->getId();
+        $classname = $this->getClassName($entity);
         try{
             $this->entityManager->remove($entity);
             $this->entityManager->flush();
-            $this->dataResponse = ["success"];
-
-            $this->eventInfo =["type" => $this->getClassName($entity), "desc" => "delete"];
-            $this->logInfo .= "| DELETE_SUCCESS | id: " .$entity->getId();
 
         }catch(Exception $e){
-            $this->serverErrorResponse($e, $this->logInfo);
+            $this->logService->logError($e,$this->getUser(),"error");
+            $this->serverErrorResponse($e, "An error occured");
         }
+
+        $this->logService->logInfo($classname ." ". $id ." was deleted. " );
+
+        $this->logService->logEvent($this->getUser(),$id, $classname, "Delete");
+
         return isset($this->response);
     }
+
+
+
+
+
 
     /**
      * @param $entity
@@ -219,17 +245,26 @@ class CommonController extends AbstractController
      */
     public function updateEntity($entity) :bool
     {
-        $this->logInfo .= "PUT | ". get_class($entity) . " | " .$entity->getId();
         try{
             $this->entityManager->flush();
             $this->dataResponse = [$entity];
             $this->eventInfo =["type" => $this->getClassName($entity), "desc" => "update"];
-            $this->logInfo .= "| UPDATE_SUCCESS";
+
         }catch(Exception $e){
-            $this->serverErrorResponse($e, $this->logInfo);
+            $this->logService->logError($e,$this->getUser(),"error");
+            $this->serverErrorResponse($e, "An error occured");
         }
+
+        $this->logService->logInfo($this->getClassName($entity) ." ". $entity->getid() ." was updated. " );
+
+        $this->logService->logEvent($this->getUser(),$entity->getId(), $this->getClassName($entity), "Update");
+
         return isset($this->response);
     }
+
+
+
+
 
     /**
      * @param String $className
@@ -237,147 +272,232 @@ class CommonController extends AbstractController
      * @return bool
      */
     public function getEntities(String $className, array $criterias) :bool {
-        //initLog
-        $this->logInfo .= ' GET | ' .  $className;
 
         $repository = $this->entityManager->getRepository($className);
+
         try{
-            //verifies the existence of criteria and their validity for query
+            //if criterias for query
+            $strLog = "all";
             if(count($this->dataRequest) > 0 ) {
+                //verify the existence of criterias and their validity
+                //todo throw vilotionException ?
                 if($this->hasAllCriteria($criterias) && !($this->isInvalid($criterias, null, $className))){
-                    //initLog
+                    $strLog = "[";
                     foreach ($criterias as $key => $criteria) {
-                        $this->logInfo .= " | by " . $criteria . " : " . $this->dataRequest[$criteria];
+                        $strLog .= $criteria .": ". $this->dataRequest[$criteria]."; ";
                         $criterias[$criteria] = $this->dataRequest[$criteria];
                         unset($criterias[$key]);
                     }
+                    $strLog .= "]";
                     $this->dataResponse = $repository->findBy($criterias);
                 }
-            }else { //otherwise we return all users
-                //initLog
-                $this->logInfo .= " | ALL";
+            }else { //otherwise return all entities
                 $this->dataResponse = $repository->findAll();
             }
         }
         catch(Exception $e){
+            $this->logService->logError($e,$this->getUser(),"error" );
             $this->serverErrorResponse($e, $this->logInfo);
         }
+
+        $this->logService->logInfo($className ." by ". $strLog ." read. " );
 
         return isset($this->response);
     }
 
-    //todo logg for pics
 
+
+
+
+
+//todo logg for pics
     /**
      * @param $entity
      * @return mixed
      */
     public function loadPicture($entity) {
         $className = $this->getClassName($entity);
-        $this->logInfo .= " GET | picture | for $className id: ".$entity->getId();
-        if($this->getuser()){
-            $this->logInfo .= " by user id : " . $this->getUser()->getId();
-        }else {
-            $this->logInfo .= " by anonymous user ";
-        }
+        if($className === "ActivityFile"){ $className = "Activity";}
+        $fileDir = '/pictures/'.$className.'/'.$entity->getPicturePath();
 
         if($entity->getPicturePath() !== null){
             try {
-                $img = $this->fileHandler->getPic($className, $entity->getPicturePath());
+                $img = $this->fileHandler->getPic($fileDir);
                 $entity->setPictureFile($img);
+
             }catch(Exception $e){
+                $this->logService->logError($e, $this->getUser(), "error");
                 $this->serverErrorResponse($e, $this->logInfo);
+
             }
         }
+        $this->logService->logInfo($className ." id ". $entity->getId() ." load Picture " );
         return $entity;
     }
 
-    //todo controle, mime & chmod dans pictureHandle( a renomm fileHandler? )
+
+
+
     /**
      * @param $entity
      * @param UploadedFile $file
      * @return bool
      */
     public function uploadPicture($entity, UploadedFile $file){
+
         $className = $this->getClassName($entity);
-        $this->logInfo .= " PUT | picture | for $className id: ".$entity->getId(). " by user id : " . $this->getUser()->getId();
+        if($className === "ActivityFile"){$className = "Activity";}
+        $fileDir = '/pictures/'.$className;
 
         try{
-            //uploading file in his directory
-            $newPicPath= $this->fileHandler->upload($className, $file);
-            $this->dataRequest["picturePath"] = $newPicPath;
-            $this->logInfo .= " | new Picture add $newPicPath ";
-
-            //if a picture already exist, need to remove it
+            $oldPic = null;
             if($entity->getPicturePath() !== null){
                 $oldPic =$entity->getPicturePath();
-                $this->fileHandler->removeFile($className, $entity->getPicturePath());
-                $this->logInfo .= " | old picture removed $oldPic ";
+            }
+
+            //make unique picturePath
+            $entity->setPicturePath(uniqid().'_'.$this->fileHandler->getOriginalFilename($file).'.'.$file->guessExtension());
+
+            $this->fileHandler->upload($fileDir, $entity->getPicturePath(), $file);
+            $this->dataRequest["picturePath"] = $entity->getPicturePath();
+
+            //if a picture already exist, need to remove it
+            if($oldPic !== null){
+                $this->logService->logInfo($className ." id " . $entity->getId() . " remove old Picture FAILED " );
+                $this->fileHandler->removeFile($fileDir.'/'.$oldPic);
             }
         }catch(Exception $e){
+            $this->logService->logError($e,$this->getUser(),"error");
             $this->serverErrorResponse($e, $this->logInfo);
         }
+
+        $this->logService->logInfo($className ." id " . $entity->getId() . " uploaded Picture " );
 
         return isset($this->response);
     }
 
+
+
+
+
+
+    /**
+     * @param ActivityFile $activityFile
+     * @param UploadedFile $file
+     * @return bool|Response
+     */
     public function uploadFile(ActivityFile $activityFile, UploadedFile $file) {
-        $this->logInfo .= " PUT | file | for Activity id: ".$activityFile->getId(). " by user id : " . $this->getUser()->getId();
+
+        //check if Mime is allowed
+        try{
+            $this->fileHandler->isAllowedMime($file);
+        }catch (Exception $e){
+            $this->logService->logError($e,$this->getUser(),"error" );
+            return $this->BadMediaResponse($e->getMessage());
+        }
 
         try{
-            $activityFile->setFileType($file->guessExtension());
+            //setter
+            $activityFile->setFilename($this->fileHandler->getOriginalFilename($file).".".$file->guessExtension());
+            $activityFile->setFileType($file->getMimeType());
             $activityFile->setSize($file->getSize());
+            $activityFile->setUniqId(uniqid());
 
-            try{
-                $newFilePath= $this->fileHandler->upload("Activity", $file);
-            }catch (Exception $e){
-                return $this->BadMediaResponse($e->getMessage());
-            }
+            //make new filename
+            $completName = $activityFile->getUniqId(). '_'. $activityFile->getFilename();
 
-            $activityFile->setFilePath($newFilePath);
-            $activityFile->setChecksum($this->fileHandler->getChecksum("Activity", $newFilePath));
+            //upload
+            $this->fileHandler->upload('/files/Activity', $completName, $file);
+
+            //make new checksum
+            $activityFile->setChecksum($this->fileHandler->getChecksum('/files/Activity/'. $completName));
 
             $this->dataResponse = [$activityFile];
 
-            $this->logInfo .= " | new File added $newFilePath ";
-
         }catch(Exception $e){
-            $this->serverErrorResponse($e, $this->logInfo);
+            $this->logService->logError($e, $this->getUser(),"error");
+            $this->logService->logEvent($this->getUser(),$activityFile->getId(), $this->getClassName($activityFile), "SERVER_ERROR : upload_File FAILED");
+            $this->serverErrorResponse($e, "An error occurred");
         }
+
+        $this->logService->logInfo("ActivityFile id " . $activityFile->getId() . " uploaded File " );
+        $this->logService->logEvent($this->getUser(),$activityFile->getId(), $this->getClassName($activityFile), "uploaded file");
 
         return isset($this->response);
     }
+
+
+
+
+
 
     /**
      * @param ActivityFile $activityFile
      * @return mixed
      */
     public function getFile(ActivityFile $activityFile) : bool {
-        $className = $this->getClassName($activityFile);
-        $this->logInfo .= " GET | picture | for $className id: ".$activityFile->getId();
-        if($this->getuser()){
-            $this->logInfo .= " by user id : " . $this->getUser()->getId();
-        }else {
-            $this->logInfo .= " by anonymous user ";
-        }
 
-        if($activityFile->getFilePath() !== null){
-            $check1 = $this->fileHandler->getChecksum($className, $activityFile->getFilePath());
-            if($check1 !== $activityFile->getChecksum()){
-                return $this->CorruptResponse("File integrity cannot be guaranteed");
+        $className = $this->getClassName($activityFile);
+
+        //todo
+        if($activityFile->getFilename() !== null && $activityFile->getUniqId() !== null )
+        {
+            $path = '/files/Activity/'.$activityFile->getUniqId(). '_'. $activityFile->getFilename();
+
+            try {
+                $this->fileHandler->controlChecksum($path, $activityFile->getChecksum());
+            } catch(Exception $e) {
+                $this->logService->logError($e, $this->getUser(),"error");
+                return $this->CorruptResponse("Compromised file");
             }
 
             try {
-                //todo change name of getPic methode
+                //todo dowload File
+                $fileDir = $this->fileHandler->getFile($path);
+           //     $response = new BinaryFileResponse($fileDir);
+            //    $response->headers->set('Content-Type', $activityFile->getFileType());
+
+                // load the file from the filesystem
+                $this->dataResponse = [$this->fileHandler->getFile($path)];
+
+                // rename the downloaded file
+        //        $this->file($file, $activityFile->getFilename().".".$activityFile->getFileType());
+
+                // display the file contents in the browser instead of downloading it
+       //         $this->file('invoice_3241.pdf', 'my_invoice.pdf', ResponseHeaderBag::DISPOSITION_INLINE);
+
+                // send the file contents and force the browser to download it
+           //     $this->dataResponse = [$this->file($file)];
+                /*
+ *
+                $disposition = HeaderUtils::makeDisposition(
+                    HeaderUtils::DISPOSITION_ATTACHMENT,
+                    $activityFile->getFilename().".".$activityFile->getFileType()
+                );
+                $response->headers->set('Content-Disposition', $disposition);
+
+                $this->dataResponse = [$response];*/
           //      stream_($this->fileHandler->getFile($className, $activityFile->getFilePath()));
-                $this->dataResponse = [$this->fileHandler->getFile($className, $activityFile->getFilePath())];
+
+                //complet path
+              //  $this->dataResponse = [$this->fileHandler->getFile($path)];
              //   $activityFile->setFile($file);
             }catch(Exception $e){
+                $this->logService->logError($e,$this->getUser(),"warning");
                 $this->serverErrorResponse($e, $this->logInfo);
             }
         }
+        $this->logService->logInfo("ActivityFile id " . $activityFile->getId() . " downloaded File " );
+
+   //     dd($this->getUser());
+        $this->logService->logEvent($this->getUser(),$activityFile->getId(), $this->getClassName($activityFile), "download file");
+
         return isset($this->response);
     }
+
+
+
+
 
     /**
      * @param String $className
@@ -392,50 +512,62 @@ class CommonController extends AbstractController
                 $this->dataRequest[$attributeName] = $this->dataResponse[0];
                 unset($this->dataRequest[$idKey]);
             }else {
+                $this->logService->logInfo($className . " id :" . $this->dataRequest[$idKey] . " linked entity not found. " );
                 $this->notFoundResponse();
             }
         }
+        $this->logService->logInfo($className . " id :" . $this->dataRequest['id'] . " linked entity found. " );
         return isset($this->response);
     }
 
+
+
+
+
+
+    //todo maybe problem with return response
+    //todo just throw?
     /**
      * @param array $criterias
      * @return bool
      */
     public function hasAllCriteria(array $criterias) :bool
     {
-        foreach($criterias as $criteria){
-            if(!isset($this->dataRequest[$criteria])){
-                $this->logger->info(Response::HTTP_NOT_FOUND . " | missing parameter: " . $criteria);
-                $this->response =  new Response(
-                    json_encode(["error" => "missing parameter : " . $criteria . " is required "]),
-                    Response::HTTP_BAD_REQUEST,
-                    ["Content-Type" => "application/json"]
-                );
-                return false;
+        try {
+            $tabMissing = [];
+            foreach($criterias as $criteria){
+                if(!isset($this->dataRequest[$criteria])){
+                    $tabMissing[] = "missing parameter : " . $criteria . " is required. ";
+                }
             }
+            if(count($tabMissing) > 0 ) {
+                throw new ViolationException($tabMissing);
+            }
+        } catch (ViolationException $e) {
+            $this->logService->logError($e,$this->getUser(),"error");
+            $this->BadRequestResponse($tabMissing);
+            return false;
         }
+
         return true;
     }
+
+
+
+
+
+
 
     /**
      * @param String|null $context
      * @return Response
      */
     public function successResponse(String $context = null) : Response {
-        if(isset($this->eventInfo)){
-            //handle case when userInterface isn't used (register)
-            !$this->getUser() ? $user = $this->dataResponse[0] : $user = $this->getUser();
 
-            //todo getId don't work on array return by membership requests
-            //rework logging...
-        //    $this->logEvents->addEvents($user, $this->dataResponse[0]->getId(), $this->eventInfo["type"], $this->eventInfo["desc"]);
-        }
         if(empty($this->dataResponse)){
              return $this->notFoundResponse();
         }else {
-            $this->logInfo .= " | GET_SUCCESS | " . count($this->dataResponse) . " DATA_FOUND";
-            $this->logger->info($this->logInfo);
+            $this->logService->logInfo('Request was successfully done. ');
             return $this->response =  new Response(
                 json_encode(
                     $this->serialize($this->dataResponse, $context)
@@ -446,6 +578,12 @@ class CommonController extends AbstractController
         }
     }
 
+
+
+
+
+
+    //todo retourne vide ou data non found? vide serait plus simple pou rle front...
     /**
      * @return Response
      */
@@ -459,6 +597,11 @@ class CommonController extends AbstractController
         );
     }
 
+
+
+
+
+
     public function BadRequestResponse(Array $violations) :Response{
         return  $this->response =  new Response(
             json_encode($violations),
@@ -466,6 +609,11 @@ class CommonController extends AbstractController
             ["content-type" => "application/json"]
         );
     }
+
+
+
+
+
 
     public function BadMediaResponse($message) :Response{
         return  $this->response =  new Response(
@@ -475,6 +623,11 @@ class CommonController extends AbstractController
         );
     }
 
+
+
+
+
+
     public function CorruptResponse(String $message) :Response{
         return  $this->response =  new Response(
             json_encode($message),
@@ -483,23 +636,28 @@ class CommonController extends AbstractController
         );
     }
 
+
+
+
+
     /**
      * @param Exception $e
      * @param String $logInfo
      */
     public function serverErrorResponse(Exception $e, String $logInfo) :void
     {
-        $logInfo .= $logInfo . " | FAILED | ";
-        $this->logger->log("error",$logInfo . $e);
-
-        //todo message un peu plus précis? ou pas...
-        //genre les violations?
+        //todo check message
         $this->response = new Response(
-            json_encode(["error" => "ERROR_SERVER"]),
+            json_encode($e->getMessage()),
             Response::HTTP_INTERNAL_SERVER_ERROR,
             ["Content-Type" => "application/json"]
         );
     }
+
+
+
+
+
 
     //todo really usefull?
     /**

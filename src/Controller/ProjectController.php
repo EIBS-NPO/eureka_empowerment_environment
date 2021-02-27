@@ -35,9 +35,7 @@ class ProjectController extends CommonController
 
         // add default required values && convert datetime
         $this->dataRequest = array_merge($this->dataRequest, ["creator" => $this->getUser()]);
-        if(!isset($this->dataRequest["isPublic"])){
-            $this->dataRequest = array_merge($this->dataRequest, ["isPublic" => false]);
-        }
+
         if(isset($this->dataRequest['startDate'])){
             $this->dataRequest['startDate'] = new DateTime ($this->dataRequest["startDate"]);
         }
@@ -53,14 +51,14 @@ class ProjectController extends CommonController
 
         //dataRequest Validations
         if($this->isInvalid(
-            ["creator", "title", "description", "startDate", "isPublic"],
+            ["creator", "title", "description", "startDate"],
             ["endDate", "organization"],
             Project::class)
         ) return $this->response;
 
 
         //create project object && set validated fields
-        $project = $this->setEntity(new Project(), ["creator", "title", "description", "startDate", "endDate", "organization", "isPublic"]);
+        $project = $this->setEntity(new Project(), ["creator", "title", "description", "startDate", "endDate", "organization"]);
 
         //persist the new project
         if($this->persistEntity($project)) return $this->response;
@@ -96,27 +94,27 @@ class ProjectController extends CommonController
             $this->dataRequest["endDate"] = new DateTime($this->dataRequest["endDate"]);
         }
 
-      //  dd($this->dataRequest);
         //validate id and recover projectObject with currentUser id (creator)
         if($this->getEntities(Project::class, ['id', 'creator'])) return $this->response;
         $project = $this->dataResponse[0];
 
         //Link or unlink with an org
-        if($this->dataRequest['orgId'] === null){
+        if(!isset($this->dataRequest['orgId'])){
             $this->dataRequest['organization'] = null;
         }else {
             if($this->getLinkedEntity(Organization::class, "organization", 'orgId')  ) return $this->response;
         }
+     //   dd($this->dataRequest);
 
         //validity control
         if($this->isInvalid(
             null,
-            ["title", "description", "startDate", "endDate", "isPublic", "organization"],
+            ["title", "description", "startDate", "endDate", "organization"],
             Project::class)
         ) return $this->response;
 
         //set project's validated fields
-        $project = $this->setEntity($project, ["title", "description", "startDate", "endDate", "isPublic", "organization"]);
+        $project = $this->setEntity($project, ["title", "description", "startDate", "endDate", "organization"]);
 
         //persist updated project
         if($this->updateEntity($project)) return $this->response;
@@ -192,17 +190,16 @@ class ProjectController extends CommonController
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest["isPublic"] = true;
 
         //todo switch sur dataRequest['context'] => 'public' || 'creator' || 'assigned'
         //todo for dispatch the good request by access rules.
 
         //get one public project
         if(isset($this->dataRequest["id"])){
-            if($this->getEntities(Project::class, ["id", "isPublic"] )) return $this->response;
+            if($this->getEntities(Project::class, ["id"] )) return $this->response;
         } else {
             //get all public project
-            if($this->getEntities(Project::class, ["isPublic"] )) return $this->response;
+            if($this->getEntities(Project::class, [] )) return $this->response;
         }
 
         //download picture
@@ -239,9 +236,6 @@ class ProjectController extends CommonController
                 $this->dataRequest["creator"] = $this->getUser()->getId();
                 $criterias[]='creator';
                 break;
-            default:
-                $this->dataRequest["isPublic"] = true;
-                $criterias[]="isPublic";
         }
 
         //if query for only one

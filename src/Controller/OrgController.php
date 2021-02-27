@@ -67,14 +67,7 @@ class OrgController extends CommonController
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
 
-        //Validate fields
-        if($this->isInvalid(
-            null,
-            ["id"],
-            Organization::class)
-        ) return $this->response;
-
-        //get query
+        //get query, if id not define, query getALL
         if($this->getEntities(Organization::class, ["id"] )) return $this->response;
 
         //download picture
@@ -111,7 +104,7 @@ class OrgController extends CommonController
         foreach($this->dataResponse as $key => $org){
             $this->dataResponse[$key] = $this->loadPicture($org);
         }
-
+//dd($this->dataResponse);
         //success response
         return $this->successResponse();
     }
@@ -125,7 +118,7 @@ class OrgController extends CommonController
      */
     public function updateOrganization(Request $insecureRequest) :Response
     {
-        //cleanXSS
+        //cleanXSS 603771a4a4792_blob.jpeg
         if($this->cleanXSS($insecureRequest)
         ) return $this->response;
 
@@ -133,7 +126,6 @@ class OrgController extends CommonController
         $this->dataRequest = $this->requestParameters->getData($this->request);
         $this->dataRequest = array_merge($this->dataRequest, ["referent" => $this->getUser()->getId()]);
 
-     //   dd($this->dataRequest);
         //validation for paramRequest && get query organization object by organization's id && referent's id
         if($this->getEntities(Organization::class, ["id", "referent"] )) return $this->response;
 
