@@ -38,18 +38,22 @@ class Address
     /**
      * @ORM\Column(type="string", length=30)
      * @Assert\NotBlank(message="country is required")
-     * @Assert\Length(min="2", max="255",
+     * @Assert\Length(min="2", max="30",
      *     minMessage="the country must be at least 2 characters long",
-     *     maxMessage="the country must not exceed 255 characters")
+     *     maxMessage="the country must not exceed 30 characters")
      */
     private $country;
 
     /**
      * @ORM\Column(type="string", length=10)
      * @Assert\NotBlank(message="zipCode is required")
+     * @Assert\Length(min="2", max="10",
+     *     minMessage="the zipCode must be at least 2 characters long",
+     *     maxMessage="the zipCode must not exceed 10 characters")
      */
     private $zipCode;
 
+    //todo check regex
     /**
      * @ORM\Column(type="float", nullable=true)
      * @Assert\Regex(
@@ -96,7 +100,7 @@ class Address
      * @Assert\NotBlank(message="city is required")
      * @Assert\Length(min="2", max="50",
      *     minMessage="the city must be at least 2 characters long",
-     *     maxMessage="the city must not exceed 255 characters")
+     *     maxMessage="the city must not exceed 50 characters")
      */
     private $city;
 

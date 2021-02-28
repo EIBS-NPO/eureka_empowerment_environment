@@ -96,6 +96,11 @@ class Organization
      */
     private $address;
 
+    /**
+     * @ORM\Column(type="boolean")
+     */
+    private $isPartner = false;
+
     public function __construct()
     {
         $this->projects = new ArrayCollection();
@@ -364,6 +369,18 @@ class Organization
     public function setAddress(?Address $address): self
     {
         $this->address = $address;
+
+        return $this;
+    }
+
+    public function getIsPartner(): ?bool
+    {
+        return $this->isPartner;
+    }
+
+    public function setIsPartner(bool $isPartner): self
+    {
+        $this->isPartner = $isPartner;
 
         return $this;
     }
