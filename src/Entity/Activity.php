@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\ActivityRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Doctrine\ORM\Mapping\InheritanceType;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -81,6 +83,21 @@ class Activity
      * base64_encode(picture)
      */
     protected $pictureFile;
+
+    /**
+     * @ORM\ManyToMany(targetEntity=User::class, inversedBy="followingActivities")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\User")
+     *     }
+     * )
+     */
+    private $followers;
+
+    public function __construct()
+    {
+        $this->followers = new ArrayCollection();
+    }
 
     public function serialize(String $context = null): array
     {
@@ -247,6 +264,30 @@ class Activity
     public function setPictureFile($pictureFile): void
     {
         $this->pictureFile = $pictureFile;
+    }
+
+    /**
+     * @return Collection|User[]
+     */
+    public function getFollowers(): Collection
+    {
+        return $this->followers;
+    }
+
+    public function addFollower(User $follower): self
+    {
+        if (!$this->followers->contains($follower)) {
+            $this->followers[] = $follower;
+        }
+
+        return $this;
+    }
+
+    public function removeFollower(User $follower): self
+    {
+        $this->followers->removeElement($follower);
+
+        return $this;
     }
 
 }

@@ -4,6 +4,7 @@ namespace App\Entity;
 
 use App\Repository\ProjectRepository;
 use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -83,9 +84,19 @@ class Project
      */
     private $description = [];
 
+    /**
+     * @ORM\OneToMany(targetEntity=FollowingProject::class, mappedBy="project")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\FollowingProject")
+     *     }
+     * )
+     */
+    private $followers;
+
     public function __construct()
     {
-        $this->activities = new ArrayCollection();
+        $this->followers = new ArrayCollection();
     }
 
     /**
@@ -259,5 +270,34 @@ class Project
         $this->pictureFile = $pictureFile;
     }
 
+    /**
+     * @return Collection|FollowingProject[]
+     */
+    public function getFollowers(): Collection
+    {
+        return $this->followers;
+    }
+
+    public function addFollower(FollowingProject $follower): self
+    {
+        if (!$this->followers->contains($follower)) {
+            $this->followers[] = $follower;
+            $follower->setProject($this);
+        }
+
+        return $this;
+    }
+
+    public function removeFollower(FollowingProject $follower): self
+    {
+        if ($this->followers->removeElement($follower)) {
+            // set the owning side to null (unless already changed)
+            if ($follower->getProject() === $this) {
+                $follower->setProject(null);
+            }
+        }
+
+        return $this;
+    }
 
 }

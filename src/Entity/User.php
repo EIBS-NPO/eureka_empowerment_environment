@@ -157,6 +157,26 @@ class User implements UserInterface
      */
     private $isDisabled = false;
 
+    /**
+     * @ORM\ManyToMany(targetEntity=Activity::class, mappedBy="followers")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\Activity")
+     *     }
+     * )
+     */
+    private $followingActivities;
+
+    /**
+     * @ORM\OneToMany(targetEntity=FollowingProject::class, mappedBy="follower")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\FollowingProject")
+     *     }
+     * )
+     */
+    private $followingProjects;
+
     public function __construct()
     {
         $this->globalPropertyAttributes = new ArrayCollection();
@@ -164,6 +184,8 @@ class User implements UserInterface
         $this->projects = new ArrayCollection();
         $this->memberOf = new ArrayCollection();
         $this->activities = new ArrayCollection();
+        $this->followingActivities = new ArrayCollection();
+        $this->followingProjects = new ArrayCollection();
     }
 
     /**
@@ -514,6 +536,63 @@ class User implements UserInterface
     public function setIsDisabled(bool $isDisabled): self
     {
         $this->isDisabled = $isDisabled;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection|Activity[]
+     */
+    public function getFollowingActivities(): Collection
+    {
+        return $this->followingActivities;
+    }
+
+    public function addFollowingActivity(Activity $followingActivity): self
+    {
+        if (!$this->followingActivities->contains($followingActivity)) {
+            $this->followingActivities[] = $followingActivity;
+            $followingActivity->addFollower($this);
+        }
+
+        return $this;
+    }
+
+    public function removeFollowingActivity(Activity $followingActivity): self
+    {
+        if ($this->followingActivities->removeElement($followingActivity)) {
+            $followingActivity->removeFollower($this);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection|FollowingProject[]
+     */
+    public function getFollowingProjects(): Collection
+    {
+        return $this->followingProjects;
+    }
+
+    public function addFollowingProject(FollowingProject $followingProject): self
+    {
+        if (!$this->followingProjects->contains($followingProject)) {
+            $this->followingProjects[] = $followingProject;
+            $followingProject->setFollower($this);
+        }
+
+        return $this;
+    }
+
+    public function removeFollowingProject(FollowingProject $followingProject): self
+    {
+        if ($this->followingProjects->removeElement($followingProject)) {
+            // set the owning side to null (unless already changed)
+            if ($followingProject->getFollower() === $this) {
+                $followingProject->setFollower(null);
+            }
+        }
 
         return $this;
     }
