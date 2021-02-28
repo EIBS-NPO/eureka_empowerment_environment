@@ -66,7 +66,7 @@ class UserController extends CommonController
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest = array_merge($this->dataRequest, ["id" => $this->getUser()->getId()]);
+        $this->dataRequest["id"] = $this->getUser()->getId();
 
         //get request
         if($this->getEntities(User::class, ["id"])) return $this->response;
@@ -91,19 +91,19 @@ class UserController extends CommonController
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest = array_merge($this->dataRequest, ["id" => $this->getUser()->getId()]);
+        $this->dataRequest["id"] = $this->getUser()->getId();
 
         //get query
         if($this->getEntities(User::class, ["id"] )) return $this->response;
         if(!empty($this->dataResponse)) {
             if($this->isInvalid(
                 null,
-                ["firstname", "lastname", "phone", "mobile"],
+                ["firstname", "lastname", "phone", "mobile", "email"],
                 User::class)
             ) return $this->response;
 
             //set user's validated fields
-            $user = $this->setEntity($this->dataResponse[0], ["firstname", "lastname", "phone", "mobile"]);
+            $user = $this->setEntity($this->dataResponse[0], ["firstname", "lastname", "phone", "mobile", "email"]);
 
             //return potential violations
             if(isset($this->response)) return $this->response;
@@ -131,7 +131,7 @@ class UserController extends CommonController
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest = array_merge($this->dataRequest, ["id" => $this->getUser()->getId()]);
+        $this->dataRequest["id"] = $this->getUser()->getId();
 
         //todo controle with assert for image and configLimite (dans pictureHandler,( ou fileHandler)
         /*if(!isset($this->dataRequest["picture"])) {
@@ -199,8 +199,60 @@ class UserController extends CommonController
         return $this->successResponse();
     }*/
 
-    //todo particular methods for email and password => need refresh token
-    public function resetPassword(){}
+    /**
+     * @param Request $insecureRequest
+     * @param UserPasswordEncoderInterface $encoder
+     * @return Response|null
+     * @Route("/password", name="_password", methods="post")
+     */
+    public function resetPassword(Request $insecureRequest, UserPasswordEncoderInterface $encoder)
+    {
+        //cleanXSS
+        if ($this->cleanXSS($insecureRequest)
+        ) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+
+    //    dd($this->dataRequest);
+
+        if (!isset($this->dataRequest['password'])
+            || !isset($this->dataRequest['newPassword'])
+            || !isset($this->dataRequest['confirmNewPassword'])
+        ) return $this->BadRequestResponse(["missing parameter : password, newPassword and confirm are required. "]);
+
+        if($this->dataRequest['newPassword'] !== $this->dataRequest['confirmNewPassword']) {
+            return $this->BadRequestResponse(["newPassword"=>"not match", "confirmNewPassword"=>"not match"]);
+        }
+
+        $this->dataRequest["id"] = $this->getUser()->getId();
+
+        if ($this->getEntities(User::class, ["id"])) return $this->response;
+        if (!empty($this->dataResponse)) {
+            $user = $this->dataResponse[0];
+
+            $hash = $encoder->encodePassword($user, $this->dataRequest['password']);
+            if(!$encoder->isPasswordValid($user, $this->dataRequest['password'])){ return $this->BadRequestResponse(["password"=> "wrong"]);}
+
+            $this->dataRequest['password'] =  $this->dataRequest['newPassword'];
+            if ($this->isInvalid(
+                null,
+                ["password"],
+                User::class)
+            ) return $this->response;
+
+            $hash = $encoder->encodePassword($user, $this->dataRequest['password']);
+            $user->setPassword($hash);
+
+            //persist the new user
+            if ($this->persistEntity($this->dataResponse[0])) return $this->response;
+        }
+
+        //final response
+        return $this->successResponse();
+    }
+
+
     public function changeEmail(){}
 
 

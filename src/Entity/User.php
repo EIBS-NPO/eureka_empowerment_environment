@@ -152,6 +152,11 @@ class User implements UserInterface
      */
     private $address;
 
+    /**
+     * @ORM\Column(type="boolean")
+     */
+    private $isDisabled = false;
+
     public function __construct()
     {
         $this->globalPropertyAttributes = new ArrayCollection();
@@ -497,6 +502,18 @@ class User implements UserInterface
     public function setAddress(?Address $address): self
     {
         $this->address = $address;
+
+        return $this;
+    }
+
+    public function getIsDisabled(): ?bool
+    {
+        return $this->isDisabled;
+    }
+
+    public function setIsDisabled(bool $isDisabled): self
+    {
+        $this->isDisabled = $isDisabled;
 
         return $this;
     }
