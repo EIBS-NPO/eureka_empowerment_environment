@@ -91,6 +91,11 @@ class Organization
      */
     private $description = [];
 
+    /**
+     * @ORM\OneToOne(targetEntity=Address::class, inversedBy="orgOwner", cascade={"persist", "remove"})
+     */
+    private $address;
+
     public function __construct()
     {
         $this->projects = new ArrayCollection();
@@ -343,6 +348,18 @@ class Organization
     public function setDescription(array $description): self
     {
         $this->description = $description;
+
+        return $this;
+    }
+
+    public function getAddress(): ?Address
+    {
+        return $this->address;
+    }
+
+    public function setAddress(?Address $address): self
+    {
+        $this->address = $address;
 
         return $this;
     }

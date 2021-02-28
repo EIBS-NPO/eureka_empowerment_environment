@@ -147,6 +147,11 @@ class User implements UserInterface
      */
     private $pictureFile;
 
+    /**
+     * @ORM\OneToOne(targetEntity=Address::class, inversedBy="owner", cascade={"persist", "remove"})
+     */
+    private $address;
+
     public function __construct()
     {
         $this->globalPropertyAttributes = new ArrayCollection();
@@ -478,6 +483,18 @@ class User implements UserInterface
     public function setPictureFile($pictureFile): void
     {
         $this->pictureFile = $pictureFile;
+    }
+
+    public function getAddress(): ?Address
+    {
+        return $this->address;
+    }
+
+    public function setAddress(?Address $address): self
+    {
+        $this->address = $address;
+
+        return $this;
     }
 
 }

@@ -104,7 +104,6 @@ class ProjectController extends CommonController
         }else {
             if($this->getLinkedEntity(Organization::class, "organization", 'orgId')  ) return $this->response;
         }
-     //   dd($this->dataRequest);
 
         //validity control
         if($this->isInvalid(

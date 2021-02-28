@@ -199,9 +199,9 @@ class CommonController extends AbstractController
             $this->serverErrorResponse($e, "An error occured");
         }
 
-        $this->logService->logInfo($this->getClassName($entity) ." ". $entity->getid() ." was created. " );
+        $this->logService->logInfo($this->getClassName($entity) ." ". $this->dataResponse[0]->getid() ." was created. " );
 
-        $this->logService->logEvent($this->getUser(),$entity->getId(), $this->getClassName($entity), "new Registration");
+        $this->logService->logEvent($this->getUser(), $this->dataResponse[0]->getId(), $this->getClassName($entity), "new Registration");
 
         return isset($this->response);
     }
@@ -654,7 +654,17 @@ class CommonController extends AbstractController
     }
 
 
-
+    /**
+     * @param $message
+     * @return Response
+     */
+    public function unauthorizedResponse($message){
+        return $this->response = new Response(
+            json_encode($message),
+            Response::HTTP_UNAUTHORIZED,
+            ["Content-Type" => "application/json"]
+        );
+    }
 
 
 

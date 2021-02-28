@@ -181,18 +181,20 @@ class ActivityFileController extends CommonController
         $this->dataRequest["isPublic"] = true;
 
         if($this->getEntities(ActivityFile::class, ['id', 'isPublic'])) return $this->response;
+        $activityFile = $this->dataResponse[0];
 
         if($this->getFile($this->dataResponse[0])) return $this->response;
         $file = $this->dataResponse[0];
 
         $response = new BinaryFileResponse($file);
-        $response->headers->set('Content-Type',$this->dataResponse[0]->getFileType());
+        $response->headers->set('Content-Type',$activityFile->getFileType());
 
-        $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $this->dataResponse[0]->getFilename());
+        $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $activityFile->getFilename());
 
         return $response;
     }
 
+    //todo ajout context pour assigned
     /**
      * @param Request $insecureRequest
      * @Route("/download", name="_download", methods="get")
