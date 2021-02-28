@@ -189,6 +189,10 @@ class User implements UserInterface
             $data["picture"] = $this->pictureFile;
         }
 
+        if($this->address){
+            $data["address"] = $this->address->serialize();
+        }
+
         //todo deprecated
         //Check some attributes with contexts to see if they are sets
         /*if($this->projects && $context != "read_project" && $context != "read_organization"){

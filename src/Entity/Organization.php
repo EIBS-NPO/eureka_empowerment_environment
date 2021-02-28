@@ -137,6 +137,10 @@ class Organization
             $data["membership"] = $this->membership->toArray();
         }
 
+        if($this->address){
+            $data["address"] = $this->address->serialize();
+        }
+
         /*if(count($this->membership) > 0 ){
             $data["membership"] = [];
             foreach($this->membership as $member){

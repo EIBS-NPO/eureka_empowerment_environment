@@ -43,13 +43,13 @@ class AddressController extends CommonController
 
         //dataRequest Validations
         if($this->isInvalid(
-            ["address", "country", "zipCode", "ownerType"],
+            ["address", "country", "city", "zipCode", "ownerType"],
             ["complement", "latitude", "longitude", "owner", "orgOwner"],
             Address::class)
         ) return $this->response;
 
         //create address object && set validated fields
-        $address = $this->setEntity(new Address(), ["address", "country", "zipCode", "complement", "latitude", "longitude", "owner", "orgOwner", "ownerType"]);
+        $address = $this->setEntity(new Address(), ["address", "country", "city", "zipCode", "complement", "latitude", "longitude", "owner", "orgOwner", "ownerType"]);
 
         //persist the new address
         if($this->persistEntity($address)) return $this->response;

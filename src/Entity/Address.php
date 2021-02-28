@@ -107,15 +107,16 @@ class Address
             "address" => $this->address,
             "complement" => $this->complement,
             "country" => $this->country,
+            "city" => $this->city,
             "zipCode" => $this->zipCode,
         ];
 
         //Check some attributes to see if they are sets
-        if($this->owner){
+        if($this->owner && $context === "read_address"){
             $data["owner"] = $this->owner->serialize();
         }
 
-        if($this->orgOwner){
+        if($this->orgOwner && $context === "read_address"){
             $data["orgOwner"] = $this->orgOwner->serialize();
         }
 
