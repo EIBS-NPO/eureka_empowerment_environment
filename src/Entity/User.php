@@ -220,6 +220,15 @@ class User implements UserInterface
             $data["address"] = $this->address->serialize();
         }
 
+        //todo maybe add context read_activity
+       /* if(!$this->followingActivities->isEmpty() && $context !== "read_activity"){
+            //$data["followingActivities"] = $this->followingActivities->toArray();
+            $data["followingActivities"] = [];
+            foreach($this->followingActivities as $activity){
+                array_push($data["followingActivities"], $activity->getId());
+            }
+        }*/
+
         //todo deprecated
         //Check some attributes with contexts to see if they are sets
         /*if($this->projects && $context != "read_project" && $context != "read_organization"){

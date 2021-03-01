@@ -72,10 +72,10 @@ class ActivityController extends CommonController
 
 
     /**
-     * @Route("", name="_put", methods="put")
      * @param Request $insecureRequest
      * @return Response
      * @throws Exception
+     * @Route("", name="_put", methods="put")
      */
     public function updateProject (Request $insecureRequest) :Response
     {
@@ -245,6 +245,10 @@ class ActivityController extends CommonController
             case 'creator':
                 $this->dataRequest["creator"] = $this->getUser()->getId();
                 $criterias[]='creator';
+                break;
+            case 'org':
+                $this->dataResponse["organization"] = $this->dataRequest['orgId'];
+                $criterias[]='organization';
                 break;
             default:
                 $this->dataRequest["isPublic"] = true;

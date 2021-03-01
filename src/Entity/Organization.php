@@ -134,17 +134,30 @@ class Organization
         }
 
         if($this->description){
-
             $data["description"] = $this->description;
+        }
+
+        if($this->address){
+            $data["address"] = $this->address->serialize();
         }
 
         if(!$this->membership->isEmpty()){
             $data["membership"] = $this->membership->toArray();
         }
 
-        if($this->address){
-            $data["address"] = $this->address->serialize();
-        }
+      /*  if(!$this->activities->isEmpty()){
+            $data["activities"] = [];
+            foreach($this->activities as $activity){
+                array_push($data["activities"], $activity->serialize("read_org"));
+            }
+        }*/
+
+        /*if(!$this->projects->isEmpty() && $context !=="read_activity"){
+            $data["projects"] = [];
+            foreach($this->projects as $project){
+                array_push($data["projects"], $project->serialize("read_org"));
+            }
+        }*/
 
         /*if(count($this->membership) > 0 ){
             $data["membership"] = [];

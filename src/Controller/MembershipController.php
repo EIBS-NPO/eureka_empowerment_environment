@@ -16,7 +16,6 @@ use Symfony\Component\Routing\Annotation\Route;
  */
 class MembershipController extends CommonController
 {
-    //todo empecher les doublons ? ou pdejà fait vi clef?
     /**
      * @param Request $insecureRequest
      * @return Response
@@ -29,16 +28,18 @@ class MembershipController extends CommonController
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
-        if(
-            (!$this->dataRequest["orgId"] || (!($this->dataRequest["email"])) )
-            || $this->dataRequest['email'] === $this->getUser()->getUsername()){
-                return $this->notFoundResponse();
+
+        if(!$this->dataRequest["orgId"]) {
+            return $this->BadRequestResponse(["orgId" => "missing required parameter"]);
+        }else if(!($this->dataRequest["email"])) {
+            return $this->BadRequestResponse(["email"=>"missing required parameter"]);
+        }else if($this->dataRequest['email'] === $this->getUser()->getUsername()){
+            return $this->BadRequestResponse(["email"=> "referent can't be added into the membership"]);
         }
 
-        $this->dataRequest = array_merge($this->dataRequest, ["referent" => $this->getUser()->getId()]);
+        $this->dataRequest["referent"] = $this->getUser()->getId();
 
         $this->dataRequest["id"] = $this->dataRequest['orgId'];
-
         //get query organization object by organization's id && referent's id
         if ($this->getEntities(Organization::class, ["id", "referent"])) return $this->response;
         if(empty($this->dataResponse)) return $this->notFoundResponse();
@@ -55,12 +56,12 @@ class MembershipController extends CommonController
 
         //get query organization object by organization's id && referent's id
         if ($this->getEntities(User::class, ["email"])) return $this->response;
-        if(empty($this->dataResponse)) return $this->notFoundResponse();
+        if(empty($this->dataResponse)) return $this->BadRequestResponse(["email"=>"aucun compte n'a été trouvé pour cet email"]);
 
         //new member already in this org?
         foreach($org->getMembership() as $member){
             if($member->getId() === $this->dataResponse[0]->getId()){
-                return $this->notFoundResponse();
+                return $this->BadRequestResponse(["email"=> "user already added into the membership"]);
             }
         }
 
@@ -73,7 +74,6 @@ class MembershipController extends CommonController
             $this->dataResponse = $this->dataResponse[0]->getMembership()->toArray();
         }
 
-        //todo rework logging in CommonCOntroller
         return $this->successResponse();
     }
 
@@ -92,7 +92,7 @@ class MembershipController extends CommonController
         if(!isset($this->dataRequest["orgId"]) || !isset($this->dataRequest["userId"])){
             return $this->notFoundResponse();
         }
-        $this->dataRequest = array_merge($this->dataRequest, ["referent" => $this->getUser()->getId()]);
+        $this->dataRequest["referent"] = $this->getUser()->getId();
         $this->dataRequest["id"] = $this->dataRequest['orgId'];
         //Validate fields
         if ($this->isInvalid(
@@ -128,7 +128,6 @@ class MembershipController extends CommonController
         sort($tab);
         $this->dataResponse = $tab;
 
-        //todo rework logging
         return $this->successResponse();
     }
 

@@ -39,7 +39,7 @@ class ActivityFileController extends CommonController
 
         //getActivity query by id and creatorId
         if($this->getEntities(Activity::class, ['id', 'creator'])) return $this->response;
-
+//dd($this->dataResponse);
         if(get_class($this->dataResponse[0]) === Activity::class) {
             //keep safe for deleting later if upload success
             $this->dataRequest['simpleActivity'] = $this->dataResponse[0];
@@ -181,15 +181,18 @@ class ActivityFileController extends CommonController
         $this->dataRequest["isPublic"] = true;
 
         if($this->getEntities(ActivityFile::class, ['id', 'isPublic'])) return $this->response;
-        $activityFile = $this->dataResponse[0];
 
-        if($this->getFile($this->dataResponse[0])) return $this->response;
-        $file = $this->dataResponse[0];
+        if(!empty($this->dataResponse)){
+            $activityFile = $this->dataResponse[0];
+            if($this->getFile($this->dataResponse[0])) return $this->response;
+            $file = $this->dataResponse[0];
 
-        $response = new BinaryFileResponse($file);
-        $response->headers->set('Content-Type',$activityFile->getFileType());
+            $response = new BinaryFileResponse($file);
+            $response->headers->set('Content-Type',$activityFile->getFileType());
 
-        $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $activityFile->getFilename());
+            $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $activityFile->getFilename());
+        }
+        else{ $response = $this->successResponse();}
 
         return $response;
     }
@@ -211,15 +214,18 @@ class ActivityFileController extends CommonController
 
         if($this->getEntities(ActivityFile::class, ['id'])) return $this->response;
 
-        $activityFile = $this->dataResponse[0];
+        if(!empty($this->dataResponse)){
+            $activityFile = $this->dataResponse[0];
 
-        if($this->getFile($this->dataResponse[0])) return $this->response;
-        $file = $this->dataResponse[0];
+            if($this->getFile($this->dataResponse[0])) return $this->response;
+            $file = $this->dataResponse[0];
 
-        $response = new BinaryFileResponse($file);
-        $response->headers->set('Content-Type',$activityFile->getFileType());
+            $response = new BinaryFileResponse($file);
+            $response->headers->set('Content-Type',$activityFile->getFileType());
 
-        $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $activityFile->getFilename());
+            $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $activityFile->getFilename());
+        }
+        else { $response = $this->successResponse();}
 
         return $response;
     }

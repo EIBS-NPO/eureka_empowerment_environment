@@ -19,6 +19,16 @@ class FollowingProjectRepository extends ServiceEntityRepository
         parent::__construct($registry, FollowingProject::class);
     }
 
+    public function getTeammate($id){
+        return $this->createQueryBuilder('fp')
+            ->select('fp.follower')
+            ->andWhere('fp.id = :id')
+            ->andWhere('fp.isAssigned = true')
+            ->setParameter('id', $id)
+            ->getQuery()
+            ->getResult();
+    }
+
     // /**
     //  * @return FollowingProject[] Returns an array of FollowingProject objects
     //  */

@@ -505,7 +505,7 @@ class CommonController extends AbstractController
      * @return bool
      */
     public function getLinkedEntity(String $className, String $attributeName, String $idKey) :bool {
-        $this->dataRequest = array_merge($this->dataRequest, ["id" => $this->dataRequest[$idKey]]);
+        $this->dataRequest["id"] = $this->dataRequest[$idKey];
         if(!$this->getEntities($className, ["id"])){
             if(!empty($this->dataResponse)){
                 $this->dataRequest[$attributeName] = $this->dataResponse[0];

@@ -107,18 +107,26 @@ class Activity
             "summary" => $this->summary,
             "postDate" => $this->postDate->format('Y-m-d'),
             "isPublic" => $this->isPublic,
-            "creator" => $this->creator->serialize(),
+            "creator" => $this->creator->serialize("read_activity"),
         ];
 
         //Check some attributes to see if they are sets
         if($this->pictureFile){
             $data["picture"] = $this->pictureFile;
         }
-        if($this->project){
+        if($this->project && $context !== "read_project"){
             $data["project"] = $this->project->serialize();
         }
-        if($this->organization){
+        if($this->organization && $context !=="read_org"){
             $data["organization"] = $this->organization->serialize();
+        }
+        //todo maybe add context read_user
+        if(!$this->followers->isEmpty()){
+            //$data["followers"] = $this->followers->toArray();
+            $data["followers"] = [];
+            foreach($this->followers as $follower){
+                array_push($data["followers"], $follower->serialize("read_activity"));
+            }
         }
 
         return $data;

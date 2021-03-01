@@ -129,9 +129,16 @@ class Project
         }*/
 
         //Check some attributes with contexts to see if they are sets
-        if($this->organization && $context != "read_organization"){
-            $data["organization"] = $this->organization->serialize("read_project");
+     /*   if($this->organization && $context != "read_org"){
+            $data["organization"] = $this->organization->serialize();
         }
+
+        if(!$this->activities->isEmpty() && $context !== "read_activity"){
+            $data["activities"] = [];
+            foreach($this->activities as $activity){
+                array_push($data["activities"], $activity->serialize("read_project"));
+            }
+        }*/
 
         return $data;
     }
@@ -286,6 +293,16 @@ class Project
         }
 
         return $this;
+    }
+
+    public function getTeam(){
+        $team = [];
+        foreach($this->followers as $follower){
+            if($follower->isAssigned()){
+                $team[]=$follower;
+            }
+        }
+        return $team;
     }
 
     public function removeFollower(FollowingProject $follower): self
