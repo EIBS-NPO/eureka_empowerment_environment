@@ -53,7 +53,7 @@ class FollowingActivityController extends CommonController
      * @return Response|null
      * @Route("/remove", name="_remove", methods="put")
      */
-    public function removeMember(Request $insecureRequest){
+    public function removeFollower(Request $insecureRequest){
         //cleanXSS
         if($this->cleanXSS($insecureRequest)
         ) return $this->response;
@@ -85,7 +85,7 @@ class FollowingActivityController extends CommonController
      * @return Response
      * @Route("/public", name="_get", methods="get")
      */
-    public function getMembers(Request $insecureRequest) : Response {
+    public function getFellowers(Request $insecureRequest) : Response {
         //cleanXSS
         if($this->cleanXSS($insecureRequest)
         ) return $this->response;
@@ -133,6 +133,42 @@ class FollowingActivityController extends CommonController
         }else {
             $this->notFoundResponse();
         }
+        return $this->successResponse();
+    }
+
+    /**
+     * API endPoint: return the following status for current user into a activity
+     * nedd $projectId the activity id target
+     * @param Request $request
+     * @return Response
+     * @Route("", name="_get", methods="get")
+     */
+    public function getFollowingStatus(Request $request) :Response{
+        //cleanXSS
+        if($this->cleanXSS($request)
+        ) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+
+        //check required params
+        if(!$this->hasAllCriteria(["activityId"])) return $this->response;
+
+        //need id variable for column id in database
+        $this->dataRequest["id"] = $this->dataRequest['activityId'];
+
+        if ($this->getEntities(Activity::class, ["id"])) return $this->response; //if error response
+        if(empty($this->dataResponse)) return $this->BadRequestResponse(["activity"=>"no_activity_found"]);
+        $activity = $this->dataResponse[0];
+
+      //  $following = $activity->isFollowUserId($this->getUser()->getId());
+
+        $this->dataResponse = [$activity->isFollowByUserId($this->getUser()->getId())];
+        /* if($following === null){
+             $this->dataResponse = [ "isFollow"=>false ];
+         }
+         else { $this->dataResponse = [ "isFollow"=> true ];}*/
+
         return $this->successResponse();
     }
 }

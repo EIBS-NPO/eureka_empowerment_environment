@@ -145,12 +145,12 @@ class Organization
             $data["membership"] = $this->membership->toArray();
         }
 
-      /*  if(!$this->activities->isEmpty()){
+        if(!$this->activities->isEmpty() && $context !== "read_activity"){
             $data["activities"] = [];
             foreach($this->activities as $activity){
                 array_push($data["activities"], $activity->serialize("read_org"));
             }
-        }*/
+        }
 
         /*if(!$this->projects->isEmpty() && $context !=="read_activity"){
             $data["projects"] = [];

@@ -67,7 +67,7 @@ class Project
      *     }
      * )
      */
-    private $activities;
+    private $activities = [];
 
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
@@ -92,11 +92,11 @@ class Project
      *     }
      * )
      */
-    private $followers;
+    private $followings;
 
     public function __construct()
     {
-        $this->followers = new ArrayCollection();
+        $this->followings = new ArrayCollection();
     }
 
     /**
@@ -132,13 +132,13 @@ class Project
      /*   if($this->organization && $context != "read_org"){
             $data["organization"] = $this->organization->serialize();
         }
-
+*/
         if(!$this->activities->isEmpty() && $context !== "read_activity"){
             $data["activities"] = [];
             foreach($this->activities as $activity){
                 array_push($data["activities"], $activity->serialize("read_project"));
             }
-        }*/
+        }
 
         return $data;
     }
@@ -232,6 +232,20 @@ class Project
         return $this->activities;
     }
 
+    /**
+     * @param int $activityId
+     * @return Activity|null
+     */
+    public function getActivityById(int $activityId){
+        $res = null;
+        foreach($this->activities as $activity ){
+            if($activity->getId() === $activityId){
+                $res = $activity;
+            }
+        }
+        return $res;
+    }
+
     public function setActivities(?Activity $activities): self
     {
         // unset the owning side of the relation if necessary
@@ -280,41 +294,65 @@ class Project
     /**
      * @return Collection|FollowingProject[]
      */
-    public function getFollowers(): Collection
+    public function getFollowings(): Collection
     {
-        return $this->followers;
+        return $this->followings;
     }
 
-    public function addFollower(FollowingProject $follower): self
+    public function addFollowing(FollowingProject $following): self
     {
-        if (!$this->followers->contains($follower)) {
-            $this->followers[] = $follower;
-            $follower->setProject($this);
+        if (!$this->followings->contains($following)) {
+            $this->followings[] = $following;
+            $following->setProject($this);
         }
 
         return $this;
     }
 
-    public function getTeam(){
+    public function removeFollowing(FollowingProject $following): self
+    {
+        if ($this->followings->removeElement($following)) {
+            // set the owning side to null (unless already changed)
+            if ($following->getProject() === $this) {
+                $following->setProject(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getAssignedTeam(){
         $team = [];
-        foreach($this->followers as $follower){
-            if($follower->isAssigned()){
-                $team[]=$follower;
+        foreach($this->followings as $following){
+            if($following->getIsAssigning()){
+                $team[]=$following->getFollower();
             }
         }
         return $team;
     }
 
-    public function removeFollower(FollowingProject $follower): self
-    {
-        if ($this->followers->removeElement($follower)) {
-            // set the owning side to null (unless already changed)
-            if ($follower->getProject() === $this) {
-                $follower->setProject(null);
+    public function getFollowers(){
+        $followers = [];
+        foreach($this->followings as $following){
+            if($following->getIsFollowing()){
+                $followers[]=$following;
             }
         }
-
-        return $this;
+        return $followers;
     }
 
+    /**
+     *
+     * @param int $userId
+     * @return FollowingProject|null
+     */
+    public function getFollowingByUserId(int $userId){
+        $res = null;
+        foreach($this->followings as $following){
+            if($following->getFollower()->getId() === $userId){
+                $res = $following;
+            }
+        }
+        return $res;
+    }
 }

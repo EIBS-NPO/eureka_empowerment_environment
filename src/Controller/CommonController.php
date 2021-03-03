@@ -46,10 +46,10 @@ class CommonController extends AbstractController
     //todo maybe add context here?
 
     /**
-     * @var Response|null
+     * @var Response
      * Methods that can create a response should store it here and return a boolean to indicate the existence of the response.
      */
-    protected ?Response $response;
+    protected Response $response;
 
     /**
      * @var Request
@@ -154,7 +154,7 @@ class CommonController extends AbstractController
      */
     public function serialize($entities, String $context = null){
         foreach($entities as $key => $entity){
-            if(gettype($entity) != "string"){
+            if(gettype($entity) !== "string" && gettype($entity) !== "boolean"){
                 $entities[$key] = $entity->serialize($context);
             }
         }
@@ -194,14 +194,13 @@ class CommonController extends AbstractController
             $this->entityManager->flush();
             $this->dataResponse = [$entity];
 
+            $this->logService->logInfo($this->getClassName($entity) ." ". $this->dataResponse[0]->getid() ." was created. " );
+            $this->logService->logEvent($this->getUser(), $this->dataResponse[0]->getId(), $this->getClassName($entity), "new Registration");
+
         }catch(Exception $e){
             $this->logService->logError($e,$this->getUser(),"error");
             $this->serverErrorResponse($e, "An error occured");
         }
-
-        $this->logService->logInfo($this->getClassName($entity) ." ". $this->dataResponse[0]->getid() ." was created. " );
-
-        $this->logService->logEvent($this->getUser(), $this->dataResponse[0]->getId(), $this->getClassName($entity), "new Registration");
 
         return isset($this->response);
     }
@@ -251,14 +250,16 @@ class CommonController extends AbstractController
             $this->dataResponse = [$entity];
             $this->eventInfo =["type" => $this->getClassName($entity), "desc" => "update"];
 
+
+            $this->logService->logInfo($this->getClassName($entity) ." ". $entity->getId() ." was updated. " );
+
+            $this->logService->logEvent($this->getUser(),$entity->getId(), $this->getClassName($entity), "Update");
+
+
         }catch(Exception $e){
             $this->logService->logError($e,$this->getUser(),"error");
             $this->serverErrorResponse($e, "An error occured");
         }
-
-        $this->logService->logInfo($this->getClassName($entity) ." ". $entity->getid() ." was updated. " );
-
-        $this->logService->logEvent($this->getUser(),$entity->getId(), $this->getClassName($entity), "Update");
 
         return isset($this->response);
     }
@@ -524,8 +525,9 @@ class CommonController extends AbstractController
 
 
 
-    //todo maybe problem with return response
-    //todo just throw?
+    //todo dsipatch in RequestDataService
+    //todo just contenu? ca sera déjà plus propre,
+    //
     /**
      * @param array $criterias
      * @return bool
@@ -562,15 +564,22 @@ class CommonController extends AbstractController
      * @return Response
      */
     public function successResponse(String $context = null) : Response {
-
+//todo notfound?
         if(empty($this->dataResponse)){
+            $this->logService->logInfo('Request was success with no data. ');
              return $this->notFoundResponse();
         }else {
             $this->logService->logInfo('Request was successfully done. ');
+
+            /*if(getType($this->dataResponse[0] !=="object") && getType($this->dataResponse[0] !=="array")){
+                $data = $this->dataResponse;
+            }
+            else {
+                $data = $this->serialize($this->dataResponse, $context);
+            }*/
             return $this->response =  new Response(
-                json_encode(
-                    $this->serialize($this->dataResponse, $context)
-                ),
+            //    json_encode($data),
+                json_encode( $this->serialize($this->dataResponse, $context) ),
                 Response::HTTP_OK,
                 ["content-type" => "application/json"]
             );

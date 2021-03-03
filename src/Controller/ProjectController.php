@@ -20,14 +20,14 @@ class ProjectController extends CommonController
     //todo access role?
     /**
      * @Route("", name="_post", methods="post")
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response
      * @throws Exception
      */
-    public function create(Request $insecureRequest): Response
+    public function create(Request $request): Response
     {
         //cleanXSS
-        if($this->cleanXSS($insecureRequest)
+        if($this->cleanXSS($request)
         ) return $this->response;
 
         // recover all data's request
@@ -73,14 +73,14 @@ class ProjectController extends CommonController
 
     /**
      * @Route("", name="_put", methods="put")
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response
      * @throws Exception
      */
-    public function updateProject (Request $insecureRequest) :Response
+    public function updateProject (Request $request) :Response
     {
         //cleanXSS
-        if($this->cleanXSS($insecureRequest)
+        if($this->cleanXSS($request)
         ) return $this->response;
 
         // recover all data's request
@@ -126,14 +126,14 @@ class ProjectController extends CommonController
 
 
     /**
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response
      * @Route("/picture", name="_picture_put", methods="post")
      */
-    public function putPicture(Request $insecureRequest ) :Response {
+    public function putPicture(Request $request ) :Response {
 
         //cleanXSS
-        if($this->cleanXSS($insecureRequest)
+        if($this->cleanXSS($request)
         ) return $this->response;
 
         // recover all data's request
@@ -179,12 +179,12 @@ class ProjectController extends CommonController
     /**
      * returns all public projects
      * @Route("/public", name="_get_public", methods="get")
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response
      */
-    public function getPublicProjects(Request $insecureRequest): Response {
+    public function getPublicProjects(Request $request): Response {
         //cleanXSS
-        if($this->cleanXSS($insecureRequest)
+        if($this->cleanXSS($request)
         ) return $this->response;
 
         // recover all data's request
@@ -213,13 +213,12 @@ class ProjectController extends CommonController
     /**
      * returns to a user his created projects
      * @Route("", name="_get", methods="get")
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response
      */
-    public function getProjects(Request $insecureRequest): Response {
+    public function getProjects(Request $request): Response {
         //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+        if($this->cleanXSS($request)) return $this->response;
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
@@ -249,12 +248,37 @@ class ProjectController extends CommonController
             $this->dataResponse[$key] = $this->loadPicture($project);
         }
 
+    //    dd($this->dataResponse);
         //success response
-        return $this->successResponse();
+        return $this->successResponse("read_project");
     }
 
-    //todo controller Followed
+    /**
+     * API andPoint: return the assigned user list for a project
+     * need $projectId, the project id target
+     * @param Request $request
+     * @return Response|null
+     * @Route("team/public", name="_team", methods="get")
+     */
+    public function getTeam(Request $request) :Response {
+        //cleanXSS
+        if($this->cleanXSS( $request )) return $this->response;
 
-    //todo request for return projectfollowed by a user,
-    // need check isPublic and if user is assigned if the project isn't public
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+
+        //check required params
+        if(!$this->hasAllCriteria(["projectId"])) return $this->response;
+
+        //need id column
+        $this->dataRequest['id'] = $this->dataRequest["projectId"];
+        if($this->getEntities(Project::class, ["id"] )) return $this->response;
+        if(empty($this->dataResponse)) return $this->BadRequestResponse(["project"=>"no_project_found"]);
+        $project = $this->dataResponse[0];
+
+        //get collection of assigned user
+        $this->dataResponse = $project->getAssignedTeam();
+
+        return $this->successResponse();
+    }
 }

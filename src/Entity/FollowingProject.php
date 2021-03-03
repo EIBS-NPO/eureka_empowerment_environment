@@ -4,6 +4,7 @@ namespace App\Entity;
 
 use App\Repository\FollowingProjectRepository;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
@@ -19,11 +20,6 @@ class FollowingProject
     private $id;
 
     /**
-     * @ORM\Column(type="boolean")
-     */
-    private $isAssigned;
-
-    /**
      * @ORM\ManyToOne(targetEntity=project::class, inversedBy="followers")
      * @ORM\JoinColumn(nullable=false)
      * @Assert\Type(type={"App\Entity\Project", "integer"})
@@ -37,21 +33,24 @@ class FollowingProject
      */
     private $follower;
 
+    /**
+     * @ORM\Column(type="boolean")
+     */
+    private $isFollowing;
+
+    /**
+     * @ORM\Column(type="boolean")
+     */
+    private $isAssigning;
+
+    public function serialize(){
+        $data =[];
+
+    }
+
     public function getId(): ?int
     {
         return $this->id;
-    }
-
-    public function getIsAssigned(): ?bool
-    {
-        return $this->isAssigned;
-    }
-
-    public function setIsAssigned(bool $isAssigned): self
-    {
-        $this->isAssigned = $isAssigned;
-
-        return $this;
     }
 
     public function getProject(): ?project
@@ -71,10 +70,38 @@ class FollowingProject
         return $this->follower;
     }
 
-    public function setFollower(?User $follower): self
+    public function setFollower(?UserInterface $follower): self
     {
         $this->follower = $follower;
 
         return $this;
+    }
+
+    public function getIsFollowing(): ?bool
+    {
+        return $this->isFollowing;
+    }
+
+    public function setIsFollowing(bool $isFollowing): self
+    {
+        $this->isFollowing = $isFollowing;
+
+        return $this;
+    }
+
+    public function getIsAssigning(): ?bool
+    {
+        return $this->isAssigning;
+    }
+
+    public function setIsAssigning(bool $isAssigning): self
+    {
+        $this->isAssigning = $isAssigning;
+
+        return $this;
+    }
+
+    public function isStillValid(){
+        return $this->isAssigning || $this->isFollowing;
     }
 }

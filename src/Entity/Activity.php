@@ -118,10 +118,10 @@ class Activity
             $data["project"] = $this->project->serialize();
         }
         if($this->organization && $context !=="read_org"){
-            $data["organization"] = $this->organization->serialize();
+            $data["organization"] = $this->organization->serialize("read_activity");
         }
         //todo maybe add context read_user
-        if(!$this->followers->isEmpty()){
+        if(!$this->followers->isEmpty() && $context === "read_activity"){
             //$data["followers"] = $this->followers->toArray();
             $data["followers"] = [];
             foreach($this->followers as $follower){
@@ -298,4 +298,14 @@ class Activity
         return $this;
     }
 
+    //todo retourner si l'activité est suivie par l'utilisateur courant
+    public function isFollowByUserId(int $userId){
+        $res = false;
+        foreach($this->followers as $follower){
+            if($follower->getId() === $userId){
+                $res = true;
+            }
+        }
+        return $res;
+    }
 }
