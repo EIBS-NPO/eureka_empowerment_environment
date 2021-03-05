@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Organization;
 use App\Entity\Project;
+use App\Entity\User;
 use DateTime;
 use Exception;
 use Symfony\Component\HttpFoundation\Request;
@@ -202,12 +203,20 @@ class ProjectController extends CommonController
         }
 
         //download picture
+    //    dd($this->dataResponse[0]->getActivities());
         foreach($this->dataResponse as $key => $project){
+            foreach($project->getActivities() as $activity){
+                $activity = $this->loadPicture(($activity));
+            }
+            if($project->getOrganization() !== null ){
+                $project->setOrganization( $this->loadPicture($project->getOrganization()));
+            }
             $this->dataResponse[$key] = $this->loadPicture($project);
+
         }
 
         //success response
-        return $this->successResponse();
+        return $this->successResponse("read_project");
     }
 
     /**
@@ -241,6 +250,8 @@ class ProjectController extends CommonController
             $criterias[] = 'id';
         }
 
+        //todo si âs de critere on recupere tout...
+        //mais c'est public de tout façon...
         if($this->getEntities(Project::class, $criterias )) return $this->response;
 
         //download picture
@@ -251,6 +262,24 @@ class ProjectController extends CommonController
     //    dd($this->dataResponse);
         //success response
         return $this->successResponse("read_project");
+    }
+
+    /**
+     * @param Request $request
+     * @return Response
+     * @Route("/assigned", name="_assigned", methods="get")
+     */
+    public function getAssignedProject(Request $request){
+        //cleanXSS
+        if($this->cleanXSS($request)) return $this->response;
+
+        $this->dataRequest['id'] = $this->getUser()->getId();
+        if($this->getEntities(User::class, ['id'] )) return $this->response;
+        $user = $this->dataResponse[0];
+
+        $this->dataResponse = $user->getAssignedProjects();
+        return $this->successResponse();
+    //    dd($user->getAssignedProjects());
     }
 
     /**

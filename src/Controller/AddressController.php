@@ -75,18 +75,20 @@ class AddressController extends CommonController
         if($this->getEntities(Address::class, ['id'])) return $this->response;
         $address = $this->dataResponse[0];
 
-        $this->isOwner($address);
+        if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
+            $this->isOwner($address);
+        }
+
 
         //dataRequest Validations
         if($this->isInvalid(
             null,
-            ["address", "country", "zipCode","complement", "latitude", "longitude", "owner", "orgOwner"],
+            ["address", "country", "city", "zipCode","complement", "latitude", "longitude", "owner", "orgOwner"],
             Address::class)
         ) return $this->response;
 
-
         //set project's validated fields
-        $address = $this->setEntity($address, ["address", "country", "zipCode","complement", "latitude", "longitude"]);
+        $address = $this->setEntity($address, ["address", "country", "city", "zipCode","complement", "latitude", "longitude"]);
 
         //persist updated project
         if($this->updateEntity($address)) return $this->response;
@@ -156,7 +158,7 @@ class AddressController extends CommonController
             ($address->getOwner() !== null && $address->getOwner()->getId() !== $this->getUser()->getId())
             || ($address->getOrgOwner() !== null && $address->getOrgOwner()->getReferent()->getId() !== $this->getUser()->getId())
         ){
-            return $this->unauthorizedResponse("not your own");
+            return $this->unauthorizedResponse("unauthorized access");
         }
         return true;
     }

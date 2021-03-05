@@ -52,4 +52,6 @@ security:
         - { path: ^/user/register, roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/(org|project|activity|member|file/download|followActivity|/project/team)/public, roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/admin, roles: ROLE_ADMIN }
+#        - { path: ^/(user|address), roles: IS_AUTHENTICATED_FULLY }
+#        - { path: ^/, roles: [ROLE_USER, ROLE_ADMIN] }
         - { path: ^/, roles: IS_AUTHENTICATED_FULLY }

@@ -280,9 +280,9 @@ class CommonController extends AbstractController
         try{
             //if criterias for query
             $strLog = "all";
-            if(count($this->dataRequest) > 0 ) {
+            //if(count($this->dataRequest) > 0 ) {
+            if(count($criterias) > 0 ) {
                 //verify the existence of criterias and their validity
-                //todo throw vilotionException ?
                 if($this->hasAllCriteria($criterias) && !($this->isInvalid($criterias, null, $className))){
                     $strLog = "[";
                     foreach ($criterias as $key => $criteria) {

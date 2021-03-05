@@ -67,8 +67,13 @@ class OrgController extends CommonController
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
 
+        $criterias = [];
+        if(isset($this->dataRequest['id'])){
+            $criterias[]="id";
+        }
+
         //get query, if id not define, query getALL
-        if($this->getEntities(Organization::class, ["id"] )) return $this->response;
+        if($this->getEntities(Organization::class, $criterias )) return $this->response;
 
         //download picture
         foreach($this->dataResponse as $key => $org){
@@ -76,7 +81,7 @@ class OrgController extends CommonController
         }
 
         //success response
-        return $this->successResponse();
+        return $this->successResponse("read_org");
     }
 
     /**
@@ -106,7 +111,7 @@ class OrgController extends CommonController
         }
 //dd($this->dataResponse);
         //success response
-        return $this->successResponse();
+        return $this->successResponse("read_org");
     }
 
     //todo ajout logo update

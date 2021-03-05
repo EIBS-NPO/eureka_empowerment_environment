@@ -114,18 +114,18 @@ class Activity
         if($this->pictureFile){
             $data["picture"] = $this->pictureFile;
         }
-        if($this->project && $context !== "read_project"){
+        if($this->project && $context === "read_activity"){
             $data["project"] = $this->project->serialize();
         }
-        if($this->organization && $context !=="read_org"){
-            $data["organization"] = $this->organization->serialize("read_activity");
+        if($this->organization && $context ==="read_activity"){
+            $data["organization"] = $this->organization->serialize();
         }
         //todo maybe add context read_user
         if(!$this->followers->isEmpty() && $context === "read_activity"){
             //$data["followers"] = $this->followers->toArray();
             $data["followers"] = [];
             foreach($this->followers as $follower){
-                array_push($data["followers"], $follower->serialize("read_activity"));
+                array_push($data["followers"], $follower->serialize());
             }
         }
 

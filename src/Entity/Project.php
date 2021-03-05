@@ -67,7 +67,7 @@ class Project
      *     }
      * )
      */
-    private $activities = [];
+    private $activities;
 
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
@@ -129,14 +129,14 @@ class Project
         }*/
 
         //Check some attributes with contexts to see if they are sets
-     /*   if($this->organization && $context != "read_org"){
+        if($this->organization && $context === "read_project"){
             $data["organization"] = $this->organization->serialize();
         }
-*/
-        if(!$this->activities->isEmpty() && $context !== "read_activity"){
+
+        if($this->activities !== null && $context === "read_project"){
             $data["activities"] = [];
             foreach($this->activities as $activity){
-                array_push($data["activities"], $activity->serialize("read_project"));
+                array_push($data["activities"], $activity->serialize());
             }
         }
 
@@ -224,10 +224,7 @@ class Project
         return $this;
     }
 
-    /**
-     * @return ArrayCollection
-     */
-    public function getActivities(): ArrayCollection
+    public function getActivities()
     {
         return $this->activities;
     }
@@ -246,7 +243,7 @@ class Project
         return $res;
     }
 
-    public function setActivities(?Activity $activities): self
+    public function setActivities( $activities): self
     {
         // unset the owning side of the relation if necessary
         if ($activities === null && $this->activities !== null) {

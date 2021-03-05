@@ -157,7 +157,7 @@ class FollowingProjectController extends CommonController
     }
 
     /**
-     * API endPoint: return the following status for current user into a project
+     * API endPoint: return the following status (true/false) for current user into a project
      * nedd $projectId the project id target
      * @param Request $request
      * @return Response
@@ -183,11 +183,11 @@ class FollowingProjectController extends CommonController
 
         $following = $project->getFollowingByUserId($this->getUser()->getId());
 
-        $this->dataResponse = [$following->getIsFollowing()];
-       /* if($following === null){
-            $this->dataResponse = [ "isFollow"=>false ];
+      //  $this->dataResponse = [$following->getIsFollowing()];
+        if($following === null){
+            $this->dataResponse = [false];
         }
-        else { $this->dataResponse = [ "isFollow"=> true ];}*/
+        else { $this->dataResponse = [$following->getIsFollowing()];}
 
         return $this->successResponse();
     }

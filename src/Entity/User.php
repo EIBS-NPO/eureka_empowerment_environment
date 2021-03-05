@@ -201,6 +201,8 @@ class User implements UserInterface
             "firstname" => $this->firstname,
             "lastname" => $this->lastname,
             "email" => $this->email,
+            "isDisabled" => $this->isDisabled,
+            "roles" => $this->roles[0]
         ];
 
         //Check some attributes to see if they are sets
@@ -606,4 +608,23 @@ class User implements UserInterface
         return $this;
     }
 
+    public function getAssignedProjects(){
+        $res = [];
+        foreach($this->followingProjects as $following){
+            if($following->getIsAssigning() === true ){
+                $res[] = $following->getProject();
+            }
+        }
+        return $res;
+    }
+
+    public function getFollowedProjects(){
+        $res = [];
+        foreach($this->followingProjects as $following){
+            if($following->getIsFollowing() === true ){
+                $res[] = $following->getProject();
+            }
+        }
+        return $res;
+    }
 }
