@@ -477,6 +477,17 @@ class User implements UserInterface
         return $this->activities;
     }
 
+    public function getActivity($activityId){
+        $res = null;
+        //look into created project
+        foreach($this->activities as $activity) {
+            if ($activity->getId() === $activityId) {
+                $res = $activity;
+            }
+        }
+        return $res;
+    }
+
     public function addActivity(Activity $activity): self
     {
         if (!$this->activities->contains($activity)) {
@@ -623,6 +634,24 @@ class User implements UserInterface
         foreach($this->followingProjects as $following){
             if($following->getIsFollowing() === true ){
                 $res[] = $following->getProject();
+            }
+        }
+        return $res;
+    }
+
+    public function getAssignedProjectById($projectId){
+        $res = null;
+        //look into created project
+        foreach($this->projects as $project){
+            if($project->getId() === $projectId ){
+                $res = $project;
+            }
+        }// look into assigned project
+        if($res === null) {
+            foreach($this->getAssignedProjects() as $project){
+                if($project->getId() === $projectId ){
+                    $res = $project;
+                }
             }
         }
         return $res;

@@ -44,8 +44,10 @@ class FollowingProject
     private $isAssigning;
 
     public function serialize(){
-        $data =[];
-
+        $data["projectId"] = $this->project->getId();
+        $data["followerId"] = $this->follower->getId();
+        $data["isFollowing"] = $this->isFollowing;
+        $data["isAssigning"] = $this->isAssigning;
     }
 
     public function getId(): ?int

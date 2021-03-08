@@ -212,9 +212,8 @@ class ProjectController extends CommonController
                 $project->setOrganization( $this->loadPicture($project->getOrganization()));
             }
             $this->dataResponse[$key] = $this->loadPicture($project);
-
         }
-
+    //    dd($this->dataResponse[0]->getFollowings());
         //success response
         return $this->successResponse("read_project");
     }
@@ -265,6 +264,29 @@ class ProjectController extends CommonController
     }
 
     /**
+     * @param Request $insecureRequest
+     * @return Response|null
+     * @Route("/followed", name="_followed", methods="get")
+     */
+    public function getMyFollowing (Request $insecureRequest) {
+        //cleanXSS
+        if($this->cleanXSS($insecureRequest)
+        ) return $this->response;
+
+        $this->dataRequest["id"] = $this->getUser()->getId();
+
+        if ($this->getEntities(User::class, ["id"])) return $this->response;
+
+        $this->dataResponse = $this->dataResponse[0]->getFollowedProjects();
+
+        foreach($this->dataResponse as $key => $follower){
+            $this->dataResponse[$key] = $this->loadPicture($follower);
+        }
+
+        return $this->successResponse("read_project");
+    }
+
+    /**
      * @param Request $request
      * @return Response
      * @Route("/assigned", name="_assigned", methods="get")
@@ -278,8 +300,11 @@ class ProjectController extends CommonController
         $user = $this->dataResponse[0];
 
         $this->dataResponse = $user->getAssignedProjects();
+        foreach($this->dataResponse as $key => $follower){
+            $this->dataResponse[$key] = $this->loadPicture($follower);
+        }
+
         return $this->successResponse();
-    //    dd($user->getAssignedProjects());
     }
 
     /**
@@ -287,7 +312,7 @@ class ProjectController extends CommonController
      * need $projectId, the project id target
      * @param Request $request
      * @return Response|null
-     * @Route("team/public", name="_team", methods="get")
+     * @Route("/team/public", name="_team", methods="get")
      */
     public function getTeam(Request $request) :Response {
         //cleanXSS
@@ -308,6 +333,43 @@ class ProjectController extends CommonController
         //get collection of assigned user
         $this->dataResponse = $project->getAssignedTeam();
 
+        return $this->successResponse();
+    }
+
+    /**
+     * @param Request $request
+     * @return Response
+     * @Route("/addActivity", name="_add_activity", methods="put")
+     */
+    public function addActivity(Request $request) {
+        //cleanXSS
+        if($this->cleanXSS( $request )) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+
+        //check required params
+        if(!$this->hasAllCriteria(["activityId", "projectId"])) return $this->response;
+
+        $this->dataRequest['id'] = $this->getUser()->getId();
+        if($this->getEntities(User::class, ["id"] )) return $this->response;
+        $user = $this->dataResponse[0];
+
+        $project = $user->getAssignedProjectById($this->dataRequest["projectId"]);
+        if($project === null) return $this->BadRequestResponse(["project" => "user not assigned into this project"]);
+
+        $activity = $user->getActivity($this->dataRequest["activityId"]);
+        if($project === null) return $this->BadRequestResponse(["activity" => "user isn't the owner of the activity"]);
+
+        if($project->getActivityById($this->dataRequest["activityId"]) === null){
+            $project->addActivity($activity);
+        }else{
+            $project->removeActivity($activity);
+        }
+
+        if($this->updateEntity($project)) return $this->response;
+
+        $this->dataResponse = ["success"];
         return $this->successResponse();
     }
 }

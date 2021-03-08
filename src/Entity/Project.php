@@ -133,6 +133,7 @@ class Project
             $data["organization"] = $this->organization->serialize();
         }
 
+        //todo ?? pourquoi j'ai foreach? ====> a cause de la colletion, ? je dois pouvoir faire toArray()
         if($this->activities !== null && $context === "read_project"){
             $data["activities"] = [];
             foreach($this->activities as $activity){
@@ -140,6 +141,13 @@ class Project
             }
         }
 
+        /*if(!$this->followings->isEmpty() && $context === "read_project") {
+            $data["followings"] = [];
+            foreach($this->followings->toArray() as $following){
+            //    dd($following);
+                array_push($data["followings"], $following->serialize());
+            }
+        }*/
         return $data;
     }
 
@@ -243,19 +251,28 @@ class Project
         return $res;
     }
 
-    public function setActivities( $activities): self
+    /**
+     * @param mixed $activities
+     */
+    public function setActivities($activities): void
     {
-        // unset the owning side of the relation if necessary
-        if ($activities === null && $this->activities !== null) {
-            $this->activities->setProject(null);
-        }
-
-        // set the owning side of the relation if necessary
-        if ($activities !== null && $activities->getProject() !== $this) {
-            $activities->setProject($this);
-        }
-
         $this->activities = $activities;
+    }
+
+    public function addActivity($activity){
+        if (!$this->activities->contains($activity)) {
+            $this->activities[] = $activity;
+            $activity->setProject($this);
+        }
+
+        return $this;
+    }
+
+    public function removeActivity($activity){
+        if ($this->activities->contains($activity)) {
+            $this->activities->removeElement($activity);
+            $activity->setProject(null);
+        }
 
         return $this;
     }

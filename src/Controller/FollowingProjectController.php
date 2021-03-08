@@ -173,6 +173,8 @@ class FollowingProjectController extends CommonController
 
         //check required params
         if(!$this->hasAllCriteria(["projectId"])) return $this->response;
+        if(!isset($this->dataRequest['isAssigning']) && !$this->hasAllCriteria(['isFollowing'])) return $this->response;
+        if(!isset($this->dataRequest['isFollowing']) && !$this->hasAllCriteria(['isAssigning'])) return $this->response;
 
         //need id variable for column id in database
         $this->dataRequest["id"] = $this->dataRequest['projectId'];
@@ -187,7 +189,14 @@ class FollowingProjectController extends CommonController
         if($following === null){
             $this->dataResponse = [false];
         }
-        else { $this->dataResponse = [$following->getIsFollowing()];}
+        else {
+            if(isset($this->dataRequest["isFollowing"])){
+                $this->dataResponse = [$following->getIsFollowing()];
+            }
+            else if(isset($this->dataRequest["isAssigning"])){
+                $this->dataResponse = [$following->getIsAssigning()];
+            }
+        }
 
         return $this->successResponse();
     }
@@ -298,5 +307,4 @@ class FollowingProjectController extends CommonController
         $this->dataResponse = [$following];
         return true;
     }
-
 }

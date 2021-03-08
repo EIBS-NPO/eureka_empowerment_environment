@@ -28,7 +28,7 @@ security:
                 pattern: ^/user/register
                 security: false
         public:
-                pattern: ^/(org|project|activity|member|file/download|followActivity|/project/team)/public
+                pattern: ^/(org|project|activity|member|file/download|followActivity|project/team)/public
                 anonymous : true
 
         main:
@@ -50,7 +50,7 @@ security:
     access_control:
         - { path: ^/security/login, roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/user/register, roles: IS_AUTHENTICATED_ANONYMOUSLY }
-        - { path: ^/(org|project|activity|member|file/download|followActivity|/project/team)/public, roles: IS_AUTHENTICATED_ANONYMOUSLY }
+        - { path: ^/(org|project|activity|member|file/download|followActivity|project/team)/public, roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/admin, roles: ROLE_ADMIN }
 #        - { path: ^/(user|address), roles: IS_AUTHENTICATED_FULLY }
 #        - { path: ^/, roles: [ROLE_USER, ROLE_ADMIN] }
