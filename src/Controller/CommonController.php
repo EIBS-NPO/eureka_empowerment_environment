@@ -10,6 +10,7 @@ use App\Service\FileHandler;
 use App\Service\Request\ParametersValidator;
 use App\Service\Request\RequestParameters;
 use App\Service\Security\RequestSecurity;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -64,7 +65,7 @@ class CommonController extends AbstractController
     protected array $dataRequest;
 
     /**
-     * @var array
+     * @var array|Collection
      * The data of the sent requests are stored in this table. Each new data will overwrite the previous one. Methods that return data, must return a booleen indicating their existence here.
      */
     protected array $dataResponse;

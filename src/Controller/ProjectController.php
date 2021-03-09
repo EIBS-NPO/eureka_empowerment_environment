@@ -237,7 +237,7 @@ class ProjectController extends CommonController
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
-
+//dd($this->dataRequest);
         $this->dataRequest["id"] = $this->getUser()->getId();
         if ($this->getEntities(User::class, ["id"])) return $this->response;
         $user = $this->dataResponse[0];
@@ -256,9 +256,11 @@ class ProjectController extends CommonController
 
         //if query for only one
         if(isset($this->dataRequest["projectId"])) {
-            $projects = [$user->getProjectById($this->dataRequest["projectId"])];
+            $this->dataRequest["id"] = $this->dataRequest["projectId"];
+            if($this->getEntities(Project::class, ["id"] )) return $this->response;
+               $projects = $this->dataResponse;
         }else {
-            $projects = count($user->getProjects()) === 0 ? [] : $user->getProjects();
+            $projects = $user->getProjects()->toArray();
         }
     //    if($this->getEntities(Project::class, $criterias )) return $this->response;
      //   $projects = $this->dataResponse;
@@ -281,6 +283,7 @@ class ProjectController extends CommonController
             $projects[$key] = $this->loadPicture($project);
         }
         $this->dataResponse = $projects;
+   //     dd($projects);
 
     //    dd($this->dataResponse);
         //success response
