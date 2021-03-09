@@ -565,10 +565,11 @@ class CommonController extends AbstractController
      */
     public function successResponse(String $context = null) : Response {
 //todo notfound?
-        if(empty($this->dataResponse)){
+        //todo retrait a verif regression
+      /*  if(empty($this->dataResponse)){
             $this->logService->logInfo('Request was success with no data. ');
              return $this->notFoundResponse();
-        }else {
+        }else {*/
             $this->logService->logInfo('Request was successfully done. ');
 
             /*if(getType($this->dataResponse[0] !=="object") && getType($this->dataResponse[0] !=="array")){
@@ -583,7 +584,7 @@ class CommonController extends AbstractController
                 Response::HTTP_OK,
                 ["content-type" => "application/json"]
             );
-        }
+       // }
     }
 
 

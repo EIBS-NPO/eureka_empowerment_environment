@@ -2,7 +2,9 @@
 
 namespace App\Controller;
 
+use App\Entity\Activity;
 use App\Entity\Organization;
+use App\Entity\User;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -74,11 +76,27 @@ class OrgController extends CommonController
 
         //get query, if id not define, query getALL
         if($this->getEntities(Organization::class, $criterias )) return $this->response;
+        $orgs = $this->dataResponse;
+
+        //only with public resources
+        foreach($orgs as $org) {
+            $org->setActivities($org->getOnlyPublicActivities());
+        }
 
         //download picture
-        foreach($this->dataResponse as $key => $org){
-            $this->dataResponse[$key] = $this->loadPicture($org);
+        foreach($orgs as $key => $org){
+            $org= $this->loadPicture($org);
+            foreach($org->getActivities() as $activity){
+                $activity = $this->loadPicture(($activity));
+            }
+            foreach($org->getProjects() as $project){
+                $project = $this->loadPicture(($project));
+            }
+            foreach($org->getMembership() as $member){
+                $member = $this->loadPicture($member);
+            }
         }
+        $this->dataResponse = $orgs;
 
         //success response
         return $this->successResponse("read_org");
@@ -104,11 +122,33 @@ class OrgController extends CommonController
         }else {
             if($this->getEntities(Organization::class, ["referent"] )) return $this->response;
         }
+        $orgs = $this->dataResponse;
+
+        $this->dataRequest['id'] = $this->getUser()->getId();
+        if($this->getEntities(User::class, ["id"] )) return $this->response;
+        $user = $this->dataResponse[0];
+        //isreferent or assign?
+        foreach($orgs as $org){
+            if(!$org->isMember($user)){
+                $org->setActivities($org->getOnlyPublicActivities());
+            }
+        }
 
         //download picture
-        foreach($this->dataResponse as $key => $org){
-            $this->dataResponse[$key] = $this->loadPicture($org);
+        foreach($orgs as $key => $org){
+            $org= $this->loadPicture($org);
+            foreach($org->getActivities() as $activity){
+                $activity = $this->loadPicture(($activity));
+            }
+            foreach($org->getProjects() as $project){
+                $project = $this->loadPicture(($project));
+            }
+            foreach($org->getMembership() as $member){
+                $member = $this->loadPicture($member);
+            }
         }
+        $this->dataResponse = $orgs;
+
 //dd($this->dataResponse);
         //success response
         return $this->successResponse("read_org");
@@ -197,6 +237,64 @@ class OrgController extends CommonController
         $this->dataResponse = [$this->loadPicture($org)];
 
         //final response
+        return $this->successResponse();
+    }
+
+    /**
+     * @param Request $request
+     * @return Response
+     * @Route("/manageActivity", name="_manage_Activity", methods="put")
+     */
+    public function manageActivity(Request $request){
+        //cleanXSS
+        if($this->cleanXSS( $request )) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+
+        //check required params
+        if(!$this->hasAllCriteria(["activityId", "orgId"])) return $this->response;
+
+        $this->dataRequest['id'] = $this->getUser()->getId();
+        if($this->getEntities(User::class, ["id"] )) return $this->response;
+        $user = $this->dataResponse[0];
+
+        $this->dataRequest['id'] = $this->dataRequest['orgId'];
+        if($this->getEntities(Organization::class, ["id"] )) return $this->response;
+        $org = $this->dataResponse[0];
+
+        if(!$org->isMember($user)){return $this->unauthorizedResponse("your not member of this organization");}
+
+        $this->dataRequest['id'] = $this->dataRequest['activityId'];
+        if($this->getEntities(Activity::class, ["id"] )) return $this->response;
+        $activity = $this->dataResponse[0];
+
+        //if activity have the organization, remove it
+        if($activity->getOrganization() !== null && $activity->getOrganization()->getId() === $org->getId()){
+            $activity->setOrganization(null);
+        }
+        else { //add
+            $activity->setOrganization($org);
+        }
+
+        if($this->updateEntity($activity)) return $this->response;
+
+        $this->dataResponse = ["success"];
+        return $this->successResponse();
+    }
+
+    /**
+     * @param Request $request
+     * @return Response
+     * @Route("/membered", name="_membered", methods="get")
+     */
+    public function getMembered (Request $request){
+        $this->dataRequest['id'] = $this->getUser()->getId();
+        if($this->getEntities(User::class, ["id"] )) return $this->response;
+        $user = $this->dataResponse[0];
+
+        $this->dataResponse = $user->getMemberOf()->toArray();
+
         return $this->successResponse();
     }
 }

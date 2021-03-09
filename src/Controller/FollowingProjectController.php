@@ -37,7 +37,6 @@ class FollowingProjectController extends CommonController
         //check required params
         if(!$this->hasAllCriteria(["projectId"])){ return $this->response; }
 
-        //todo faire un ou plutot...
         if(!isset($this->dataRequest['isAssigning']) && !$this->hasAllCriteria(['isFollowing'])) return $this->response;
         if(!isset($this->dataRequest['isFollowing']) && !$this->hasAllCriteria(['isAssigning'])) return $this->response;
 
@@ -183,19 +182,24 @@ class FollowingProjectController extends CommonController
         if(empty($this->dataResponse)) return $this->BadRequestResponse(["project"=>"no_project_found"]);
         $project = $this->dataResponse[0];
 
-        $following = $project->getFollowingByUserId($this->getUser()->getId());
-
-      //  $this->dataResponse = [$following->getIsFollowing()];
-        if($following === null){
-            $this->dataResponse = [false];
+        if($project->getCreator()->getId() !== $this->getUser()->getId()){
+            $following = $project->getFollowingByUserId($this->getUser()->getId());
+            //  dd($following);
+            //  $this->dataResponse = [$following->getIsFollowing()];
+            if($following === null){
+                $this->dataResponse = [false];
+            }
+            else {
+                if(isset($this->dataRequest["isFollowing"])){
+                    $this->dataResponse = [$following->getIsFollowing()];
+                }
+                else if(isset($this->dataRequest["isAssigning"])){
+                    $this->dataResponse = [$following->getIsAssigning()];
+                }
+            }
         }
         else {
-            if(isset($this->dataRequest["isFollowing"])){
-                $this->dataResponse = [$following->getIsFollowing()];
-            }
-            else if(isset($this->dataRequest["isAssigning"])){
-                $this->dataResponse = [$following->getIsAssigning()];
-            }
+            $this->dataResponse = [true];
         }
 
         return $this->successResponse();

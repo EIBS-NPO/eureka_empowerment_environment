@@ -251,6 +251,16 @@ class Project
         return $res;
     }
 
+    public function getOnlyPublicActivities(){
+        $res = [];
+        foreach($this->activities as $activity ){
+            if($activity->getIsPublic()){
+                $res[] = $activity;
+            }
+        }
+        return $res;
+    }
+
     /**
      * @param mixed $activities
      */
@@ -365,6 +375,20 @@ class Project
         foreach($this->followings as $following){
             if($following->getFollower()->getId() === $userId){
                 $res = $following;
+            }
+        }
+        return $res;
+    }
+
+    public function isAssign($user){
+        $res = false;
+        if($this->creator->getId() === $user->getId()){
+            $res = true;
+        }
+        else{
+            $following = $this->getFollowingByUserId($user->getId());
+            if($following !== null && $following->getIsAssigning() === true){
+                $res = true;
             }
         }
         return $res;

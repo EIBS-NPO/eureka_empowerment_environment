@@ -145,10 +145,10 @@ class Organization
             $data["membership"] = $this->membership->toArray();
         }
 
-        if(!$this->activities->isEmpty() && $context === "read_org"){
+        if(!$this->activities !== null && $context === "read_org"){
             $data["activities"] = [];
             foreach($this->activities as $activity){
-                array_push($data["activities"], $activity->serialize("read_org"));
+                array_push($data["activities"], $activity->serialize());
             }
         }
 
@@ -304,12 +304,15 @@ class Organization
         return $this;
     }
 
-    /**
-     * @return Collection|Activity[]
-     */
-    public function getActivities(): Collection
+    public function getActivities()
     {
         return $this->activities;
+    }
+
+
+    public function setActivities($activities): void
+    {
+        $this->activities = $activities;
     }
 
     public function addActivity(Activity $activity): self
@@ -398,5 +401,26 @@ class Organization
         return $this;
     }
 
+    public function isMember($user){
+        $res = false;
+        if($this->referent->getid() === $user->getId()){
+            $res = true;
+        }else {
+            if($this->membership->contains($user)){
+                $res = true;
+            }
+        }
+        return $res;
+    }
+
+    public function getOnlyPublicActivities(){
+        $res = [];
+        foreach($this->activities as $activity ){
+            if($activity->getIsPublic()){
+                $res[] = $activity;
+            }
+        }
+        return $res;
+    }
 
 }

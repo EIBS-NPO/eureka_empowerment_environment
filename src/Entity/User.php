@@ -403,6 +403,16 @@ class User implements UserInterface
         return $this;
     }
 
+    public function getOrgById($orgId){
+        $res = null;
+        foreach($this->organizations as $org){
+            if($org->getId() === $orgId){
+                $res = $org;
+            }
+        }
+        return $res;
+    }
+
     public function removeOrganization(Organization $organization): self
     {
         if ($this->organizations->removeElement($organization)) {
@@ -431,6 +441,16 @@ class User implements UserInterface
         }
 
         return $this;
+    }
+
+    public function getProjectById($projectId){
+        $res = null;
+        foreach($this->projects as $project){
+            if($project->getId() === $projectId){
+                $res = $project;
+            }
+        }
+        return $res;
     }
 
     public function removeProject(Project $project): self

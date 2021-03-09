@@ -25,10 +25,9 @@ class Activity
 
     /**
      * @ORM\Column(type="boolean")
-     * @Assert\NotBlank(message="isPublic is required")
      * @Assert\Type(type="bool", message=" isPublic not valid boolean")
      */
-    protected  $isPublic;
+    protected  $isPublic = false;
 
     /**
      * @ORM\Column(type="string", length=50)

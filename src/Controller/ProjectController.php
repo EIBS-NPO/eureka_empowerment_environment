@@ -178,7 +178,7 @@ class ProjectController extends CommonController
 
 
     /**
-     * returns all public projects
+     * returns all projects
      * @Route("/public", name="_get_public", methods="get")
      * @param Request $request
      * @return Response
@@ -202,18 +202,25 @@ class ProjectController extends CommonController
             if($this->getEntities(Project::class, [] )) return $this->response;
         }
 
+        $projects =$this->dataResponse;
+
+        //filter for return only publics resources
+        foreach($projects as $project){
+            $project->setActivities($project->getOnlyPublicActivities());
+        }
+
         //download picture
-    //    dd($this->dataResponse[0]->getActivities());
-        foreach($this->dataResponse as $key => $project){
+        foreach($projects as $key => $project){
             foreach($project->getActivities() as $activity){
                 $activity = $this->loadPicture(($activity));
             }
             if($project->getOrganization() !== null ){
                 $project->setOrganization( $this->loadPicture($project->getOrganization()));
             }
-            $this->dataResponse[$key] = $this->loadPicture($project);
+            $project = $this->loadPicture($project);
         }
-    //    dd($this->dataResponse[0]->getFollowings());
+        $this->dataResponse = $projects;
+
         //success response
         return $this->successResponse("read_project");
     }
@@ -231,9 +238,12 @@ class ProjectController extends CommonController
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
 
-        //todo maybe change assigned context, 'cause it'snt created for now
+        $this->dataRequest["id"] = $this->getUser()->getId();
+        if ($this->getEntities(User::class, ["id"])) return $this->response;
+        $user = $this->dataResponse[0];
+
         $criterias = [];
-        switch($this->dataRequest['ctx']){
+      /*  switch($this->dataRequest['ctx']){
             case 'assigned':
                 $this->dataRequest["assigned"] = $this->getUser()->getId();
                 $criterias[]='assigned';
@@ -242,21 +252,35 @@ class ProjectController extends CommonController
                 $this->dataRequest["creator"] = $this->getUser()->getId();
                 $criterias[]='creator';
                 break;
-        }
+        }*/
 
         //if query for only one
-        if(isset($this->dataRequest["id"])) {
-            $criterias[] = 'id';
+        if(isset($this->dataRequest["projectId"])) {
+            $projects = [$user->getProjectById($this->dataRequest["projectId"])];
+        }else {
+            $projects = count($user->getProjects()) === 0 ? [] : $user->getProjects();
         }
+    //    if($this->getEntities(Project::class, $criterias )) return $this->response;
+     //   $projects = $this->dataResponse;
+    //    dd($projects);
 
-        //todo si âs de critere on recupere tout...
-        //mais c'est public de tout façon...
-        if($this->getEntities(Project::class, $criterias )) return $this->response;
+        foreach($projects as $project){
+            if(!$project->isAssign($user)){
+                $project->setActivities($project->getOnlyPublicActivities());
+            }
+        }
 
         //download picture
-        foreach($this->dataResponse as $key => $project){
-            $this->dataResponse[$key] = $this->loadPicture($project);
+        foreach($projects as $key => $project){
+            foreach($project->getActivities() as $activity){
+                $activity = $this->loadPicture(($activity));
+            }
+            if($project->getOrganization() !== null ){
+                $project->setOrganization( $this->loadPicture($project->getOrganization()));
+            }
+            $projects[$key] = $this->loadPicture($project);
         }
+        $this->dataResponse = $projects;
 
     //    dd($this->dataResponse);
         //success response
@@ -339,9 +363,9 @@ class ProjectController extends CommonController
     /**
      * @param Request $request
      * @return Response
-     * @Route("/addActivity", name="_add_activity", methods="put")
+     * @Route("/manageActivity", name="_add_activity", methods="put")
      */
-    public function addActivity(Request $request) {
+    public function manageActivity(Request $request) {
         //cleanXSS
         if($this->cleanXSS( $request )) return $this->response;
 
@@ -368,6 +392,46 @@ class ProjectController extends CommonController
         }
 
         if($this->updateEntity($project)) return $this->response;
+
+        $this->dataResponse = ["success"];
+        return $this->successResponse();
+    }
+
+    /**
+     * @param Request $request
+     * @return Response
+     * @Route("/manageOrg", name="_manage_org", methods="put")
+     */
+    public function manageOrg(Request $request){
+        //cleanXSS
+        if($this->cleanXSS( $request )) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+
+        //check required params
+        if(!$this->hasAllCriteria(["orgId", "projectId"])) return $this->response;
+
+        $this->dataRequest['id'] = $this->getUser()->getId();
+        if($this->getEntities(User::class, ["id"] )) return $this->response;
+        $user = $this->dataResponse[0];
+
+        $project = $user->getAssignedProjectById($this->dataRequest["projectId"]);
+        if($project === null) return $this->BadRequestResponse(["project" => "user not assigned into this project"]);
+
+        $this->dataRequest['id'] = $this->dataRequest['orgId'];
+        if($this->getEntities(Organization::class, ["id"] )) return $this->response;
+        $org = $this->dataResponse[0];
+
+        if(!$org->isMember($user)){return $this->unauthorizedResponse("your not member of this organization");}
+
+        if($project->getOrganization() === null){
+            $project->setOrganization($org);
+        }else {
+            $project->setOrganization(null);
+        }
+
+        $this->updateEntity($project);
 
         $this->dataResponse = ["success"];
         return $this->successResponse();

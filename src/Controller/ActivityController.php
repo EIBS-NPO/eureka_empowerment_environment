@@ -36,7 +36,7 @@ class ActivityController extends CommonController
         $this->dataRequest = array_merge($this->dataRequest, ["postDate" => New \DateTime("now")]);
         if(!isset($this->dataRequest['isPublic'])){$this->dataRequest = array_merge($this->dataRequest, ["isPublic" => false]);}
 
-        //optional link with an organization : validation orgId & convert to Organization object
+       /* //optional link with an organization : validation orgId & convert to Organization object
         if (isset($this->dataRequest['orgId'])) {
             if($this->getLinkedEntity(Organization::class, "organization", 'orgId')
             ) return $this->response;
@@ -48,17 +48,17 @@ class ActivityController extends CommonController
         if (isset($this->dataRequest['projectId'])) {
             if($this->getLinkedEntity(Project::class, "project", 'projectId')
             ) return $this->response;
-        }
+        }*/
 
         //dataRequest Validations
         if($this->isInvalid(
             ["title", "description", "summary", "postDate", "creator"],
-            ["organization", "project"],
+            [],
             Activity::class)
         ) return $this->response;
 
         //create Activity object && set validated fields
-        $activity = $this->setEntity(new Activity(), ["title", "description", "summary", "postDate", "isPublic", "creator", "organization", "project"]);
+        $activity = $this->setEntity(new Activity(), ["title", "description", "summary", "postDate", "isPublic", "creator" ]);
 
         //persist the new activity
         if($this->persistEntity($activity)) return $this->response;
@@ -87,7 +87,6 @@ class ActivityController extends CommonController
         $this->dataRequest = $this->requestParameters->getData($this->request);
         $this->dataRequest = array_merge($this->dataRequest, ["creator" => $this->getUser()->getId()]);
 
-    //    dd($this->dataRequest);
         if(isset($this->dataRequest["startDate"])){
             $this->dataRequest["startDate"] = new DateTime($this->dataRequest["startDate"]);
         }
@@ -99,40 +98,42 @@ class ActivityController extends CommonController
         //validate id and recover activityObject with currentUser id (creator)
         if($this->getEntities(Activity::class, ['id', 'creator'])) return $this->response;
     //    dd($this->dataResponse);
-        $project = $this->dataResponse[0];
+        $activity = $this->dataResponse[0];
 
         //Link or unlink with an org
-        if(!isset($this->dataRequest['orgId'])){
+        /*if(!isset($this->dataRequest['orgId'])){
             $this->dataRequest['organization'] = null;
         }else {
             if($this->getLinkedEntity(Organization::class, "organization", 'orgId')  ) return $this->response;
-        }
+        }*/
 
         //Link or unlink with an project
-        if(!isset($this->dataRequest['projectId'])){
+       /* if(!isset($this->dataRequest['projectId'])){
             $this->dataRequest['project'] = null;
         }else {
             if($this->getLinkedEntity(Project::class, "project", 'projectId')  ) return $this->response;
-        }
+        }*/
 
         //persist updated project
         if(!empty($this->dataResponse)){
 
             if($this->isInvalid(
                 null,
-                ["title", "description", "summary", "isPublic", "organization", "project"],
-                Organization::class)
+                ["title", "summary", "isPublic"],
+                Activity::class)
             ) return $this->response;
 
             //set project's validated fields
-            $project = $this->setEntity($project, ["title", "description", "summary", "isPublic", "organization", "project"]);
+            $activity = $this->setEntity($activity, ["title", "description", "summary", "isPublic"]);
 
             //persist updated project
-            if($this->updateEntity($project)) return $this->response;
+            if($this->updateEntity($activity)) return $this->response;
+      //      dd($this->dataResponse);
+            $this->getPics($this->dataResponse);
         }
 
         //final response
-        return $this->successResponse();
+        return $this->successResponse("read_activity");
     }
 
 
@@ -247,15 +248,15 @@ class ActivityController extends CommonController
         //todo can be placed une CommonController
         $criterias = [];
         switch($this->dataRequest['ctx']){
-            case 'assigned':
+            /*case 'assigned':
                 $this->dataRequest["assigned"] = $this->getUser()->getId();
                 $criterias[]='assigned';
-                break;
+                break;*/
             case 'creator':
                 $this->dataRequest["creator"] = $this->getUser()->getId();
                 $criterias[]='creator';
                 break;
-            case 'org':
+            case 'org': //todo util?
                 $this->dataResponse["organization"] = $this->dataRequest['orgId'];
                 $criterias[]='organization';
                 break;
@@ -307,5 +308,19 @@ class ActivityController extends CommonController
         if($this->deleteEntity($this->dataResponse[0])) return $this->response;
 
         return $this->successResponse();
+    }
+
+    public function getPics($activities){
+        //download picture
+        foreach($activities as $key => $activity){
+            $activities[$key] = $this->loadPicture($activity);
+            if($activity->getProject() !== null){
+                $activity->setProject($this->loadPicture($activity->getProject()));
+            }
+            if($activity->getOrganization() !== null){
+                $activity->setOrganization($this->loadPicture($activity->getOrganization()));
+            }
+        }
+        return $activities;
     }
 }
