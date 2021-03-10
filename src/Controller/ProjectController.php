@@ -439,4 +439,32 @@ class ProjectController extends CommonController
         $this->dataResponse = ["success"];
         return $this->successResponse();
     }
+
+    /**
+     * @param Request $request
+     * @return Response
+     * @Route("", name="_delete", methods="delete")
+     */
+    public function deleteProject(Request $request){
+        //cleanXSS
+        if($this->cleanXSS( $request )) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+
+        //check required params
+        if(!$this->hasAllCriteria(["projectId"])) return $this->response;
+
+        $this->dataRequest['id'] = $this->getUser()->getId();
+        if($this->getEntities(User::class, ["id"] )) return $this->response;
+        $user = $this->dataResponse[0];
+
+        $project = $user->getProjectById((int)$this->dataRequest['projectId']);
+        if($project === null) return $this->BadRequestResponse(["project" => "user not creator of this project"]);
+
+        if($this->deleteEntity($project)) return $this->response;
+
+        $this->dataResponse = ["success"];
+        return $this->successResponse();
+    }
 }

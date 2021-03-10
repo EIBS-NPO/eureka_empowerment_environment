@@ -106,16 +106,18 @@ class Activity
             "summary" => $this->summary,
             "postDate" => $this->postDate->format('Y-m-d'),
             "isPublic" => $this->isPublic,
-            "creator" => $this->creator->serialize("read_activity"),
+            "creator" => $this->creator->serialize("read_activity")
         ];
 
         //Check some attributes to see if they are sets
         if($this->pictureFile){
             $data["picture"] = $this->pictureFile;
         }
+
         if($this->project && $context === "read_activity"){
             $data["project"] = $this->project->serialize();
         }
+
         if($this->organization && $context ==="read_activity"){
             $data["organization"] = $this->organization->serialize();
         }

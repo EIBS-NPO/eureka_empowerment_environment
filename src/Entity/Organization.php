@@ -159,12 +159,12 @@ class Organization
             }
         }
 
-        /*if(count($this->membership) > 0 ){
+        if(count($this->membership) > 0 && $context ==="read_org"){
             $data["membership"] = [];
             foreach($this->membership as $member){
                 array_push($data["membership"], $member->serialize());
             }
-        }*/
+        }
 
         //todo deprecated
         //Check some attributes with contexts to see if they are sets
@@ -405,10 +405,8 @@ class Organization
         $res = false;
         if($this->referent->getid() === $user->getId()){
             $res = true;
-        }else {
-            if($this->membership->contains($user)){
-                $res = true;
-            }
+        }else if($this->membership->contains($user)){
+            $res = true;
         }
         return $res;
     }

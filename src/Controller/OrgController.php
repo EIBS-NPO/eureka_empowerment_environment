@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Activity;
 use App\Entity\Organization;
+use App\Entity\Project;
 use App\Entity\User;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -60,7 +61,7 @@ class OrgController extends CommonController
      * @param Request $insecureRequest
      * @return Response
      */
-    public function getPublicOrganization(Request $insecureRequest) :Response
+    public function getPublicOrg(Request $insecureRequest) :Response
     {
         //cleanXSS
         if($this->cleanXSS($insecureRequest)
@@ -107,20 +108,50 @@ class OrgController extends CommonController
      * @param Request $insecureRequest
      * @return Response|null
      */
-    public function getOrganization(Request $insecureRequest){
+    public function getOrg(Request $insecureRequest){
         //cleanXSS
         if($this->cleanXSS($insecureRequest)
         ) return $this->response;
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest["referent"] = $this->getUser()->getId();
+        /*$this->dataRequest["referent"] = $this->getUser()->getId();*/
+
+      /*  $this->dataRequest['id'] = $this->getUser()->getId();
+        if($this->getEntities(User::class, ["id"] )) return $this->response;
+        $user = $this->dataResponse[0];*/
+
+      //ca ne doit pas partir des param de requete, mais de verification!
+
+        /**
+         * comme les droit de modif et d'accès ne sont utilisé que sur des page profile des org, on ne recupere les info prové que sur des requetes d'org unique, selon les tests.
+         * pour les listes d'org, aucune infos senssible pour personne.
+         */
+    /*    if(isset($this->$this->dataRequest["orgId"])){ //request for one org
+            //vérifier si user a cette orgId dans ces org comme referent sinon comme membre
+            $orgRes = $user->getOrgById($this->dataRequest["orgId"]);
+            if(!$orgRes){
+                $orgRes = $user->getMemberOfById($this->dataRequest["orgId"]);
+            }
+            if(!$orgRes){
+                $this->dataRequest['id'] = $this->dataRequest['orgId'];
+                if($this->getEntities(Organization::class, ["id"] )) return $this->response;
+                $orgRes = $this->dataResponse[0]->getOnlyPublic();
+
+            }
+        }else { //request for many org
+            if($this->dataRequest["my"]){
+
+            }
+        }*/
+
+
 
         //validation requestParam and recover organization(s)
         if(isset($this->dataRequest['id'])){
-            if($this->getEntities(Organization::class, ["id", "referent"] )) return $this->response;
+            if($this->getEntities(Organization::class, ["id"] )) return $this->response;
         }else {
-            if($this->getEntities(Organization::class, ["referent"] )) return $this->response;
+            if($this->getEntities(Organization::class, [] )) return $this->response;
         }
         $orgs = $this->dataResponse;
 
@@ -286,9 +317,52 @@ class OrgController extends CommonController
     /**
      * @param Request $request
      * @return Response
+     * @Route("/manageProject", name="_manage_Project", methods="put")
+     */
+    public function manageProject(Request $request){
+        //cleanXSS
+        if($this->cleanXSS( $request )) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+
+        //check required params
+        if(!$this->hasAllCriteria(["projectId", "orgId"])) return $this->response;
+
+        $this->dataRequest['id'] = $this->getUser()->getId();
+        if($this->getEntities(User::class, ["id"] )) return $this->response;
+        $user = $this->dataResponse[0];
+
+        $this->dataRequest['id'] = $this->dataRequest['orgId'];
+        if($this->getEntities(Organization::class, ["id"] )) return $this->response;
+        $org = $this->dataResponse[0];
+
+        if(!$org->isMember($user)){return $this->unauthorizedResponse("your not member of this organization");}
+
+        $this->dataRequest['id'] = $this->dataRequest['projectId'];
+        if($this->getEntities(Project::class, ["id"] )) return $this->response;
+        $project = $this->dataResponse[0];
+
+        //if activity have the organization, remove it
+        if($project->getOrganization() !== null && $project->getOrganization()->getId() === $org->getId()){
+            $project->setOrganization(null);
+        }
+        else { //add
+            $project->setOrganization($org);
+        }
+
+        if($this->updateEntity($project)) return $this->response;
+
+        $this->dataResponse = ["success"];
+        return $this->successResponse();
+    }
+
+    /**
+     * @param Request $request
+     * @return Response
      * @Route("/membered", name="_membered", methods="get")
      */
-    public function getMembered (Request $request){
+    public function getMemberedOrg (Request $request){
         $this->dataRequest['id'] = $this->getUser()->getId();
         if($this->getEntities(User::class, ["id"] )) return $this->response;
         $user = $this->dataResponse[0];
@@ -297,4 +371,19 @@ class OrgController extends CommonController
 
         return $this->successResponse();
     }
+
+    /*public function hasAccess(Request $request){
+        //cleanXSS
+        if($this->cleanXSS( $request )) return $this->response;
+
+        // recover all data's request
+        $this->dataRequest = $this->requestParameters->getData($this->request);
+
+        //check required params
+        if(!$this->hasAllCriteria(["orgId"])) return $this->response;
+
+        $this->dataRequest['id'] = $this->dataRequest['orgId'];
+        if($this->getEntities(Organization::class, ["id"] )) return $this->response;
+        $org = $this->dataResponse[0];
+    }*/
 }

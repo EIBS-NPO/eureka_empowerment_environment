@@ -244,8 +244,6 @@ class ActivityController extends CommonController
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
 
-        //todo maybe change assigned context, 'cause it'snt created for now
-        //todo can be placed une CommonController
         $criterias = [];
         switch($this->dataRequest['ctx']){
             /*case 'assigned':

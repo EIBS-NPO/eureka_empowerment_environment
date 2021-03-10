@@ -404,8 +404,18 @@ class User implements UserInterface
     }
 
     public function getOrgById($orgId){
-        $res = null;
+        $res = false;
         foreach($this->organizations as $org){
+            if($org->getId() === $orgId){
+                $res = $org;
+            }
+        }
+        return $res;
+    }
+
+    public function getMemberOfById($orgId){
+        $res = false;
+        foreach($this->memberOf as $org){
             if($org->getId() === $orgId){
                 $res = $org;
             }
