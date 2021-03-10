@@ -403,7 +403,7 @@ class Organization
 
     public function isMember($user){
         $res = false;
-        if($this->referent->getid() === $user->getId()){
+        if($this->referent->getId() === $user->getId()){
             $res = true;
         }else if($this->membership->contains($user)){
             $res = true;
