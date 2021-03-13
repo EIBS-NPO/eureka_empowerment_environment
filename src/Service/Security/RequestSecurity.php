@@ -22,9 +22,9 @@ class RequestSecurity
     /**
      * @var ConfigurationHandler ConfigurationHandler object to manipulate the configuration and retrieve configuration keys easily.
      */
-    private $configHandler;
+    private ConfigurationHandler $configHandler;
 
-    private $forbiddenStrings;
+    private ?array $forbiddenStrings;
 
     /**
      * RequestSecurity constructor.

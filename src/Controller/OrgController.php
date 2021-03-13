@@ -6,6 +6,13 @@ use App\Entity\Activity;
 use App\Entity\Organization;
 use App\Entity\Project;
 use App\Entity\User;
+use App\Service\FileHandler;
+use App\Service\LogService;
+use App\Service\Request\ParametersValidator;
+use App\Service\Request\RequestParameters;
+use App\Service\Request\ResponseHandler;
+use App\Service\Security\RequestSecurity;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -17,6 +24,36 @@ use Symfony\Component\Routing\Annotation\Route;
  */
 class OrgController extends CommonController
 {
+    private RequestSecurity $security;
+    private RequestParameters $parameters;
+    private ResponseHandler $responseHandler;
+    private ParametersValidator $validator;
+    protected EntityManagerInterface $entityManager;
+    protected FileHandler $fileHandler;
+    private LogService $logger;
+
+    /**
+     * OrgController constructor.
+     * @param RequestSecurity $requestSecurity
+     * @param RequestParameters $requestParameters
+     * @param ResponseHandler $responseHandler
+     * @param ParametersValidator $validator
+     * @param EntityManagerInterface $entityManager
+     * @param FileHandler $fileHandler
+     * @param LogService $logger
+     */
+    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
+    {
+        $this->security = $requestSecurity;
+        $this->parameters = $requestParameters;
+        $this->responseHandler = $responseHandler;
+        $this->validator = $validator;
+        $this->entityManager = $entityManager;
+        $this->fileHandler = $fileHandler;
+        $this->logger = $logger;
+    }
+
+
     /**
      * @Route("", name="_registration", methods="post")
      * @param Request $insecureRequest
@@ -252,6 +289,7 @@ class OrgController extends CommonController
 
         if($this->uploadPicture($org, $this->dataRequest['image'])) return $this->response;
 
+        //todo inutile...
         if($this->isInvalid(
             null,
             ["picturePath"],

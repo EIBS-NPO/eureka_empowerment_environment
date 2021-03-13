@@ -153,11 +153,6 @@ class User implements UserInterface
     private $address;
 
     /**
-     * @ORM\Column(type="boolean")
-     */
-    private $isDisabled = false;
-
-    /**
      * @ORM\ManyToMany(targetEntity=Activity::class, mappedBy="followers")
      * @Assert\Collection(
      *     fields={
@@ -540,6 +535,9 @@ class User implements UserInterface
         return $this;
     }
 
+    /**
+     * @return string|null
+     */
     public function getPicturePath(): ?string
     {
         return $this->picturePath;
@@ -576,18 +574,6 @@ class User implements UserInterface
     public function setAddress(?Address $address): self
     {
         $this->address = $address;
-
-        return $this;
-    }
-
-    public function getIsDisabled(): ?bool
-    {
-        return $this->isDisabled;
-    }
-
-    public function setIsDisabled(bool $isDisabled): self
-    {
-        $this->isDisabled = $isDisabled;
 
         return $this;
     }

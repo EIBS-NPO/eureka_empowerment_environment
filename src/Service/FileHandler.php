@@ -26,7 +26,7 @@ class FileHandler
     /**
      * @var ConfigurationHandler ConfigurationHandler object to manipulate the configuration and retrieve configuration keys easily.
      */
-    private $configHandler;
+    private ConfigurationHandler $configHandler;
 
     private $allowedMime =[];
 
@@ -80,6 +80,31 @@ class FileHandler
             throw new NoFileException("File not found");
         }
         return $fileDir;
+    }
+
+    /**
+     * @param $entity
+     * @param $className
+     * @return mixed
+     */
+    public function loadPicture($entity, $className) {
+    //    $className = $this->getClassName($entity);
+    //    if($className === "ActivityFile"){ $className = "Activity";}
+        $fileDir = '/pictures/'.$className.'/'.$entity->getPicturePath();
+
+        if($entity->getPicturePath() !== null){
+           // try {
+                $img = $this->getPic($fileDir);
+                $entity->setPictureFile($img);
+
+        //    }catch(Exception $e){
+           //     $this->logService->logError($e, $this->getUser(), "error");
+         //       $this->serverErrorResponse($e, $this->logInfo);
+
+            }
+     //   }
+    //    $this->logService->logInfo($className ." id ". $entity->getId() ." load Picture " );
+        return $entity;
     }
 
     /**

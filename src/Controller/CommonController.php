@@ -14,14 +14,10 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Symfony\Component\HttpFoundation\File\Exception\NoFileException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
-use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\Validator\ConstraintViolationListInterface;
 
 /**
  * Class CommonController
@@ -41,7 +37,6 @@ class CommonController extends AbstractController
     protected EntityManagerInterface $entityManager;
     protected ParametersValidator $paramValidator;
 
-    //todo dispatch in LoggerService
     private $logInfo = "";
 
     //todo maybe add context here?
@@ -341,43 +336,43 @@ class CommonController extends AbstractController
 
 
 
-    /**
-     * @param $entity
-     * @param UploadedFile $file
-     * @return bool
-     */
-    public function uploadPicture($entity, UploadedFile $file){
-
-        $className = $this->getClassName($entity);
-        if($className === "ActivityFile"){$className = "Activity";}
-        $fileDir = '/pictures/'.$className;
-
-        try{
-            $oldPic = null;
-            if($entity->getPicturePath() !== null){
-                $oldPic =$entity->getPicturePath();
-            }
-
-            //make unique picturePath
-            $entity->setPicturePath(uniqid().'_'.$this->fileHandler->getOriginalFilename($file).'.'.$file->guessExtension());
-
-            $this->fileHandler->upload($fileDir, $entity->getPicturePath(), $file);
-            $this->dataRequest["picturePath"] = $entity->getPicturePath();
-
-            //if a picture already exist, need to remove it
-            if($oldPic !== null){
-                $this->logService->logInfo($className ." id " . $entity->getId() . " remove old Picture FAILED " );
-                $this->fileHandler->removeFile($fileDir.'/'.$oldPic);
-            }
-        }catch(Exception $e){
-            $this->logService->logError($e,$this->getUser(),"error");
-            $this->serverErrorResponse($e, $this->logInfo);
-        }
-
-        $this->logService->logInfo($className ." id " . $entity->getId() . " uploaded Picture " );
-
-        return isset($this->response);
-    }
+//    /**
+//     * @param $entity
+//     * @param UploadedFile $file
+//     * @return bool
+//     */
+//    public function uploadPicture($entity, UploadedFile $file){
+//
+//        $className = $this->getClassName($entity);
+//        if($className === "ActivityFile"){$className = "Activity";}
+//        $fileDir = '/pictures/'.$className;
+//
+//        try{
+//            $oldPic = null;
+//            if($entity->getPicturePath() !== null){
+//                $oldPic =$entity->getPicturePath();
+//            }
+//
+//            //make unique picturePath
+//            $entity->setPicturePath(uniqid().'_'.$this->fileHandler->getOriginalFilename($file).'.'.$file->guessExtension());
+//
+//            $this->fileHandler->upload($fileDir, $entity->getPicturePath(), $file);
+//            $this->dataRequest["picturePath"] = $entity->getPicturePath();
+//
+//            //if a picture already exist, need to remove it
+//            if($oldPic !== null){
+//                $this->logService->logInfo($className ." id " . $entity->getId() . " remove old Picture FAILED " );
+//                $this->fileHandler->removeFile($fileDir.'/'.$oldPic);
+//            }
+//        }catch(Exception $e){
+//            $this->logService->logError($e,$this->getUser(),"error");
+//            $this->serverErrorResponse($e, $this->logInfo);
+//        }
+//
+//        $this->logService->logInfo($className ." id " . $entity->getId() . " uploaded Picture " );
+//
+//        return isset($this->response);
+//    }
 
 
 
@@ -455,34 +450,8 @@ class CommonController extends AbstractController
             try {
                 //todo dowload File
                 $fileDir = $this->fileHandler->getFile($path);
-           //     $response = new BinaryFileResponse($fileDir);
-            //    $response->headers->set('Content-Type', $activityFile->getFileType());
-
-                // load the file from the filesystem
                 $this->dataResponse = [$this->fileHandler->getFile($path)];
 
-                // rename the downloaded file
-        //        $this->file($file, $activityFile->getFilename().".".$activityFile->getFileType());
-
-                // display the file contents in the browser instead of downloading it
-       //         $this->file('invoice_3241.pdf', 'my_invoice.pdf', ResponseHeaderBag::DISPOSITION_INLINE);
-
-                // send the file contents and force the browser to download it
-           //     $this->dataResponse = [$this->file($file)];
-                /*
- *
-                $disposition = HeaderUtils::makeDisposition(
-                    HeaderUtils::DISPOSITION_ATTACHMENT,
-                    $activityFile->getFilename().".".$activityFile->getFileType()
-                );
-                $response->headers->set('Content-Disposition', $disposition);
-
-                $this->dataResponse = [$response];*/
-          //      stream_($this->fileHandler->getFile($className, $activityFile->getFilePath()));
-
-                //complet path
-              //  $this->dataResponse = [$this->fileHandler->getFile($path)];
-             //   $activityFile->setFile($file);
             }catch(Exception $e){
                 $this->logService->logError($e,$this->getUser(),"warning");
                 $this->serverErrorResponse($e, $this->logInfo);
@@ -490,7 +459,6 @@ class CommonController extends AbstractController
         }
         $this->logService->logInfo("ActivityFile id " . $activityFile->getId() . " downloaded File " );
 
-   //     dd($this->getUser());
         $this->logService->logEvent($this->getUser(),$activityFile->getId(), $this->getClassName($activityFile), "download file");
 
         return isset($this->response);
@@ -565,7 +533,7 @@ class CommonController extends AbstractController
      * @return Response
      */
     public function successResponse(String $context = null) : Response {
-//todo notfound?
+
         //todo retrait a verif regression
       /*  if(empty($this->dataResponse)){
             $this->logService->logInfo('Request was success with no data. ');
@@ -580,7 +548,6 @@ class CommonController extends AbstractController
                 $data = $this->serialize($this->dataResponse, $context);
             }*/
             return $this->response =  new Response(
-            //    json_encode($data),
                 json_encode( $this->serialize($this->dataResponse, $context) ),
                 Response::HTTP_OK,
                 ["content-type" => "application/json"]
