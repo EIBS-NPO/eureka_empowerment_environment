@@ -3,29 +3,13 @@
 
 namespace App\Service\Request;
 
-
-use App\Service\LogService;
 use Exception;
 use Symfony\Component\HttpFoundation\Response;
 
 class ResponseHandler
 {
-    private LogService $logService;
-    private RequestParameters $requestParameters;
-
     private array $dataResponse;
     private Response $response;
-
-    /**
-     * ResponseHandler constructor.
-     * @param RequestParameters $requestParameters
-     * @param LogService $logService
-     */
-    public function __construct(RequestParameters $requestParameters,   LogService $logService)
-    {
-        $this->requestParameters = $requestParameters;
-        $this->logService = $logService;
-    }
 
     /**
      * @return array
@@ -44,19 +28,18 @@ class ResponseHandler
     }
 
 
-
     /**
-     * @param $entities
+     * @param $datas
      * @param String|null $context
      * @return mixed
      */
-    public function serialize($entities, String $context = null){
-        foreach($entities as $key => $entity){
-            if(gettype($entity) !== "string" && gettype($entity) !== "boolean"){
-                $entities[$key] = $entity->serialize($context);
+    public function serialize($datas, String $context = null){
+        foreach($datas as $key => $data){
+            if(gettype( $data) !== "string" && gettype( $data) !== "boolean" && gettype( $data) !== "array"){
+                $datas[$key] =  $data->serialize($context);
             }
         }
-        return $entities;
+        return $datas;
     }
 
     /**

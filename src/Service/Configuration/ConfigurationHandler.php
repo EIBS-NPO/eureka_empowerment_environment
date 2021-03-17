@@ -32,12 +32,6 @@ class ConfigurationHandler
     private $GPARespository;
 
     /**
-     * Repository to access Users
-     * @var ObjectRepository
-     */
-    private $UserRepository;
-
-    /**
      * ConfigurationHandler constructor.
      * @param ManagerRegistry $entityManager
      */
@@ -45,7 +39,6 @@ class ConfigurationHandler
     {
         $this->entityManager = $entityManager;
         $this->GPARespository = $this->entityManager->getRepository(GlobalPropertyAttribute::class);
-        $this->UserRepository = $this->entityManager->getRepository(User::class);
     }
 
     /**

@@ -8,7 +8,6 @@ use App\Exceptions\ViolationException;
 use App\Service\FileHandler;
 use App\Service\LogService;
 use App\Service\Request\ParametersValidator;
-use App\Service\Request\RequestHandler;
 use App\Service\Request\RequestParameters;
 use App\Service\Request\ResponseHandler;
 use App\Service\Security\RequestSecurity;
@@ -16,8 +15,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\File\Exception\FileException;
-use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -61,7 +58,7 @@ class UserController extends AbstractController
 
 
     /**
-     * @Route("", name="_registration", methods="post")
+     * @Route("/register", name="_registration", methods="post")
      * @param Request $request
      * @param UserPasswordEncoderInterface $encoder
      * @return Response
@@ -75,14 +72,7 @@ class UserController extends AbstractController
         }
 
        // recover all data's request
-        $this->parameters->setData($this->request);
-
-        //check if required params exist
-        try{ $this->parameters->hasData(["email", "firstname", "lastname", "password"]); }
-        catch(ViolationException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
-        }
+        $this->parameters->setData($request);
 
         //check params Validations
         try{ $this->validator->isInvalid(
@@ -136,7 +126,7 @@ class UserController extends AbstractController
     {
         try{$request = $this->security->cleanXSS($request);}
         catch(SecurityException $e) {
-            $this->logService->logError($e, $this->getUser(), "warning");
+            $this->logger->logError($e, $this->getUser(), "warning");
             return $this->responseHandler->forbidden();
         }
 
@@ -162,16 +152,16 @@ class UserController extends AbstractController
                 $dataResponse = $repository->findAll();
             }
         }catch(Exception $e){
-            $this->logService->logError($e,$this->getUser(),"error" );
+            $this->logger->logError($e,$this->getUser(),"error" );
             return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
 
         //download picture
         foreach($dataResponse as $key => $user){
             try{
-                $dataResponse[$key] = $this->fileHandler->loadPicture($user, User::class);
+                $dataResponse[$key] = $this->fileHandler->loadPicture($user);
             }catch(Exception $e){
-                $this->logService->logError($e, $this->getUser(), "error");
+                $this->logger->logError($e, $this->getUser(), "error");
                 return $this->responseHandler->serverErrorResponse($e, "An error occured");
             }
         }
@@ -235,7 +225,7 @@ class UserController extends AbstractController
                 }
 
                 $this->entityManager->flush();
-                $user = $this->fileHandler->loadPicture($user, User::class);
+                $user = $this->fileHandler->loadPicture($user);
                 $userData = [$user];
             }
 
@@ -288,9 +278,6 @@ class UserController extends AbstractController
                 $user = $userData[0];
 
                 $oldPic = $user->getPicturePath() ? $user->getPicturePath() : null;
-                /*if($user->getPicturePath() !== null){
-                    $oldPic =$user->getPicturePath();
-                }*/
 
                 $fileDir = '/pictures/User';
                 $picFile = $this->parameters->getData("image");
@@ -302,12 +289,12 @@ class UserController extends AbstractController
                 $this->fileHandler->upload($fileDir, $user->getPicturePath(), $picFile);
 
                 $this->entityManager->flush();
-                $user = $this->fileHandler->loadPicture($user, User::class);
+                $user = $this->fileHandler->loadPicture($user);
                 $userData = [$user];
 
                 //if a picture already exist, need to remove it
                 if($oldPic !== null){
-                    $this->logService->logInfo(" User with id " . $user->getId() . " remove old Picture " );
+                    $this->logger->logInfo(" User with id " . $user->getId() . " remove old Picture " );
                     $this->fileHandler->removeFile($fileDir.'/'.$oldPic);
                 }
 
@@ -363,7 +350,6 @@ class UserController extends AbstractController
                     $user->setPicturePath(null);
 
                     $this->entityManager->flush();
-                    $user = $this->fileHandler->loadPicture($user, User::class);
                     $userData = [$user];
                 }
 
@@ -388,7 +374,7 @@ class UserController extends AbstractController
      * @param Request $request
      * @param UserPasswordEncoderInterface $encoder
      * @param JWTTokenManagerInterface $JWTManager
-     * @return Response|null
+     * @return Response
      * @Route("/password", name="_password", methods="put")
      */
     public function resetPassword(Request $request, UserPasswordEncoderInterface $encoder, JWTTokenManagerInterface $JWTManager)
@@ -456,7 +442,7 @@ class UserController extends AbstractController
 
                 //persist the user with new password
                 $this->entityManager->flush();
-                $user = $this->fileHandler->loadPicture($user, User::class);
+                $user = $this->fileHandler->loadPicture($user);
 
                 //if password was change for currentUser, need refresh Token
                 if($criterias["id"] === $this->getUser()->getId()){
@@ -528,7 +514,7 @@ class UserController extends AbstractController
                 $user->setEmail($this->parameters->getData('email'));
 
                 $this->entityManager->flush();
-                $user = $this->fileHandler->loadPicture($user, User::class);
+                $user = $this->fileHandler->loadPicture($user);
 
                 //if email was change for currentUser, need refresh Token
                 if($criterias["id"] === $this->getUser()->getId()){

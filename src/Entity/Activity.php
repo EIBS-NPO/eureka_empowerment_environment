@@ -134,7 +134,6 @@ class Activity
     }
 
     public function setFromActivityFile(ActivityFile $activityFile){
-       // $this->id($activityFile->getId());
         $this->isPublic = $activityFile->getIsPublic();
         $this->title = $activityFile->getTitle();
         $this->summary = $activityFile->getSummary();
@@ -307,6 +306,25 @@ class Activity
                 $res = true;
             }
         }
+        return $res;
+    }
+
+    /**
+     * @param $user
+     * @return bool
+     */
+    public function hasAccess($user){
+        $res = false;
+        if($this->creator->getId() === $user->getId()){
+            $res = true;
+        }
+        else if($this->project !== null && $this->project->isAssign($user)){
+            $res = true;
+        }
+        else if($this->organization !== null && $this->organization->isMember($user)){
+            $res = true;
+        }
+
         return $res;
     }
 }

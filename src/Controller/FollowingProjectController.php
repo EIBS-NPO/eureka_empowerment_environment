@@ -5,6 +5,14 @@ namespace App\Controller;
 use App\Entity\FollowingProject;
 use App\Entity\Project;
 use App\Entity\User;
+use App\Exceptions\SecurityException;
+use App\Exceptions\ViolationException;
+use App\Service\LogService;
+use App\Service\Request\RequestParameters;
+use App\Service\Request\ResponseHandler;
+use App\Service\Security\RequestSecurity;
+use Doctrine\ORM\EntityManagerInterface;
+use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,8 +23,31 @@ use Symfony\Component\Routing\Annotation\Route;
  * @package App\Controller
  * @Route("/followProject", name="follow_project")
  */
-class FollowingProjectController extends CommonController
+class FollowingProjectController extends AbstractController
 {
+    private RequestSecurity $security;
+    private RequestParameters $parameters;
+    private ResponseHandler $responseHandler;
+    protected EntityManagerInterface $entityManager;
+    private LogService $logger;
+
+    /**
+     * OrgController constructor.
+     * @param RequestSecurity $requestSecurity
+     * @param RequestParameters $requestParameters
+     * @param ResponseHandler $responseHandler
+     * @param EntityManagerInterface $entityManager
+     * @param LogService $logger
+     */
+    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, EntityManagerInterface $entityManager, LogService $logger)
+    {
+        $this->security = $requestSecurity;
+        $this->parameters = $requestParameters;
+        $this->responseHandler = $responseHandler;
+        $this->entityManager = $entityManager;
+        $this->logger = $logger;
+    }
+
     /**
      * API endPoint: create or update a Following entity in a project
      * need $projectId, the project id target
@@ -27,60 +58,89 @@ class FollowingProjectController extends CommonController
      * @Route("", name="_add", methods="post")
      */
     public function add(Request $request) :Response {
-        //cleanXSS
-        if($this->cleanXSS($request)
-        ) return $this->response;
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
+        $this->parameters->setData($request);
 
         //check required params
-        if(!$this->hasAllCriteria(["projectId"])){ return $this->response; }
-
-        if(!isset($this->dataRequest['isAssigning']) && !$this->hasAllCriteria(['isFollowing'])) return $this->response;
-        if(!isset($this->dataRequest['isFollowing']) && !$this->hasAllCriteria(['isAssigning'])) return $this->response;
+        try{ $this->parameters->hasData(["projectId"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+        //for following
+        if($this->parameters->getData('isAssigning') === false){
+            try{ $this->parameters->hasData(["isFollowing"]); }
+            catch(ViolationException $e) {
+                $this->logger->logError($e, $this->getUser(), "error");
+                return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+            }
+        }
+        //for assigning
+        if($this->parameters->getData('isFollowing') === false ){
+            try{ $this->parameters->hasData(["isAssigning", "email"]); }
+            catch(ViolationException $e) {
+                $this->logger->logError($e, $this->getUser(), "error");
+                return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+            }
+        }
 
         //need id variable for column id in database
-        $this->dataRequest["id"] = $this->dataRequest['projectId'];
-        $criterias = ["id"];
+        $criterias["id"] = $this->parameters->getData('projectId');
 
-        if(isset($this->dataRequest['isAssigning'])){
+        if($this->parameters->getData('isAssigning') !== false ){
             //need current user id as creator
-            $this->dataRequest["creator"] = $this->getUser()->getId();
-            $criterias[] = "creator";
+            $criterias["creator"] = $this->getUser()->getId();
         }
 
-        if ($this->getEntities(Project::class, $criterias)) return $this->response; //error response
-        if(empty($this->dataResponse)) return $this->BadRequestResponse(["project"=>"no_project_found"]);
-        $project = $this->dataResponse[0];
+        //get project just by id for following or with creator for assigning
+        $repository = $this->entityManager->getRepository(Project::class);
+        $projectData = $repository->findBy($criterias);
+
+        if(count($projectData) === 0 ){
+            $this->logger->logInfo(" Project with id : ". $this->parameters->getData("projectId") ." not found " );
+            return $this->responseHandler->BadRequestResponse(["project"=>"no_project_found"]);
+        }
+
+        $projectData = $projectData[0];
+
 
         //check if it's an assign query by project creator
-        if(isset($this->dataRequest["isAssigning"]))
+        if($this->parameters->getData('isAssigning') !== false )
         {
-            if(!$this->addAssigned($project)) return $this->response; //error response
+            if(!$this->addAssigned($projectData)) return $this->responseHandler->BadRequestResponse(["email"=>"no_mail_account_found"]); //error response
         }
         else {// add simple following tag
-            if(!$this->addFollower($project)) return $this->response; //error response
+            $this->addFollower($projectData);
         }
 
-        $following = $this->dataResponse[0];
-        if($following->getId() !== null){
-            if($this->updateEntity($following)) return $this->response;
-        }
-        else {
-            if($this->persistEntity($following)) return $this->response;
+        //recup following after
+        $following = $this->responseHandler->getDataResponse()[0];
+
+        try{
+            if($following->getId() === null){ //if it's a new following
+                $this->entityManager->persist($following);
+            }
+            $this->entityManager->flush();
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
 
-        $project->addFollowing($following);
+        $projectData->addFollowing($following);
 
-        if(isset($this->dataRequest["isAssigning"])){
+        //make response
+        if($this->parameters->getData('isAssigning') !== false ){
             //response for assigning action
-            $this->dataResponse = $project->getAssignedTeam();
-            return $this->successResponse("team");
+            return $this->responseHandler->successResponse( $projectData->getAssignedTeam());
         }else {
             //response for following action
-            //todo
-            return $this->successResponse("collection");
+            return $this->responseHandler->successResponse( ["success"]);
         }
     }
 
@@ -96,61 +156,86 @@ class FollowingProjectController extends CommonController
      * @Route("", name="_remove", methods="put")
      */
     public function remove(Request $request){
-        //cleanXSS
-        if($this->cleanXSS($request)
-        ) return $this->response;
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
+        $this->parameters->setData($request);
 
         //check required params
-        if(!$this->hasAllCriteria(["projectId"])) return $this->response;
-        if(!isset($this->dataRequest['isAssigning']) && !$this->hasAllCriteria(['isFollowing'])) return $this->response;
-        if(!isset($this->dataRequest['isFollowing']) && !$this->hasAllCriteria(['isAssigning'])) return $this->response;
+        try{ $this->parameters->hasData(["projectId"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+//for following
+        if($this->parameters->getData('isAssigning') === false){
+            try{ $this->parameters->hasData(["isFollowing"]); }
+            catch(ViolationException $e) {
+                $this->logger->logError($e, $this->getUser(), "error");
+                return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+            }
+        }
+        //for assigning
+        if($this->parameters->getData('isFollowing') === false ){
+            try{ $this->parameters->hasData(["isAssigning", "userId"]); }
+            catch(ViolationException $e) {
+                $this->logger->logError($e, $this->getUser(), "error");
+                return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+            }
+        }
 
         //need id variable for column id in database
-        $this->dataRequest["id"] = $this->dataRequest['projectId'];
-        $criterias = ["id"];
+        $criterias["id"] = $this->parameters->getData('projectId');
 
-        if(isset($this->dataRequest['isAssigning'])){
+        if($this->parameters->getData('isAssigning') !== false ){
             //need current user id as creator
-            $this->dataRequest["creator"] = $this->getUser()->getId();
-            $criterias[] = "creator";
+            $criterias["creator"] = $this->getUser()->getId();
         }
 
-        if ($this->getEntities(Project::class, $criterias)) return $this->response; //error response
-        if(empty($this->dataResponse)) return $this->BadRequestResponse(["project"=>"no_project_found"]);
-        $project = $this->dataResponse[0];
+        //get project just by id for following or with creator for assigning
+        $repository = $this->entityManager->getRepository(Project::class);
+        $projectData = $repository->findBy($criterias);
+
+        if(count($projectData) === 0 ){
+            $this->logger->logInfo(" Project with id : ". $this->parameters->getData("projectId") ." not found " );
+            return $this->responseHandler->BadRequestResponse(["project"=>"no_project_found"]);
+        }
+        $projectData = $projectData[0];
 
         //check if it's an assign query by project creator
-        if(isset($this->dataRequest["isAssigning"]))
+        if($this->parameters->getData('isAssigning') !== false)
         {
-            if(!$this->rmvAssigned($project)) return $this->response; // error response
+            if(!$this->rmvAssigned($projectData)) return $this->responseHandler->BadRequestResponse(["user"=>"no_found_in_assigned"]); // error response
         }
         else {// add simple following tag
-            if(!$this->rmvFollower($project)) return $this->response; // error response
+            if(!$this->rmvFollower($projectData)) return $this->responseHandler->BadRequestResponse(["user"=>"no_found_in_followers"]); // error response
         }
-        $following = $this->dataResponse[0];
-        /**
-         * ca dit que c'est potentiellement null ou response a cause des retour de reponse pour les erreurs...
-         */
-        if(!$following->isStillValid()){
-            $this->deleteEntity($following);
-            //    $project->removeFollowing($following);
+        $following = $this->responseHandler->getDataResponse()[0];
+
+        try{
+            //check if the followingObject have again a following has true.
+            if(!$following->isStillValid()){
+                $this->entityManager->remove($following);
+            }
+            $this->entityManager->flush();
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
 
-        //todo check conmportement sur remove et data retournées
-    else{    if($this->updateEntity($following)) return $this->response;}
+        $projectData->addFollowing($following);
 
-        $project->addFollowing($following);
-
-        if(isset($this->dataRequest["isAssigning"])){
+        //make response
+        if($this->parameters->getData('isAssigning') !== false ){
             //response for assigning action
-            $this->dataResponse = $project->getAssignedTeam();
-            return $this->successResponse("team");
+            return $this->responseHandler->successResponse( $projectData->getAssignedTeam());
         }else {
             //response for following action
-            return $this->successResponse("collection");
+            return $this->responseHandler->successResponse( ["success"]);
         }
 
     }
@@ -163,144 +248,144 @@ class FollowingProjectController extends CommonController
      * @Route("", name="_get", methods="get")
      */
     public function getFollowingStatus(Request $request) :Response{
-        //cleanXSS
-        if($this->cleanXSS($request)
-        ) return $this->response;
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
+        $this->parameters->setData($request);
 
         //check required params
-        if(!$this->hasAllCriteria(["projectId"])) return $this->response;
-        if(!isset($this->dataRequest['isAssigning']) && !$this->hasAllCriteria(['isFollowing'])) return $this->response;
-        if(!isset($this->dataRequest['isFollowing']) && !$this->hasAllCriteria(['isAssigning'])) return $this->response;
-
-        //need id variable for column id in database
-        $this->dataRequest["id"] = $this->dataRequest['projectId'];
-
-        if ($this->getEntities(Project::class, ["id"])) return $this->response; //if error response
-        if(empty($this->dataResponse)) return $this->BadRequestResponse(["project"=>"no_project_found"]);
-        $project = $this->dataResponse[0];
-
-        if($project->getCreator()->getId() !== $this->getUser()->getId()){
-            $following = $project->getFollowingByUserId($this->getUser()->getId());
-            //  dd($following);
-            //  $this->dataResponse = [$following->getIsFollowing()];
-            if($following === null){
-                $this->dataResponse = [false];
+        try{ $this->parameters->hasData(["projectId"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+        //for following
+        if($this->parameters->getData('isAssigning') === false){
+            try{ $this->parameters->hasData(["isFollowing"]); }
+            catch(ViolationException $e) {
+                $this->logger->logError($e, $this->getUser(), "error");
+                return $this->responseHandler->BadRequestResponse($e->getViolationsList());
             }
-            else {
-                if(isset($this->dataRequest["isFollowing"])){
-                    $this->dataResponse = [$following->getIsFollowing()];
+        }
+        //for assigning
+        if($this->parameters->getData('isFollowing') === false ){
+            try{ $this->parameters->hasData(["isAssigning"]); }
+            catch(ViolationException $e) {
+                $this->logger->logError($e, $this->getUser(), "error");
+                return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+            }
+        }
+
+        //get project just by id for following or with creator for assigning
+        $repository = $this->entityManager->getRepository(Project::class);
+        $projectData = $repository->findBy(["id" => $this->parameters->getData("projectId")]);
+
+        if(count($projectData) === 0 ){
+            $this->logger->logInfo(" Project with id : ". $this->parameters->getData("projectId") ." not found " );
+            return $this->responseHandler->BadRequestResponse(["project"=>"no_project_found"]);
+        }
+        $projectData = $projectData[0];
+
+        $response = false;
+        if($projectData->getCreator()->getId() !== $this->getUser()->getId()){
+            $following = $projectData->getFollowingByUserId($this->getUser()->getId());
+
+            if($following !== null){
+                if($this->parameters->getData("isFollowing") !== false){
+                    $response = $following->getIsFollowing();
                 }
-                else if(isset($this->dataRequest["isAssigning"])){
-                    $this->dataResponse = [$following->getIsAssigning()];
+                else if($this->parameters->getData("isAssigning") !== false){
+                    $response = $following->getIsAssigning();
                 }
             }
         }
-        else {
-            $this->dataResponse = [true];
-        }
+        else $response = true;
 
-        return $this->successResponse();
+        return $this->responseHandler->successResponse([$response]);
     }
 
     /**
-     * @param Project $project
+     * @param $project
      * @return bool
      */
-    public function rmvAssigned(Project $project) :bool {
-        if(!$this->hasAllCriteria(["userId"])) return false;
-
-        $this->dataRequest["id"] = $this->dataRequest['userId'];
-        //need user by id
-        if ($this->getEntities(User::class, ["id"])) return false; // false if an error response prepared
-        if(empty($this->dataResponse)) {
-            $this->response = $this->BadRequestResponse(["email"=>"no_mail_account_found"]);
-            return false;
-        }
-        $user = $this->dataResponse[0];
-
-        //user have already a following?
-        $following = $project->getFollowingByUserId($this->dataRequest['userId']);
-        if($following === null) {
-            $this->response = $this->BadRequestResponse(["user"=>"no_found_in_assigned"]);
-            return false;
-        }
-        $following->setIsAssigning(false);
-
-        $this->dataResponse = [$following];
-        return true;
-      //  return $following;
-    }
-
-    /**
-     * @param Project $project
-     * @return bool
-     */
-    public function rmvFollower(Project $project) :bool {
-
-       // $this->dataRequest["id"] = $this->dataRequest['userId'];
-        $this->dataRequest["id"] = $this->getUser()->getId();
-        //need user by id
-        if ($this->getEntities(User::class, ["id"])) return false; // false if an error response prepared
-        if(empty($this->dataResponse)) {
-            $this->response = $this->BadRequestResponse(["email"=>"no_mail_account_found"]);
-            return false;
-        }
-        $user = $this->dataResponse[0];
+    public function rmvAssigned($project) :bool {
+        //get User by id
+        $repository = $this->entityManager->getRepository(User::class);
+        $user = $repository->findBy(["id" => $this->parameters->getData("userId")]);
+        if(empty($user)) return false;
+        $user = $user[0];
 
         //user have already a following?
         $following = $project->getFollowingByUserId($user->getId());
-        if($following === null) {
-            $this->response = $this->BadRequestResponse(["user"=>"no_found_in_followers"]);
-            return false;
-        }
+        if($following === null) return false;
+
+        $following->setIsAssigning(false);
+
+        $this->responseHandler->setDataResponse([$following]);
+        return true;
+    }
+
+    /**
+     * @param $project
+     * @return bool
+     */
+    public function rmvFollower($project) :bool {
+        //user have already a following?
+        $following = $project->getFollowingByUserId($this->getUser()->getId());
+        if($following === null) return false;
+
         $following->setIsFollowing(false);
 
-        $this->dataResponse = [$following];
+        $this->responseHandler->setDataResponse([$following]);
         return true;
     }
 
     /**
      * add a follower into project
-     * @param Project $project
+     * @param $project
      * @return bool
      */
-    public function addFollower(Project $project) :bool {
+    public function addFollower($project) :bool {
 
         //user have already a following?
         $following = $project->getFollowingByUserId($this->getUser()->getId());
+
         if($following === null){
             $following = new FollowingProject();
             $following->setIsAssigning(false);
-            //$following->setFollower($this->dataRequest['userId']);
             $following->setFollower($this->getUser());
             $following->setProject($project);
         }
 
         $following->setIsFollowing(true);
-        $this->dataResponse = [$following];
+        $this->responseHandler->setDataResponse([$following]);
         return true;
     }
 
     /**
      * add an assigned user into project by his creator
-     * @param Project $project
+     * @param $project
      * @return bool
      */
-    public function addAssigned(Project $project) :bool {
-        //check required params
-        if(!$this->hasAllCriteria(["email"])) return false;
+    public function addAssigned($project) :bool {
+        //get User by email
+        $repository = $this->entityManager->getRepository(User::class);
+        $user = $repository->findBy(["email" => $this->parameters->getData("email")]);
+        if(empty($user)) return false;
 
-        //need user by email
-        if ($this->getEntities(User::class, ["email"])) return false; //error response
-        if(empty($this->dataResponse)) return false;
-        $user = $this->dataResponse[0];
+        if(count($user) === 0 ){
+            $this->logger->logInfo(" User with email : ". $this->parameters->getData("email") ." not found " );
+            return false;
+        }
+        $user = $user[0];
 
         //user have already a following?
         $following = $project->getFollowingByUserId($user->getId());
-        if($following === null) {
+        if($following === null) { //if need a new following object
             $following = new FollowingProject();
             $following->setIsFollowing(false);
             $following->setFollower($user);
@@ -308,7 +393,7 @@ class FollowingProjectController extends CommonController
         }
         $following->setIsAssigning(true);
 
-        $this->dataResponse = [$following];
+        $this->responseHandler->setDataResponse([$following]);
         return true;
     }
 }

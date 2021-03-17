@@ -4,15 +4,10 @@ namespace App\Service;
 
 use App\Service\Configuration\ConfigurationHandler;
 use Exception;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\File\Exception\FileException;
 use Symfony\Component\HttpFoundation\File\Exception\NoFileException;
-use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\String\Slugger\SluggerInterface;
-
-//todo ajout des gestion de config pour les limite fichier
-//s'inspirer de RequestSecurity
 
 /**
  * Class FileHandler
@@ -28,10 +23,7 @@ class FileHandler
      */
     private ConfigurationHandler $configHandler;
 
-    private $allowedMime =[];
-
-    //todo
-   // private $pictureAllowedMime;
+    private ?array $allowedMime;
 
     /**
      * FileHandler constructor.
@@ -48,7 +40,6 @@ class FileHandler
     }
 
     /**
-     * just short className like "User", or "Organization" to direct the correct files's folder
      * @param String $fileDir
      * @param String $uniqName
      * @param UploadedFile $file
@@ -60,10 +51,6 @@ class FileHandler
         try {
             $file->move($this->targetDirectory.$fileDir, $uniqName);
             chmod($this->targetDirectory.$fileDir ."/". $uniqName, 0644);
-
-            //test retour permission file
-            //fileperms ( $this->getFileDir($className) ."/". $uniqId);
-
         } catch (FileException $e) {
             throw new Exception("Failed: an error occurred while uploading the file", 500);
         }
@@ -87,23 +74,15 @@ class FileHandler
      * @param $className
      * @return mixed
      */
-    public function loadPicture($entity, $className) {
-    //    $className = $this->getClassName($entity);
-    //    if($className === "ActivityFile"){ $className = "Activity";}
+    public function loadPicture($entity) {
+        $className = $this->getClassName($entity);
+        if($className === "ActivityFile"){ $className = "Activity";}
         $fileDir = '/pictures/'.$className.'/'.$entity->getPicturePath();
 
         if($entity->getPicturePath() !== null){
-           // try {
                 $img = $this->getPic($fileDir);
                 $entity->setPictureFile($img);
-
-        //    }catch(Exception $e){
-           //     $this->logService->logError($e, $this->getUser(), "error");
-         //       $this->serverErrorResponse($e, $this->logInfo);
-
             }
-     //   }
-    //    $this->logService->logInfo($className ." id ". $entity->getId() ." load Picture " );
         return $entity;
     }
 
@@ -143,16 +122,13 @@ class FileHandler
     }
 
     /**
-     * throw an Exception is the control checksum don't match
-     * @param $filePath
+     * throw an Exception if the control checksum don't match
+     * @param String $filePath
      * @param String $bddCheckSum
-     * @return void
-     * @throws Exception
+     * @return bool
      */
-    public function controlChecksum($filePath, String $bddCheckSum) : void{
-        if(!hash_file('sha256', $this->targetDirectory.$filePath) === $bddCheckSum){
-            throw new Exception("checksum COMPARISON FAILED");
-        }
+    public function controlChecksum(String $filePath, String $bddCheckSum) : bool{
+        return hash_equals($this->getChecksum($filePath), $bddCheckSum);
     }
 
     /**
@@ -174,5 +150,10 @@ class FileHandler
     public function getOriginalFilename(UploadedFile $file) : String {
         $originalFilename = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
         return $this->slugger->slug($originalFilename);
+    }
+
+    public function getClassName($entity) :String {
+        $namespace = explode("\\", get_class($entity));
+        return end($namespace);
     }
 }

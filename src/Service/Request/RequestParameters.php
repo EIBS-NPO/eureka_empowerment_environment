@@ -12,11 +12,10 @@ class RequestParameters
     private array $data = [];
 
     /**
-     * @param null $key
+     * @param $key
      * @return false|mixed
      */
-    public function getData($key)
-    {
+    public function getData($key){
         if(isset($this->data[$key])){
             return $this->data[$key];
         }
@@ -61,10 +60,11 @@ class RequestParameters
     }
 
     /**
+     * @param String $key
      * @param $param
      */
-    public function addParam($param) :void {
-        $this->data[] = $param;
+    public function addParam(String $key, $param) :void {
+        $this->data[$key] = $param;
     }
 
     /**

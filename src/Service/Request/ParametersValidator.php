@@ -5,19 +5,13 @@ namespace App\Service\Request;
 
 
 use App\Exceptions\ViolationException;
-use App\Service\LogService;
-use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class ParametersValidator
 {
-    public ValidatorInterface $validator;
-
-    private EntityManagerInterface $entityManager;
+    private ValidatorInterface $validator;
 
     private RequestParameters $paramRequest;
-
-    private LogService $logService;
 
     private ?array $requiredFields = [];
 
@@ -32,14 +26,10 @@ class ParametersValidator
     /**
      * ParametersValidator constructor.
      * @param ValidatorInterface $validator
-     * @param EntityManagerInterface $entityManager
-     * @param LogService $logService
      * @param RequestParameters $requestParameters
      */
-    public function __construct(ValidatorInterface $validator, EntityManagerInterface $entityManager, LogService $logService, RequestParameters $requestParameters){
+    public function __construct(ValidatorInterface $validator, RequestParameters $requestParameters){
         $this->validator = $validator;
-        $this->entityManager = $entityManager;
-        $this->logService = $logService;
         $this->paramRequest = $requestParameters;
     }
 
@@ -52,7 +42,6 @@ class ParametersValidator
         $this->requiredFields = $requiredFields;
         $this->optionalFields = $optionalFields;
         $this->className = $className;
-     //   $this->paramRequest = $paramRequest;
     }
 
     /**
@@ -60,18 +49,18 @@ class ParametersValidator
      * @param $fields
      * @throws ViolationException
      */
-    public function validObject($object, $fields){
-        foreach ($fields as $field){
-            $getter = "get".ucfirst($field);
-            $violations = $this->validator->validatePropertyValue($object, $field, $object->$getter());
-            if(count($violations)> 0 ){
-                $this->violations = array_merge($this->violations,  $violations);
-            }
-        }
-        if(count($this->violations)){
-            throw new ViolationException($this->violations);
-        }
-    }
+//    public function validObject($object, $fields){
+//        foreach ($fields as $field){
+//            $getter = "get".ucfirst($field);
+//            $violations = $this->validator->validatePropertyValue($object, $field, $object->$getter());
+//            if(count($violations)> 0 ){
+//                $this->violations = array_merge($this->violations,  $violations);
+//            }
+//        }
+//        if(count($this->violations)){
+//            throw new ViolationException($this->violations);
+//        }
+//    }
 
     /**
      * @param null $object
@@ -82,12 +71,12 @@ class ParametersValidator
             $object = new $this->className();
         }
 
-        //check required fileds
+        //check required fields
         if($this->requiredFields != null && count($this->requiredFields) > 0){
             $this->fieldsValidation($object, $this->requiredFields, true, $this->paramRequest->getAllData());
         }
 
-        //check optional fileds
+        //check optional fields
         if($this->optionalFields != null && count($this->optionalFields) > 0){
             $this->fieldsValidation($object, $this->optionalFields, false, $this->paramRequest->getAllData());
         }
@@ -115,7 +104,6 @@ class ParametersValidator
 
             if(count($violations) > 0 ){
                 foreach($violations as $violation){
-                    $this->logService->logInfo($violation);
                     $this->violations = array_merge(
                         $this->violations,
                         [$violation->getPropertyPath() => $violation->getMessage()]

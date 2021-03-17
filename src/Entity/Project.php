@@ -372,6 +372,7 @@ class Project
      */
     public function getFollowingByUserId(int $userId){
         $res = null;
+
         foreach($this->followings as $following){
             if($following->getFollower()->getId() === $userId){
                 $res = $following;

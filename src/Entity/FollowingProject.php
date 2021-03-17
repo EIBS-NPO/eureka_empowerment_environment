@@ -72,7 +72,7 @@ class FollowingProject
         return $this->follower;
     }
 
-    public function setFollower(?UserInterface $follower): self
+    public function setFollower(UserInterface $follower): self
     {
         $this->follower = $follower;
 

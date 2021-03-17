@@ -4,6 +4,15 @@ namespace App\Controller;
 
 use App\Entity\Activity;
 use App\Entity\User;
+use App\Exceptions\SecurityException;
+use App\Exceptions\ViolationException;
+use App\Service\FileHandler;
+use App\Service\LogService;
+use App\Service\Request\RequestParameters;
+use App\Service\Request\ResponseHandler;
+use App\Service\Security\RequestSecurity;
+use Doctrine\ORM\EntityManagerInterface;
+use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,126 +23,212 @@ use Symfony\Component\Routing\Annotation\Route;
  * @package App\Controller
  * @Route("/followActivity", name="follow_activity")
  */
-class FollowingActivityController extends CommonController
+class FollowingActivityController extends AbstractController
 {
+    private RequestSecurity $security;
+    private RequestParameters $parameters;
+    private ResponseHandler $responseHandler;
+    protected EntityManagerInterface $entityManager;
+    private  FileHandler $fileHandler;
+    private LogService $logger;
+
     /**
-     * @param Request $insecureRequest
+     * OrgController constructor.
+     * @param RequestSecurity $requestSecurity
+     * @param RequestParameters $requestParameters
+     * @param ResponseHandler $responseHandler
+     * @param EntityManagerInterface $entityManager
+     * @param LogService $logger
+     */
+    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
+    {
+        $this->security = $requestSecurity;
+        $this->parameters = $requestParameters;
+        $this->responseHandler = $responseHandler;
+        $this->entityManager = $entityManager;
+        $this->fileHandler = $fileHandler;
+        $this->logger = $logger;
+    }
+
+    /**
+     * @param Request $request
      * @return Response
      * @Route("/add", name="_add", methods="put")
      */
-    public function addFollower(Request $insecureRequest) :Response {
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+    public function addFollower(Request $request) :Response {
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        if((!$this->dataRequest["activityId"])) return $this->BadRequestResponse(["missing parameter : activityId is required. "]);
+        $this->parameters->setData($request);
 
-        //get Activity target for link
-        $this->getLinkedEntity(Activity::class,"followingActivities", "activityId");
+        //check required params
+        try{ $this->parameters->hasData(["activityId"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
 
-        //getUser
-        $this->dataRequest["id"] = $this->getUser()->getId();
-        if ($this->getEntities(User::class, ["id"])) return $this->response;
+        try{
+            //get Activity target for link
+            $repository = $this->entityManager->getRepository(Activity::class);
+            $activityData = $repository->findBy(["id" => $this->parameters->getData("activityId")]);
 
-        $user = $this->dataResponse[0];
-        $user->addFollowingActivity($this->dataRequest["followingActivities"]);
+            if(count($activityData) === 0 ){
+                $this->logger->logInfo(" Actvity with id : ". $this->parameters->getData("activityId") ." not found " );
+                return $this->responseHandler->BadRequestResponse(["activity"=>"no_activity_found"]);
+            }
+            $activity = $activityData[0];
 
-        //todo check if double possible
+            //getUser
+            $repository = $this->entityManager->getRepository(User::class);
+            $user = $repository->findBy(["id" => $this->getUser()->getId()]);
 
-        if($this->updateEntity($user)) return $this->response;
+            $user = $user[0];
 
-        //todo quel retour?
-        return $this->successResponse();
+            $user->addFollowingActivity($activity);
+
+            //if($this->updateEntity($user)) return $this->response;
+            $this->entityManager->flush();
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
+
+        return $this->responseHandler->successResponse(["success"]);
     }
 
     /**
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response|null
      * @Route("/remove", name="_remove", methods="put")
      */
-    public function removeFollower(Request $insecureRequest){
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+    public function removeFollower(Request $request){
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        if(!isset($this->dataRequest["activityId"]))return $this->BadRequestResponse(["missing parameter : activityId is required. "]);
+        $this->parameters->setData($request);
 
-        $this->dataRequest["userId"] = $this->getUser()->getId();
-        $this->dataRequest["id"] = $this->getUser()->getId();
+        //check required params
+        try{ $this->parameters->hasData(["activityId"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
 
-        if ($this->getEntities(User::class, ["id"])) return $this->response;
-        $user = $this->dataResponse[0];
+        try{
+            //get Activity target for link
+            $repository = $this->entityManager->getRepository(Activity::class);
+            $activityData = $repository->findBy(["id" => $this->parameters->getData("activityId")]);
 
-        //get Activity target for link
-        $this->getLinkedEntity(Activity::class,"followingActivities", "activityId");
+            if(count($activityData) === 0 ){
+                $this->logger->logInfo(" Actvity with id : ". $this->parameters->getData("activityId") ." not found " );
+                return $this->responseHandler->BadRequestResponse(["activity"=>"no_activity_found"]);
+            }
+            $activity = $activityData[0];
 
-        $user->removeFollowingActivity($this->dataRequest["followingActivities"]);
 
-        if($this->updateEntity($user)) return $this->response;
+            //getUser
+            $repository = $this->entityManager->getRepository(User::class);
+            $user = $repository->findBy(["id" => $this->getUser()->getId()]);
 
-        //todo retour?
+            $user = $user[0];
 
-        return $this->successResponse();
+            $user->removeFollowingActivity($activity);
+
+            $this->entityManager->flush();
+
+            return $this->responseHandler->successResponse(["success"]);
+
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
     }
 
     /**
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response
      * @Route("/public", name="_get", methods="get")
      */
-    public function getFellowers(Request $insecureRequest) : Response {
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
-
-        // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        if(!isset($this->dataRequest["id"]))return $this->BadRequestResponse(["missing parameter : id is required. "]);
-
-        //get query organization object by organization's id && referent's id
-        if ($this->getEntities(Activity::class, ["id"])) return $this->response;
-        if(!empty($this->dataResponse)){
-            $this->dataResponse = $this->dataResponse[0]->getFollowers()->toArray();
-            foreach($this->dataResponse as $key => $follower){
-                $this->dataResponse[$key] = $this->loadPicture($follower);
-            }
-        }else {
-            $this->notFoundResponse();
+    public function getFellowers(Request $request) : Response {
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
         }
 
-        return $this->successResponse();
+        // recover all data's request
+        $this->parameters->setData($request);
 
+        //check required params
+        try{ $this->parameters->hasData(["id"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+
+        //
+        try{
+            $repository = $this->entityManager->getRepository(Activity::class);
+            $activityData = $repository->findBy(["id" => $this->parameters->getData("activityId")]);
+
+            if(empty($activityData)){
+                $this->logger->logInfo(" Actvity with id : ". $this->parameters->getData("activityId") ." not found " );
+                return $this->responseHandler->BadRequestResponse(["activity"=>"no_activity_found"]);
+            }
+            else {
+                $followers = $activityData[0]->getFollowers()->toArray();
+                foreach($followers as $key => $follower){
+                    $followers[$key] = $this->fileHandler->loadPicture($follower);
+                }
+            }
+
+            return $this->responseHandler->successResponse([$followers]);
+
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
     }
 
     /**
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response|null
      * @Route("/myFavorites", name="_myFavorites", methods="get")
      */
-    public function getMyFollowing (Request $insecureRequest) {
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+    public function getMyFollowing (Request $request) {
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest["id"] = $this->getUser()->getId();
+        $this->parameters->setData($request);
 
-        //get query organization object by organization's id && referent's id
-        if ($this->getEntities(User::class, ["id"])) return $this->response;
-        if(!empty($this->dataResponse)){
-            $this->dataResponse = $this->dataResponse[0]->getFollowingActivities()->toArray();
-            foreach($this->dataResponse as $key => $follower){
-                $this->dataResponse[$key] = $this->loadPicture($follower);
+        try {
+            $repository = $this->entityManager->getRepository(User::class);
+            $user = $repository->findBy(["id" => $this->getUser()->getId()])[0];
+
+            $followActivities = $user->getFollowingActivities()->toArray();
+            foreach($followActivities as $key => $activity){
+                $followActivities[$key] = $this->fileHandler->loadPicture($activity);
             }
-        }else {
-            $this->notFoundResponse();
+
+            return $this->responseHandler->successResponse($followActivities);
+
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
-        return $this->successResponse();
     }
 
     /**
@@ -144,31 +239,37 @@ class FollowingActivityController extends CommonController
      * @Route("", name="_get", methods="get")
      */
     public function getFollowingStatus(Request $request) :Response{
-        //cleanXSS
-        if($this->cleanXSS($request)
-        ) return $this->response;
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
+        $this->parameters->setData($request);
 
         //check required params
-        if(!$this->hasAllCriteria(["activityId"])) return $this->response;
+        try{ $this->parameters->hasData(["activityId"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
 
-        //need id variable for column id in database
-        $this->dataRequest["id"] = $this->dataRequest['activityId'];
+        try{
+            $repository = $this->entityManager->getRepository(Activity::class);
+            $activityData = $repository->findBy(["id" => $this->parameters->getData("activityId")]);
 
-        if ($this->getEntities(Activity::class, ["id"])) return $this->response; //if error response
-        if(empty($this->dataResponse)) return $this->BadRequestResponse(["activity"=>"no_activity_found"]);
-        $activity = $this->dataResponse[0];
+            if(empty($activityData)){
+                $this->logger->logInfo(" Actvity with id : ". $this->parameters->getData("activityId") ." not found " );
+                return $this->responseHandler->BadRequestResponse(["activity"=>"no_activity_found"]);
+            }
+            $isFollow = $activityData[0]->isFollowByUserId($this->getUser()->getId());
 
-      //  $following = $activity->isFollowUserId($this->getUser()->getId());
+            return $this->responseHandler->successResponse([$isFollow]);
 
-        $this->dataResponse = [$activity->isFollowByUserId($this->getUser()->getId())];
-        /* if($following === null){
-             $this->dataResponse = [ "isFollow"=>false ];
-         }
-         else { $this->dataResponse = [ "isFollow"=> true ];}*/
-
-        return $this->successResponse();
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
     }
 }

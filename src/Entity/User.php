@@ -196,7 +196,6 @@ class User implements UserInterface
             "firstname" => $this->firstname,
             "lastname" => $this->lastname,
             "email" => $this->email,
-            "isDisabled" => $this->isDisabled,
             "roles" => $this->roles[0]
         ];
 
@@ -506,7 +505,7 @@ class User implements UserInterface
         $res = null;
         //look into created project
         foreach($this->activities as $activity) {
-            if ($activity->getId() === $activityId) {
+            if ($activity->getId() === (int)$activityId) {
                 $res = $activity;
             }
         }

@@ -4,12 +4,22 @@ namespace App\Controller;
 
 use App\Entity\Activity;
 use App\Entity\ActivityFile;
+use App\Entity\User;
+use App\Exceptions\SecurityException;
+use App\Exceptions\ViolationException;
+use App\Service\FileHandler;
+use App\Service\LogService;
+use App\Service\Request\ParametersValidator;
+use App\Service\Request\RequestParameters;
+use App\Service\Request\ResponseHandler;
+use App\Service\Security\RequestSecurity;
+use Doctrine\ORM\EntityManagerInterface;
+use Exception;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Annotation\Route;
 
 /**
@@ -17,234 +27,444 @@ use Symfony\Component\Routing\Annotation\Route;
  * @package App\Controller
  * @Route("/file", name="file")
  */
-class ActivityFileController extends CommonController
+class ActivityFileController extends AbstractController
 {
+    private RequestSecurity $security;
+    private RequestParameters $parameters;
+    private ResponseHandler $responseHandler;
+    private ParametersValidator $validator;
+    protected EntityManagerInterface $entityManager;
+    protected FileHandler $fileHandler;
+    private LogService $logger;
+
     /**
-     * @Route("/create", name="_post", methods="post")
-     * @param Request $insecureRequest
-     * @return Response
+     * UserController constructor.
+     * @param RequestSecurity $requestSecurity
+     * @param RequestParameters $requestParameters
+     * @param ResponseHandler $responseHandler
+     * @param ParametersValidator $validator
+     * @param EntityManagerInterface $entityManager
+     * @param FileHandler $fileHandler
+     * @param LogService $logger
      */
-    public function postFile(Request $insecureRequest): Response
+    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
     {
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)) return $this->response;
-
-        // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest = array_merge($this->dataRequest, ["creator" => $this->getUser()->getId()]);
-
-        if(!isset($this->dataRequest['file']) || (!isset($this->dataRequest['id']))){
-            return $this->BadRequestResponse(["missing params"]);
-        }
-
-        //getActivity query by id and creatorId
-        if($this->getEntities(Activity::class, ['id', 'creator'])) return $this->response;
-//dd($this->dataResponse);
-        if(get_class($this->dataResponse[0]) === Activity::class) {
-            //keep safe for deleting later if upload success
-            $this->dataRequest['simpleActivity'] = $this->dataResponse[0];
-
-            $activityFile = new ActivityFile();
-            $activityFile->setForActivity($this->dataResponse[0]);
-            $this->dataResponse[0] = $activityFile;
-        }
-
-        if($this->uploadFile($this->dataResponse[0], $this->dataRequest['file'])) return $this->response;
-
-        if($this->persistEntity($this->dataResponse[0])) return $this->response;
-        $newActivityFile = $this->dataResponse[0];
-
-        $this->logService->logInfo("ActivityFile id " . $newActivityFile->getId() . " uploaded File " );
-        $this->logService->logEvent($this->getUser(),$newActivityFile->getId(), $this->getClassName($newActivityFile), "uploaded file");
-
-        if(isset($this->dataRequest['simpleActivity'])){
-            if($this->deleteEntity($this->dataRequest['simpleActivity'])) return $this->response;
-        }
-
-        $this->dataResponse = [$newActivityFile];
-        if($this->dataResponse[0]->getPicturePath()){
-            $this->dataResponse = [$this->loadPicture($this->dataResponse[0])];
-        }
-
-        //success response
-        return $this->successResponse();
+        $this->security = $requestSecurity;
+        $this->parameters = $requestParameters;
+        $this->responseHandler = $responseHandler;
+        $this->validator = $validator;
+        $this->entityManager = $entityManager;
+        $this->fileHandler = $fileHandler;
+        $this->logger = $logger;
     }
 
 
     /**
-     * @param Request $insecureRequest
+     * @Route("/create", name="_post", methods="post")
+     * @param Request $request
+     * @return Response
+     */
+    public function postFile(Request $request): Response
+    {
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
+
+        // recover all data's request
+        $this->parameters->setData($request);
+        $this->parameters->addParam("creator", $this->getUser());
+
+//check if required params exist
+        try{ $this->parameters->hasData(["file", "id"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+
+        $file = $this->parameters->getData("file");
+
+        try {
+            //get the activity
+            $repository = $this->entityManager->getRepository(Activity::class);
+            $activityData = $repository->findBy(["id" => $this->parameters->getData("id")]);
+
+            if(get_class($activityData[0]) === Activity::class) {
+                //keep safe for deleting later if upload success
+                $activity = $activityData[0];
+
+                //create a new activityFile and hydrate it with activity data
+                $activityData = new ActivityFile();
+                $activityData->setForActivity($activity);
+            }
+
+            try{
+                $this->fileHandler->isAllowedMime($file);
+            }catch (Exception $e){
+                $this->logger->logError($e,$this->getUser(),"error" );
+                return $this->responseHandler->BadMediaResponse($e->getMessage());
+            }
+
+            try{
+                $activityData->setFilename($this->fileHandler->getOriginalFilename($file).".".$file->guessExtension());
+                $activityData->setFileType($file->getMimeType());
+                $activityData->setSize($file->getSize());
+                $activityData->setUniqId(uniqid());
+
+                //make new filename
+                $completName = $activityData->getUniqId(). '_'. $activityData->getFilename();
+
+                //upload
+                $this->fileHandler->upload('/files/Activity', $completName, $file);
+
+                //make new checksum
+                $activityData->setChecksum($this->fileHandler->getChecksum('/files/Activity/'. $completName));
+
+            }catch(Exception $e){
+                $this->logger->logError($e, $this->getUser(),"error");
+                $this->logger->logEvent($this->getUser(),$activityData->getId(), ActivityFile::class, "SERVER_ERROR : upload_File FAILED");
+                $this->responseHandler->serverErrorResponse($e, "An error occurred");
+            }
+
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured ");
+        }
+
+        //persist the new activity
+        try{
+            $this->entityManager->persist($activityData);
+            $this->entityManager->flush();
+
+            if(isset($activity)){
+                $this->entityManager->remove($activity);
+            }
+
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error");
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
+
+        $this->logger->logInfo("ActivityFile id " . $activityData->getId() . " uploaded File " );
+        $this->logger->logEvent($this->getUser(),$activityData->getId(), ActivityFile::class, "uploaded file");
+
+        if($activityData->getPicturePath()){
+            $activityData = [$this->fileHandler->loadPicture($activityData)];
+        }
+
+        //success response
+        return $this->responseHandler->successResponse([$activityData], "read_activity");
+    }
+
+
+    /**
+     * @param Request $request
      * @return Response|null
      * @Route("/update", name="_put", methods="post")
      */
-    public function updateActivityFile (Request $insecureRequest) {
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
-
-        // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-
-        if(!isset($this->dataRequest['file']) || (!isset($this->dataRequest['id']))){
-            return $this->BadRequestResponse(["missing params"]);
+    public function updateActivityFile (Request $request) {
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
         }
 
-        if($this->getEntities(ActivityFile::class, ['id'])) return $this->response;
+        // recover all data's request
+        $this->parameters->setData($request);
 
-        if($this->uploadFile($this->dataResponse[0], $this->dataRequest['file'])) return $this->response;
+        //check if required params exist
+        try{ $this->parameters->hasData(["file", "id"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+
+        try{
+            //get the activity
+            $repository = $this->entityManager->getRepository(Activity::class);
+            $activityData = $repository->findBy(["id" => $this->parameters->getData("id") ] )[0];
+
+            $file = $this->parameters->getData("file");
+
+            $activityData->setFilename($this->fileHandler->getOriginalFilename($file).".".$file->guessExtension());
+            $activityData->setFileType($file->getMimeType());
+            $activityData->setSize($file->getSize());
+            $activityData->setUniqId(uniqid());
+
+            //make new filename
+            $completName = $activityData->getUniqId(). '_'. $activityData->getFilename();
+
+            //upload
+            $this->fileHandler->upload('/files/Activity', $completName, $file);
+
+            //make new checksum
+            $activityData->setChecksum($this->fileHandler->getChecksum('/files/Activity/'. $completName));
+
+            //persist updated activityFile
+            $this->entityManager->flush();
+
+        }catch(Exception $e){
+            $this->logger->logError($e, $this->getUser(),"error");
+            $this->logger->logEvent($this->getUser(),$activityData->getId(), ActivityFile::class, "SERVER_ERROR : upload_File FAILED");
+            $this->responseHandler->serverErrorResponse($e, "An error occurred");
+        }
 
         //persist updated activityFile
-        if ($this->updateEntity($this->dataResponse[0])) return $this->response;
+        $this->entityManager->flush();
 
-        $this->dataResponse = [$this->loadPicture($this->dataResponse[0])];
+        if($activityData->getPicturePath()){
+            $activityData = [$this->fileHandler->loadPicture($activityData)];
+        }
 
-        return $this->successResponse();
+        //success response
+        return $this->responseHandler->successResponse([$activityData], "read_activity");
     }
 
 
 
 
+    //todo vraiment utilisé?
+
     /**
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response|null
      * @Route("", name="_get", methods="get")
      */
-    public function getActivityFile (Request $insecureRequest) {
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
-
-        // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        if(!isset($this->dataRequest['id'])) return $this->notFoundResponse();
-
-        if($this->getEntities(Activity::class, ['id'])) return $this->response;
-
-        $activityFile = $this->dataResponse[0];
-        $completName = $activityFile->getUniqId(). '_'. $activityFile->getFilename();
-
-        //todo a finir!
-        if(get_class($this->dataResponse[0]) === ActivityFile::class){
-            $this->fileHandler->controlChecksum('/files/Activity/'.$completName, $activityFile->getChecksum());
+    public function getActivityFile (Request $request)
+    {
+        try {
+            $this->security->cleanXSS($request);
+        } catch (SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
         }
 
-        $this->dataResponse = [$this->loadPicture($activityFile)];
+        // recover all data's request
+        $this->parameters->setData($request);
 
-        //success response
-        return $this->successResponse();
+        //check if required params exist
+        try {
+            $this->parameters->hasData(["id"]);
+        } catch (ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+
+        $repository = $this->entityManager->getRepository(Activity::class);
+        //get query, if id not define, query getALL
+        try {
+            $activityData = $repository->findBy(["id" => $this->parameters->getData("id")]);
+        } catch (Exception $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
+
+        if (count($activityData) > 0) {
+            $activityData = $activityData[0];
+            $completName = $activityData->getUniqId() . '_' . $activityData->getFilename();
+
+            //todo a finir!
+            if (get_class($activityData) === ActivityFile::class) {
+                try {
+                    $this->fileHandler->controlChecksum('/files/Activity/' . $completName, $activityData->getChecksum());
+                } catch (Exception $e) {
+                    $this->logger->logError($e, $this->getUser(), "warning");
+                    $this->logger->logEvent($this->getUser(), $activityData->getId(), ActivityFile::class, "SERVER_ERROR : checksum COMPARISON FAILED");
+                }
+
+            }
+
+            //check if public or private data return
+            if (!$activityData->hasAccess($this->getUser())) {
+                $activityData->setActivities($activityData->getOnlyPublicActivities());
+            }
+
+            if ($activityData->getPicturePath()) {
+                $activityData = [$this->fileHandler->loadPicture($activityData)];
+            }
+
+            //success response
+            return $this->responseHandler->successResponse([$activityData], "read_activity");
+        }else {
+            return $this->responseHandler->notFoundResponse();
+        }
     }
 
     /**
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response|null
      * @Route("", name="_delete", methods="delete")
      */
-    public function removeActivityFile (Request $insecureRequest){
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
-
-        // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        if(!isset($this->dataRequest['id'])) return $this->BadRequestResponse(["missing parameter : id is required. "]);
-
-        if($this->getEntities(ActivityFile::class, ['id'])) return $this->response;
-        $this->dataRequest['activityFile'] = $this->dataResponse[0];
-        $simpleActivity = new Activity();
-        $simpleActivity->setFromActivityFile($this->dataResponse[0]);
-
-        if($this->persistEntity($simpleActivity)) return $this->response;
-        $simpleActivity = $this->dataResponse[0];
-
-        if($this->deleteEntity($this->dataRequest['activityFile'])) return $this->response;
-
-        $this->dataResponse = [$simpleActivity];
-        if($this->dataResponse[0]->getPicturePath()){
-            $this->dataResponse = [$this->loadPicture($this->dataResponse[0])];
+    public function removeActivityFile (Request $request){
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
         }
 
-        return $this->successResponse();
+        // recover all data's request
+        $this->parameters->setData($request);
+
+        //check if required params exist
+        try{ $this->parameters->hasData(["id"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+
+        try {
+            //for no admin get org by user
+            if ($this->getUser()->getRoles()[0] !== "ROLE_ADMIN") {
+                $repository = $this->entityManager->getRepository(User::class);
+                $userData = $repository->findBy(["id" => $this->getUser()->getId()]);
+                $user = $userData[0];
+
+                $activityData = $user->getActivity($this->parameters->getData("id"))[0];
+            } else {//for admin
+                $repository = $this->entityManager->getRepository(Activity::class);
+                $activityData = $repository->findBy(["id" => $this->parameters->getData("id")]);
+                if (count($activityData) === 0) {
+                    $this->logger->logInfo(" Activity with id : " . $this->parameters->getData("id") . " not found ");
+                    return $this->responseHandler->notFoundResponse();
+                }
+                $activityData = $activityData[0];
+            }
+
+            $simpleActivity = new Activity();
+            $simpleActivity->setFromActivityFile($activityData);
+
+            $this->entityManager->persist($simpleActivity);
+            $this->entityManager->flush();
+
+            $this->entityManager->remove($activityData);
+            $this->entityManager->flush();
+
+            if($simpleActivity->getPicturePath()){
+                $simpleActivity = [$this->fileHandler->loadPicture($simpleActivity)];
+            }
+
+            return $this->responseHandler->successResponse([$simpleActivity], "read_activity");
+
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
     }
 
 
     /**
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response|null
      * @Route("/download/public", name="_public_download", methods="get")
      */
-    public function downloadPublicFile(Request $insecureRequest)
+    public function downloadPublicFile(Request $request)
     {
-        //comme route public en ano, il ne trouve pas l'interfaceUser?
-    //    dd($this->getUser());
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        if(!isset($this->dataRequest['id'])) return $this->BadRequestResponse(["missing parameter : id is required. "]);
-        $this->dataRequest["isPublic"] = true;
+        $this->parameters->setData($request);
 
-        if($this->getEntities(ActivityFile::class, ['id', 'isPublic'])) return $this->response;
 
-        if(!empty($this->dataResponse)){
-            $activityFile = $this->dataResponse[0];
-            if($this->getFile($this->dataResponse[0])) return $this->response;
-            $file = $this->dataResponse[0];
+        //check if required params exist
+        try{ $this->parameters->hasData(["id"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+
+    try{
+        $repository = $this->entityManager->getRepository(ActivityFile::class);
+        $activityData = $repository->findBy([
+            "id" => $this->parameters->getData("id"),
+            "isPublic" => true
+        ]);
+
+        if (count($activityData) === 0) {
+            $this->logger->logInfo(" ActivityFile with id : " . $this->parameters->getData("id") . " not found ");
+            return $this->responseHandler->notFoundResponse();
+        }
+
+        if(!empty($activityData)){
+            $activityData = $activityData[0];
+            $completName = $activityData->getUniqId(). '_'. $activityData->getFilename();
+            $file = $this->fileHandler->getFile('/files/Activity/'.$completName);
+
+            if(!$this->fileHandler->controlChecksum('/files/Activity/'.$completName, $activityData->getChecksum())){
+                return $this->responseHandler->CorruptResponse("Compromised file");
+            }
+
 
             $response = new BinaryFileResponse($file);
-            $response->headers->set('Content-Type',$activityFile->getFileType());
+            $response->headers->set('Content-Type',$activityData->getFileType());
 
-            $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $activityFile->getFilename());
+            $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $activityData->getFilename());
+            return $response;
+        }else{
+            return $this->responseHandler->notFoundResponse();
         }
-        else{ $response = $this->successResponse();}
 
-        return $response;
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
     }
 
-    //todo ajout context pour assigned
     /**
-     * @param Request $insecureRequest
+     * @param Request $request
+     * @return BinaryFileResponse|Response
      * @Route("/download", name="_download", methods="get")
      */
-    public function downloadFile(Request $insecureRequest)
+    public function downloadFile(Request $request)
     {
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        if(!isset($this->dataRequest['id'])) return $this->BadRequestResponse(["missing parameter : id is required. "]);
+        $this->parameters->setData($request);
 
+        //check if required params exist
+        try{ $this->parameters->hasData(["id"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
 
-        if($this->getEntities(ActivityFile::class, ['id'])) return $this->response;
+        try{
+            $repository = $this->entityManager->getRepository(ActivityFile::class);
+            $activityData = $repository->findBy(["id" => $this->parameters->getData("id")]);
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
 
-        if(!empty($this->dataResponse)){
-            $activityFile = $this->dataResponse[0];
+        if (!$activityData[0]->hasAccess($this->getUser())) {
+            return $this->responseHandler->unauthorizedResponse("unauthorized");
+        }
 
-            if($this->getFile($this->dataResponse[0])) return $this->response;
-            $file = $this->dataResponse[0];
+        if(!empty($activityData[0])){
+            $activityFile = $activityData[0];
+
+            $path = '/files/Activity/'.$activityFile->getUniqId(). '_'. $activityFile->getFilename();
+            $file = $this->fileHandler->getFile($path);
+
+            if(!$this->fileHandler->controlChecksum($path, $activityFile->getChecksum())){
+                return $this->responseHandler->CorruptResponse("Compromised file");
+            }
 
             $response = new BinaryFileResponse($file);
             $response->headers->set('Content-Type',$activityFile->getFileType());
 
             $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $activityFile->getFilename());
         }
-        else { $response = $this->successResponse();}
-
-        return $response;
-    }
-
-    public function streamFileResponse($file, $filename) : StreamedResponse
-    {
-        $response = new StreamedResponse(static function () use ($file) {
-            $outputStream = fopen('php://output', 'wb');
-
-            stream_copy_to_stream($file, $outputStream);
-        });
-
-        $response->headers->set('Content-Type', $file->getType());
-
-        $disposition = HeaderUtils::makeDisposition(
-            HeaderUtils::DISPOSITION_ATTACHMENT,
-            $filename
-        );
-        $response->headers->set('Content-Disposition', $disposition);
+        else { return $this->responseHandler->notFoundResponse();}
 
         return $response;
     }

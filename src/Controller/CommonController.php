@@ -386,7 +386,6 @@ class CommonController extends AbstractController
      */
     public function uploadFile(ActivityFile $activityFile, UploadedFile $file) {
 
-
         //check if Mime is allowed
         try{
             $this->fileHandler->isAllowedMime($file);
