@@ -216,8 +216,7 @@ class MembershipController extends AbstractController
         try {
             $repository = $this->entityManager->getRepository(Organization::class);
             $orgData = $repository->findBy([
-                    "orgId" => $this->parameters->getData("email"),
-                    "referent" => $this->getUser()->getId()
+                    "id" => $this->parameters->getData("orgId")
                 ]
             );
             if (count($orgData) === 0) {
