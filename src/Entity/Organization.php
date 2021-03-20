@@ -91,6 +91,16 @@ class Organization
      */
     private $description = [];
 
+    /**
+     * @ORM\OneToOne(targetEntity=Address::class, inversedBy="orgOwner", cascade={"persist", "remove"})
+     */
+    private $address;
+
+    /**
+     * @ORM\Column(type="boolean")
+     */
+    private $isPartner = false;
+
     public function __construct()
     {
         $this->projects = new ArrayCollection();
@@ -124,20 +134,37 @@ class Organization
         }
 
         if($this->description){
-
             $data["description"] = $this->description;
+        }
+
+        if($this->address){
+            $data["address"] = $this->address->serialize();
         }
 
         if(!$this->membership->isEmpty()){
             $data["membership"] = $this->membership->toArray();
         }
 
-        /*if(count($this->membership) > 0 ){
+        if(!$this->activities !== null && $context === "read_org"){
+            $data["activities"] = [];
+            foreach($this->activities as $activity){
+                array_push($data["activities"], $activity->serialize());
+            }
+        }
+
+        if(!$this->projects->isEmpty() && $context ==="read_org"){
+            $data["projects"] = [];
+            foreach($this->projects as $project){
+                array_push($data["projects"], $project->serialize("read_org"));
+            }
+        }
+
+        if(count($this->membership) > 0 && $context ==="read_org"){
             $data["membership"] = [];
             foreach($this->membership as $member){
                 array_push($data["membership"], $member->serialize());
             }
-        }*/
+        }
 
         //todo deprecated
         //Check some attributes with contexts to see if they are sets
@@ -277,12 +304,15 @@ class Organization
         return $this;
     }
 
-    /**
-     * @return Collection|Activity[]
-     */
-    public function getActivities(): Collection
+    public function getActivities()
     {
         return $this->activities;
+    }
+
+
+    public function setActivities($activities): void
+    {
+        $this->activities = $activities;
     }
 
     public function addActivity(Activity $activity): self
@@ -347,5 +377,48 @@ class Organization
         return $this;
     }
 
+    public function getAddress(): ?Address
+    {
+        return $this->address;
+    }
+
+    public function setAddress(?Address $address): self
+    {
+        $this->address = $address;
+
+        return $this;
+    }
+
+    public function getIsPartner(): ?bool
+    {
+        return $this->isPartner;
+    }
+
+    public function setIsPartner(bool $isPartner): self
+    {
+        $this->isPartner = $isPartner;
+
+        return $this;
+    }
+
+    public function isMember($user){
+        $res = false;
+        if($this->referent->getId() === $user->getId()){
+            $res = true;
+        }else if($this->membership->contains($user)){
+            $res = true;
+        }
+        return $res;
+    }
+
+    public function getOnlyPublicActivities(){
+        $res = [];
+        foreach($this->activities as $activity ){
+            if($activity->getIsPublic()){
+                $res[] = $activity;
+            }
+        }
+        return $res;
+    }
 
 }

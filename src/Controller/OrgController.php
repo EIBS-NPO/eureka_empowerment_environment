@@ -2,7 +2,21 @@
 
 namespace App\Controller;
 
+use App\Entity\Activity;
 use App\Entity\Organization;
+use App\Entity\Project;
+use App\Entity\User;
+use App\Exceptions\SecurityException;
+use App\Exceptions\ViolationException;
+use App\Service\FileHandler;
+use App\Service\LogService;
+use App\Service\Request\ParametersValidator;
+use App\Service\Request\RequestParameters;
+use App\Service\Request\ResponseHandler;
+use App\Service\Security\RequestSecurity;
+use Doctrine\ORM\EntityManagerInterface;
+use Exception;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -12,147 +26,288 @@ use Symfony\Component\Routing\Annotation\Route;
  * @package App\Controller
  * @Route("/org", name="org")
  */
-class OrgController extends CommonController
+class OrgController extends AbstractController
 {
+    private RequestSecurity $security;
+    private RequestParameters $parameters;
+    private ResponseHandler $responseHandler;
+    private ParametersValidator $validator;
+    protected EntityManagerInterface $entityManager;
+    protected FileHandler $fileHandler;
+    private LogService $logger;
+
     /**
-     * @Route("", name="_registration", methods="post")
-     * @param Request $insecureRequest
-     * @return Response
+     * OrgController constructor.
+     * @param RequestSecurity $requestSecurity
+     * @param RequestParameters $requestParameters
+     * @param ResponseHandler $responseHandler
+     * @param ParametersValidator $validator
+     * @param EntityManagerInterface $entityManager
+     * @param FileHandler $fileHandler
+     * @param LogService $logger
      */
-    public function create(Request $insecureRequest) :Response
+    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
     {
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
-
-        // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest = array_merge($this->dataRequest, ["referent" => $this->getUser()]);
-
-        //todo add address optional
-
-        //dataRequest Validations
-        if($this->isInvalid(
-            ["name", "type", "email", "referent"],
-            ["phone", 'description'],
-            Organization::class)
-        ) return $this->response;
-
-        //create user object && set validated fields
-        $org = $this->setEntity(new Organization(),["name", "type", "email", "description", "referent", "phone"]);
-
-        //persist the new organization
-        if($this->persistEntity($org)) return $this->response;
-
-        //success response
-        return $this->successResponse();
+        $this->security = $requestSecurity;
+        $this->parameters = $requestParameters;
+        $this->responseHandler = $responseHandler;
+        $this->validator = $validator;
+        $this->entityManager = $entityManager;
+        $this->fileHandler = $fileHandler;
+        $this->logger = $logger;
     }
 
 
+    /**
+     * @Route("", name="_registration", methods="post")
+     * @param Request $request
+     * @return Response
+     */
+    public function create(Request $request) :Response
+    {
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
+        // recover all data's request
+        $this->parameters->setData($request);
+        $this->parameters->addParam("referent", $this->getUser());
 
+        //check params Validations
+        try{ $this->validator->isInvalid(
+            ["name", "type", "email", "referent"],
+            ["phone", 'description'],
+            Organization::class);
+        } catch(ViolationException $e){
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+
+        //create org object && set validated fields
+        $org = new Organization();
+        foreach( ["name", "type", "email", "referent", "phone", 'description']
+                 as $field ) {
+            if($this->parameters->getData($field) !== false ) {
+                $setter = 'set'.ucfirst($field);
+                $org->$setter($this->parameters->getData($field));
+            }
+        }
+
+        //persist the new org
+        try{
+            $this->entityManager->persist($org);
+            $this->entityManager->flush();
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error");
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
+
+        //success response
+        return $this->responseHandler->successResponse([$org], "read_project");
+    }
 
 
     /**
      * @Route("/public", name="_get_public", methods="get")
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response
      */
-    public function getPublicOrganization(Request $insecureRequest) :Response
+    public function getPublicOrg(Request $request) :Response
     {
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
+        $this->parameters->setData($request);
 
-        //Validate fields
-        if($this->isInvalid(
-            null,
-            ["id"],
-            Organization::class)
-        ) return $this->response;
+        $criterias = [];
+        if($this->parameters->getData('id') !== false){
+            $criterias["id"]= $this->parameters->getData('id') ;
+        }
 
-        //get query
-        if($this->getEntities(Organization::class, ["id"] )) return $this->response;
+        $repository = $this->entityManager->getRepository(Organization::class);
+        //get query, if id not define, query getALL
+        try{
+            if(isset($criterias['id'])){
+                $dataResponse = $repository->findBy($criterias);
+            }else {
+                $dataResponse = $repository->findAll();
+            }
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
+
+        //only with public resources
+        foreach($dataResponse as $org) {
+            $org->setActivities($org->getOnlyPublicActivities());
+        }
 
         //download picture
-        foreach($this->dataResponse as $key => $org){
-            $this->dataResponse[$key] = $this->loadPicture($org);
+        foreach($dataResponse as $key => $org){
+            $org= $this->fileHandler->loadPicture($org);
+            foreach($org->getActivities() as $activity){
+                $activity = $this->fileHandler->loadPicture($activity);
+            }
+            foreach($org->getProjects() as $project){
+                $project = $this->fileHandler->loadPicture($project);
+            }
+            foreach($org->getMembership() as $member){
+                $member = $this->fileHandler->loadPicture($member);
+            }
+            $dataResponse[$key] = $org;
         }
 
         //success response
-        return $this->successResponse();
+        return $this->responseHandler->successResponse($dataResponse, "read_org");
     }
 
     /**
      * @Route("", name="_get", methods="get")
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response|null
      */
-    public function getOrganization(Request $insecureRequest){
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+    public function getOrg(Request $request){
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest["referent"] = $this->getUser()->getId();
+        $this->parameters->setData($request);
 
-        //validation requestParam and recover organization(s)
-        if(isset($this->dataRequest['id'])){
-            if($this->getEntities(Organization::class, ["id", "referent"] )) return $this->response;
-        }else {
-            if($this->getEntities(Organization::class, ["referent"] )) return $this->response;
+        $criterias = [];
+        if($this->parameters->getData('id') !== false){
+            $criterias["id"]= $this->parameters->getData('id') ;
+        }
+
+        $repository = $this->entityManager->getRepository(Organization::class);
+        //get query, if id not define, query getALL
+        try{
+            if(isset($criterias['id'])){
+                $dataResponse = $repository->findBy($criterias);
+            }else {
+                $dataResponse = $repository->findAll();
+            }
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
+
+        $criterias["id"] = $this->getUser()->getId() ;
+        try {
+            $userData = $repository->findBy($criterias);
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
+
+        $user = $userData[0];
+
+        //check if public or private data return
+        foreach($dataResponse as $org){
+            if(!$org->isMember($user)){
+                $org->setActivities($org->getOnlyPublicActivities());
+            }
         }
 
         //download picture
-        foreach($this->dataResponse as $key => $org){
-            $this->dataResponse[$key] = $this->loadPicture($org);
+        foreach($dataResponse as $key => $org){
+            $org= $this->fileHandler->loadPicture($org);
+            foreach($org->getActivities() as $activity){
+                $activity = $this->fileHandler->loadPicture($activity);
+            }
+            foreach($org->getProjects() as $project){
+                $project = $this->fileHandler->loadPicture($project);
+            }
+            foreach($org->getMembership() as $member){
+                $member = $this->fileHandler->loadPicture($member);
+            }
+            $dataResponse[$key] = $org;
         }
 
         //success response
-        return $this->successResponse();
+        return $this->responseHandler->successResponse($dataResponse, "read_org");
     }
 
     //todo ajout logo update
 
     /**
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response
      * @ROUTE("", name="_put", methods="put")
      */
-    public function updateOrganization(Request $insecureRequest) :Response
+    public function updateOrganization(Request $request) :Response
     {
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest = array_merge($this->dataRequest, ["referent" => $this->getUser()->getId()]);
+        $this->parameters->setData($request);
 
-     //   dd($this->dataRequest);
-        //validation for paramRequest && get query organization object by organization's id && referent's id
-        if($this->getEntities(Organization::class, ["id", "referent"] )) return $this->response;
+        //check if required params exist
+        try{ $this->parameters->hasData(["orgId"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
 
-        if(!empty($this->dataResponse)){
-            if($this->isInvalid(
-                null,
-                ["type", "name", "description", "email", "phone"],
-                Organization::class)
-            ) return $this->response;
+        //check params Validations
+        try{ $this->validator->isInvalid(
+            [],
+            ["name", "type", "email", "phone", 'description'],
+            Organization::class);
+        } catch(ViolationException $e){
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
 
-            //set organization's validated fields
-            $org = $this->setEntity($this->dataResponse[0], ["type", "name", "description", "email", "phone"]);
+        //for no admin get org by user
+        if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
+            $repository = $this->entityManager->getRepository(User::class);
+            $userData = $repository->findBy(["id" => $this->getUser()->getId()]);
+            $user = $userData[0];
 
-            //persist updated org
-            if($this->updateEntity($org)) return $this->response;
+            $orgData = $user->getOrgById($this->parameters->getData("orgId"));
+        }
+        else{//for admin
+            $repository = $this->entityManager->getRepository(Organization::class);
+            $orgData = $repository->findBy(["id" => $this->parameters->getData("orgId")]);
+            if(count($orgData) === 0 ){
+                $this->logger->logInfo(" Organization with id : ". $this->parameters->getData("orgId") ." not found " );
+                return $this->responseHandler->notFoundResponse();
+            }
+            $orgData = $orgData[0];
+        }
+
+        //only for referent or admin
+        if($orgData !== false ){
+            foreach( ["name", "type", "email", "phone", 'description']
+                     as $field ) {
+                if($this->parameters->getData($field) !== false ) {
+                    $setter = 'set'.ucfirst($field);
+                    $orgData->$setter($this->parameters->getData($field));
+                }
+            }
+
+            $this->entityManager->flush();
+            $orgData = $this->fileHandler->loadPicture($orgData);
+
+        }else{
+            $this->responseHandler->unauthorizedResponse("unauthorized");
         }
 
         //final response
-        return $this->successResponse();
+        return $this->responseHandler->successResponse([$orgData], "read_org");
     }
 
     /**
@@ -160,46 +315,296 @@ class OrgController extends CommonController
      * @return Response
      * @Route("/picture", name="_picture_put", methods="post")
      */
-    public function putPicture(Request $insecureRequest ) :Response {
+    public function putPicture(Request $request ) :Response {
 
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest = array_merge($this->dataRequest, ["referent" => $this->getUser()->getId()]);
+        $this->parameters->setData($request);
 
-        //todo controle with assert for image and configLimite (dans pictureHandler,( ou fileHandler)
-        /*if(!isset($this->dataRequest["picture"])) {
+        //check if required params exist
+        try{ $this->parameters->hasData(["id", "image"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
 
-        }*/
+        try{
+            //for no admin get org by user
+            if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
+                $repository = $this->entityManager->getRepository(User::class);
+                $userData = $repository->findBy(["id" => $this->getUser()->getId()]);
+                $user = $userData[0];
 
-        //get query
-        if($this->getEntities(Organization::class, ['id', 'referent'])) return $this->response;
-        $org = $this->dataResponse[0];
+                $orgData = $user->getOrgById($this->parameters->getData("id"));
+            }
+            else{//for admin
+                $repository = $this->entityManager->getRepository(Organization::class);
+                $orgData = $repository->findBy(["id" => $this->parameters->getData("id")]);
+                if(count($orgData) === 0 ){
+                    $this->logger->logInfo(" Organization with id : ". $this->parameters->getData("id") ." not found " );
+                    return $this->responseHandler->notFoundResponse();
+                }
+                $orgData = $orgData[0];
+            }
 
-        //todo gestion des files dans la requête
-        // todo content-type getResponse()->setContentType('image/jpeg')
+            if($orgData !== false ){
 
-        if($this->uploadPicture($org, $this->dataRequest['image'])) return $this->response;
+                $oldPic = $orgData->getPicturePath() ? $orgData->getPicturePath() : null;
 
-        if($this->isInvalid(
-            null,
-            ["picturePath"],
-            Organization::class)
-        ) return $this->response;
+                $fileDir = '/pictures/Organization';
+                $picFile = $this->parameters->getData("image");
 
-        //set project's validated fields
-        $org = $this->setEntity($org, ["picturePath"]);
+                //make unique picturePath
+                $orgData->setPicturePath(uniqid().'_'. $this->fileHandler->getOriginalFilename($picFile).'.'. $picFile->guessExtension());
 
-        //persist updated project
-        if($this->updateEntity($org)) return $this->response;
+                //upload
+                $this->fileHandler->upload($fileDir, $orgData->getPicturePath(), $picFile);
 
-        //download picture
-        $this->dataResponse = [$this->loadPicture($org)];
+                $this->entityManager->flush();
+                $orgData = $this->fileHandler->loadPicture($orgData);
+
+                //if a picture already exist, need to remove it
+                if($oldPic !== null){
+                    $this->logger->logInfo(" User with id " . $this->getUser()->getId() . " remove old Picture for Organization with id ". $orgData->getId() );
+                    $this->fileHandler->removeFile($fileDir.'/'.$oldPic);
+                }
+
+                $this->entityManager->flush();
+                $orgData = $this->fileHandler->loadPicture($orgData);
+
+            }else{
+                $this->responseHandler->unauthorizedResponse("unauthorized");
+            }
+
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured ");
+        }
 
         //final response
-        return $this->successResponse();
+        return $this->responseHandler->successResponse([$orgData]);
+    }
+
+    /**
+     * @param Request $request
+     * @return Response
+     * @("/deletePicture", name="_picture_delete", methods="delete")
+     */
+    public function deletePicture(Request$request){
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
+
+        // recover all data's request
+        $this->parameters->setData($request);
+
+        //check if required params exist
+        try{ $this->parameters->hasData(["orgId"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+
+        $repository = $this->entityManager->getRepository(User::class);
+        try{
+            //for no admin get org by user
+            if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
+                $repository = $this->entityManager->getRepository(User::class);
+                $userData = $repository->findBy(["id" => $this->getUser()->getId()]);
+                $user = $userData[0];
+
+                $orgData = $user->getOrgById($this->parameters->getData("orgId"));
+            }
+            else{//for admin
+                $repository = $this->entityManager->getRepository(Organization::class);
+                $orgData = $repository->findBy(["id" => $this->parameters->getData("orgId")]);
+                if(count($orgData) === 0 ){
+                    $this->logger->logInfo(" Organization with id : ". $this->parameters->getData("orgId") ." not found " );
+                    return $this->responseHandler->notFoundResponse();
+                }
+                $orgData = $orgData[0];
+            }
+
+            if($orgData !== false ){
+                $this->fileHandler->removeFile('/pictures/User/' .$orgData->getPicturePath());
+                $orgData->setPicturePath(null);
+
+                $this->entityManager->flush();
+                $userData = [$orgData];
+            }else{
+                $this->responseHandler->unauthorizedResponse("unauthorized");
+            }
+
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured ");
+        }
+
+        $this->logger->logInfo(" User with id " . $user->getId() . " remove old Picture " );
+
+        //final response
+        return $this->responseHandler->successResponse($orgData, "read_org");
+    }
+
+    /**
+     * @param Request $request
+     * @return Response
+     * @Route("/manageActivity", name="_manage_Activity", methods="put")
+     */
+    public function manageActivity(Request $request){
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
+
+        // recover all data's request
+        $this->parameters->setData($request);
+
+        //check if required params exist
+        try{ $this->parameters->hasData(["activityId", "orgId"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+
+
+//get Activity
+        $repository = $this->entityManager->getRepository(Activity::class);
+        $actData = $repository->findBy(["id" => $this->parameters->getData("activityId")]);
+        if(count($actData) === 0 ){
+            $this->logger->logInfo(" Activity with id : ". $this->parameters->getData("activityId") ." not found " );
+            return $this->responseHandler->notFoundResponse();
+        }
+        $actData = $actData[0];
+
+//get organization
+        $repository = $this->entityManager->getRepository(Organization::class);
+        $orgData = $repository->findBy(["id" => $this->parameters->getData("orgId")]);
+        if(count($orgData) === 0 ){
+            $this->logger->logInfo(" Organization with id : ". $this->parameters->getData("orgId") ." not found " );
+            return $this->responseHandler->notFoundResponse();
+        }
+        $orgData = $orgData[0];
+
+//check manage access manage only for project creator, org referent and admin
+        if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
+            if(//if no referrent and no member && if no creator of the project
+                $orgData->getReferent()->getId() !== $this->getUser()->getId()
+                && $actData->getCreator()->getId() !== $this->getUser()->getId()
+
+            ){
+                return $this->responseHandler->unauthorizedResponse("unauthorized");
+            }
+        }
+
+//if activity have the organization, remove it else add
+        if($actData->getOrganization() !== null && $actData->getOrganization()->getId() === $orgData->getId()){
+            $actData->setOrganization(null);
+        }
+        else { //add
+            $actData->setOrganization($orgData);
+        }
+
+        $this->entityManager->flush();
+
+        return $this->responseHandler->successResponse(["success"]);
+    }
+
+    /**
+     * @param Request $request
+     * @return Response
+     * @Route("/manageProject", name="_manage_Project", methods="put")
+     */
+    public function manageProject(Request $request){
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
+
+        // recover all data's request
+        $this->parameters->setData($request);
+
+        //check if required params exist
+        try{ $this->parameters->hasData(["projectId", "orgId"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+
+        try {
+            //get Project
+            $repository = $this->entityManager->getRepository(Project::class);
+            $projData = $repository->findBy(["id" => $this->parameters->getData("projectId")]);
+            if (count($projData) === 0) {
+                $this->logger->logInfo(" Project with id : " . $this->parameters->getData("projectId") . " not found ");
+                return $this->responseHandler->notFoundResponse();
+            }
+            $projData = $projData[0];
+
+
+//get organization
+            $repository = $this->entityManager->getRepository(Organization::class);
+            $orgData = $repository->findBy(["id" => $this->parameters->getData("orgId")]);
+            if (count($orgData) === 0) {
+                $this->logger->logInfo(" Organization with id : " . $this->parameters->getData("orgId") . " not found ");
+                return $this->responseHandler->notFoundResponse();
+            }
+            $orgData = $orgData[0];
+
+//check manage access manage only for project creator, org referent and admin
+            if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
+                if(//if no referrent and no member && if no creator of the project
+                    $orgData->getreferent()->getId() !== $this->getUser()->getId()
+                    && $projData->getCreator()->getId() !== $this->getUser()->getId()
+
+                ){
+                    return $this->responseHandler->unauthorizedResponse("unauthorized");
+                }
+            }
+
+//if activity have the organization, remove it
+            if ($projData->getOrganization() !== null && $projData->getOrganization()->getId() === $orgData->getId()) {
+                $projData->setOrganization(null);
+            } else { //add
+                $projData->setOrganization($orgData);
+            }
+
+            $this->entityManager->flush();
+
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured ");
+        }
+
+        return $this->responseHandler->successResponse(["success"]);
+    }
+
+    //todo for what??
+    /**
+     * @param Request $request
+     * @return Response
+     * @Route("/membered", name="_membered", methods="get")
+     */
+    public function getOrgByUser (Request $request){
+        try{
+            $repository = $this->entityManager->getRepository(User::class);
+            $userData = $repository->findBy(["id" => $this->getUser()->getId()])[0];
+        }catch(Exception $e){
+             $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured ");
+        }
+
+        $orgsData = $userData->getMemberOf()->toArray();
+
+        return $this->responseHandler->successResponse($orgsData);
     }
 }

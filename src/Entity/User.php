@@ -147,6 +147,31 @@ class User implements UserInterface
      */
     private $pictureFile;
 
+    /**
+     * @ORM\OneToOne(targetEntity=Address::class, inversedBy="owner", cascade={"persist", "remove"})
+     */
+    private $address;
+
+    /**
+     * @ORM\ManyToMany(targetEntity=Activity::class, mappedBy="followers")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\Activity")
+     *     }
+     * )
+     */
+    private $followingActivities;
+
+    /**
+     * @ORM\OneToMany(targetEntity=FollowingProject::class, mappedBy="follower")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\FollowingProject")
+     *     }
+     * )
+     */
+    private $followingProjects;
+
     public function __construct()
     {
         $this->globalPropertyAttributes = new ArrayCollection();
@@ -154,6 +179,8 @@ class User implements UserInterface
         $this->projects = new ArrayCollection();
         $this->memberOf = new ArrayCollection();
         $this->activities = new ArrayCollection();
+        $this->followingActivities = new ArrayCollection();
+        $this->followingProjects = new ArrayCollection();
     }
 
     /**
@@ -169,6 +196,7 @@ class User implements UserInterface
             "firstname" => $this->firstname,
             "lastname" => $this->lastname,
             "email" => $this->email,
+            "roles" => $this->roles[0]
         ];
 
         //Check some attributes to see if they are sets
@@ -183,6 +211,19 @@ class User implements UserInterface
         if($this->pictureFile){
             $data["picture"] = $this->pictureFile;
         }
+
+        if($this->address){
+            $data["address"] = $this->address->serialize();
+        }
+
+        //todo maybe add context read_activity
+       /* if(!$this->followingActivities->isEmpty() && $context !== "read_activity"){
+            //$data["followingActivities"] = $this->followingActivities->toArray();
+            $data["followingActivities"] = [];
+            foreach($this->followingActivities as $activity){
+                array_push($data["followingActivities"], $activity->getId());
+            }
+        }*/
 
         //todo deprecated
         //Check some attributes with contexts to see if they are sets
@@ -356,6 +397,26 @@ class User implements UserInterface
         return $this;
     }
 
+    public function getOrgById($orgId){
+        $res = false;
+        foreach($this->organizations as $org){
+            if($org->getId() === $orgId){
+                $res = $org;
+            }
+        }
+        return $res;
+    }
+
+    public function getMemberOfById($orgId){
+        $res = false;
+        foreach($this->memberOf as $org){
+            if($org->getId() === $orgId){
+                $res = $org;
+            }
+        }
+        return $res;
+    }
+
     public function removeOrganization(Organization $organization): self
     {
         if ($this->organizations->removeElement($organization)) {
@@ -384,6 +445,16 @@ class User implements UserInterface
         }
 
         return $this;
+    }
+
+    public function getProjectById($projectId){
+        $res = null;
+        foreach($this->projects as $project){
+            if($project->getId() === $projectId){
+                $res = $project;
+            }
+        }
+        return $res;
     }
 
     public function removeProject(Project $project): self
@@ -430,6 +501,17 @@ class User implements UserInterface
         return $this->activities;
     }
 
+    public function getActivity($activityId){
+        $res = null;
+        //look into created project
+        foreach($this->activities as $activity) {
+            if ($activity->getId() === (int)$activityId) {
+                $res = $activity;
+            }
+        }
+        return $res;
+    }
+
     public function addActivity(Activity $activity): self
     {
         if (!$this->activities->contains($activity)) {
@@ -452,6 +534,9 @@ class User implements UserInterface
         return $this;
     }
 
+    /**
+     * @return string|null
+     */
     public function getPicturePath(): ?string
     {
         return $this->picturePath;
@@ -480,4 +565,110 @@ class User implements UserInterface
         $this->pictureFile = $pictureFile;
     }
 
+    public function getAddress(): ?Address
+    {
+        return $this->address;
+    }
+
+    public function setAddress(?Address $address): self
+    {
+        $this->address = $address;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection|Activity[]
+     */
+    public function getFollowingActivities(): Collection
+    {
+        return $this->followingActivities;
+    }
+
+    public function addFollowingActivity(Activity $followingActivity): self
+    {
+        if (!$this->followingActivities->contains($followingActivity)) {
+            $this->followingActivities[] = $followingActivity;
+            $followingActivity->addFollower($this);
+        }
+
+        return $this;
+    }
+
+    public function removeFollowingActivity(Activity $followingActivity): self
+    {
+        if ($this->followingActivities->removeElement($followingActivity)) {
+            $followingActivity->removeFollower($this);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection|FollowingProject[]
+     */
+    public function getFollowingProjects(): Collection
+    {
+        return $this->followingProjects;
+    }
+
+    public function addFollowingProject(FollowingProject $followingProject): self
+    {
+        if (!$this->followingProjects->contains($followingProject)) {
+            $this->followingProjects[] = $followingProject;
+            $followingProject->setFollower($this);
+        }
+
+        return $this;
+    }
+
+    public function removeFollowingProject(FollowingProject $followingProject): self
+    {
+        if ($this->followingProjects->removeElement($followingProject)) {
+            // set the owning side to null (unless already changed)
+            if ($followingProject->getFollower() === $this) {
+                $followingProject->setFollower(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getAssignedProjects(){
+        $res = [];
+        foreach($this->followingProjects as $following){
+            if($following->getIsAssigning() === true ){
+                $res[] = $following->getProject();
+            }
+        }
+        return $res;
+    }
+
+    public function getFollowedProjects(){
+        $res = [];
+        foreach($this->followingProjects as $following){
+            if($following->getIsFollowing() === true ){
+                $res[] = $following->getProject();
+            }
+        }
+        return $res;
+    }
+
+    public function getAssignedProjectById($projectId){
+        $res = null;
+        //look into created project
+        foreach($this->projects as $project){
+            if($project->getId() === $projectId ){
+                $res = $project;
+            }
+        }// look into assigned project
+        if($res === null) {
+            foreach($this->getAssignedProjects() as $project){
+                if($project->getId() === $projectId ){
+                    $res = $project;
+                }
+            }
+        }
+        return $res;
+    }
 }

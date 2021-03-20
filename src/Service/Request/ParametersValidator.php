@@ -4,94 +4,82 @@
 namespace App\Service\Request;
 
 
-use App\Entity\Organization;
-use App\Entity\Project;
-use App\Entity\User;
-use Doctrine\ORM\EntityManagerInterface;
-use Exception;
-use Symfony\Component\HttpFoundation\Response;
-use Psr\Log\LoggerInterface;
-use Symfony\Component\Validator\ConstraintViolation;
+use App\Exceptions\ViolationException;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class ParametersValidator
 {
-    public ValidatorInterface $validator;
+    private ValidatorInterface $validator;
 
-    private EntityManagerInterface $entityManager;
+    private RequestParameters $paramRequest;
 
-    /**
-     * @var array|null
-     */
     private ?array $requiredFields = [];
 
     private ?array $optionalFields = [];
 
-    private array $paramRequest = [];
-
     private String $className;
 
-    private LoggerInterface $logger;
+    private array $violations = [];
+
+
 
     /**
      * ParametersValidator constructor.
      * @param ValidatorInterface $validator
-     * @param EntityManagerInterface $entityManager
-     * @param LoggerInterface $logger
+     * @param RequestParameters $requestParameters
      */
-    public function __construct(ValidatorInterface $validator, EntityManagerInterface $entityManager, LoggerInterface $logger){
+    public function __construct(ValidatorInterface $validator, RequestParameters $requestParameters){
         $this->validator = $validator;
-        $this->entityManager = $entityManager;
-        $this->logger = $logger;
+        $this->paramRequest = $requestParameters;
     }
 
     /**
      * @param array|null $requiredFields
      * @param array|null $optionalFields
      * @param $className
-     * @param $paramRequest
      */
-    public function initValidator(?array $requiredFields, ?array $optionalFields, $className, $paramRequest) :void{
+    public function initValidator(?array $requiredFields, ?array $optionalFields, $className ) :void{
         $this->requiredFields = $requiredFields;
         $this->optionalFields = $optionalFields;
         $this->className = $className;
-        $this->paramRequest = $paramRequest;
-    }
-
-    public function validObject($object, $fields){
-        $violationsList = [];
-        foreach ($fields as $field){
-            $getter = "get".ucfirst($field);
-            $violations = $this->validator->validatePropertyValue($object, $field, $object->$getter());
-            if(count($violations)> 0 ){
-                $violationsList[] = $violations;
-            }
-        }
-        return $violationsList;
     }
 
     /**
-     * @return array
-     * @throws Exception
+     * @param $object
+     * @param $fields
+     * @throws ViolationException
      */
-    public function getViolations($object = null) :array{
+//    public function validObject($object, $fields){
+//        foreach ($fields as $field){
+//            $getter = "get".ucfirst($field);
+//            $violations = $this->validator->validatePropertyValue($object, $field, $object->$getter());
+//            if(count($violations)> 0 ){
+//                $this->violations = array_merge($this->violations,  $violations);
+//            }
+//        }
+//        if(count($this->violations)){
+//            throw new ViolationException($this->violations);
+//        }
+//    }
+
+    /**
+     * @param null $object
+     * @return void
+     */
+    public function getViolations($object = null) :void {
         if($object === null){
             $object = new $this->className();
         }
 
-        $violations = [];
-        try {
-            if($this->requiredFields != null && count($this->requiredFields) > 0){
-                $violations = $this->fieldsValidation($object, $this->requiredFields, true, $this->paramRequest);
-            }
-            if($this->optionalFields != null && count($this->optionalFields) > 0){
-                $violations = array_merge($violations, $this->fieldsValidation($object, $this->optionalFields, false, $this->paramRequest));
-            }
-        } catch (Exception $e) {
-            //todo error cannot create metadata?
-            throw new Exception($e->getMessage(), $e->getCode());
+        //check required fields
+        if($this->requiredFields != null && count($this->requiredFields) > 0){
+            $this->fieldsValidation($object, $this->requiredFields, true, $this->paramRequest->getAllData());
         }
-        return $violations;
+
+        //check optional fields
+        if($this->optionalFields != null && count($this->optionalFields) > 0){
+            $this->fieldsValidation($object, $this->optionalFields, false, $this->paramRequest->getAllData());
+        }
     }
 
     /**
@@ -99,30 +87,46 @@ class ParametersValidator
      * @param array $fields
      * @param bool $required
      * @param array $data
-     * @return array
-     * @throws Exception
+     * @return void
      */
-    public function fieldsValidation($object, array $fields, bool $required, array $data) : array{
-        $violationsList = [];
+    public function fieldsValidation($object, array $fields, bool $required, array $data) : void {
         foreach($fields as $field){
             $violations = [];
+
+            //need to throw violation if a required param is missing
             if(!isset($data[$field]) && $required){
                 $data[$field] = "";
             }
+
             if(isset($data[$field])){
                 $violations = $this->validator->validatePropertyValue($object, $field, $data[$field]);
             }
 
             if(count($violations) > 0 ){
                 foreach($violations as $violation){
-                    $this->logger->info($violation);
-                    $violationsList = array_merge(
-                        $violationsList,
+                    $this->violations = array_merge(
+                        $this->violations,
                         [$violation->getPropertyPath() => $violation->getMessage()]
                     );
                 }
             }
         }
-        return $violationsList;
+    }
+
+    /**
+     * @param $requiredFields
+     * @param $optionalFields
+     * @param $className
+     * @throws ViolationException
+     */
+    public function isInvalid($requiredFields, $optionalFields, $className)
+    {
+        $this->initValidator($requiredFields, $optionalFields, $className);
+
+        $this->getViolations();
+
+        if(count($this->violations) > 0 ){
+            throw new ViolationException($this->violations);
+        }
     }
 }

@@ -8,6 +8,7 @@ use App\Entity\GlobalPropertyAttribute;
 use App\Entity\User;
 use Doctrine\Persistence\ManagerRegistry;
 use Doctrine\Persistence\ObjectRepository;
+use Exception;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
@@ -31,12 +32,6 @@ class ConfigurationHandler
     private $GPARespository;
 
     /**
-     * Repository to access Users
-     * @var ObjectRepository
-     */
-    private $UserRepository;
-
-    /**
      * ConfigurationHandler constructor.
      * @param ManagerRegistry $entityManager
      */
@@ -44,7 +39,6 @@ class ConfigurationHandler
     {
         $this->entityManager = $entityManager;
         $this->GPARespository = $this->entityManager->getRepository(GlobalPropertyAttribute::class);
-        $this->UserRepository = $this->entityManager->getRepository(User::class);
     }
 
     /**
@@ -88,9 +82,9 @@ class ConfigurationHandler
      * Get a specific key value for a given user. If user is null, the method will return the GLOBAL value.
      * @param string $propertyKey
      * @param UserInterface|null $user
-     * @return string|null
+     * @return array|null
      */
-    public function getValue(string $propertyKey, UserInterface $user = null) : ?string
+    public function getValue(string $propertyKey, UserInterface $user = null) : ?array
     {
         if ($user == null) {
             $config = $this->GPARespository->findBy(["scope"=>'GLOBAL']);
@@ -104,9 +98,5 @@ class ConfigurationHandler
             $config = $this->getConfig($user);
         }
         return $config[$propertyKey]->getPropertyValue();
-    }
-
-    public function getConfigTab(string $propertyKey) {
-        return $this->GPARespository->findBy(["propertyKey" => $propertyKey]);
     }
 }

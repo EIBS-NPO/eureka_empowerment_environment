@@ -18,7 +18,6 @@ class SecurityController extends AbstractController
      */
     public function login(): Response
     {
-        //todo return?
         return new Response("true");
     }
 

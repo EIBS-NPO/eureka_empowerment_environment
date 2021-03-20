@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\ActivityRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Doctrine\ORM\Mapping\InheritanceType;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -19,14 +21,13 @@ class Activity
      * @ORM\Column(type="integer")
      * @Assert\Type(type="numeric", message=" id is not valid")
      */
-    protected ?int $id;
+    protected  $id;
 
     /**
      * @ORM\Column(type="boolean")
-     * @Assert\NotBlank(message="isPublic is required")
      * @Assert\Type(type="bool", message=" isPublic not valid boolean")
      */
-    protected ?bool $isPublic;
+    protected  $isPublic = false;
 
     /**
      * @ORM\Column(type="string", length=50)
@@ -36,7 +37,7 @@ class Activity
      *     minMessage="the title must be at least 2 characters long",
      *     maxMessage="the title must not exceed 50 characters")
      */
-    protected ?string $title;
+    protected $title;
 
     //todo add timezone
     /**
@@ -45,7 +46,7 @@ class Activity
      * @Assert\Type(type={"DateTime", "Y-m-d"}, message= "the date must be in the format YYYY-mm-dd")
      * @Assert\GreaterThanOrEqual("today", message="post date must be today or greater date")
      */
-    protected ?\DateTimeInterface $postDate;
+    protected $postDate;
 
     /**
      * @ORM\Column(type="json")
@@ -75,12 +76,27 @@ class Activity
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
      */
-    private ?string $picturePath;
+    protected $picturePath;
 
     /**
      * base64_encode(picture)
      */
-    private $pictureFile;
+    protected $pictureFile;
+
+    /**
+     * @ORM\ManyToMany(targetEntity=User::class, inversedBy="followingActivities")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\User")
+     *     }
+     * )
+     */
+    private $followers;
+
+    public function __construct()
+    {
+        $this->followers = new ArrayCollection();
+    }
 
     public function serialize(String $context = null): array
     {
@@ -90,26 +106,56 @@ class Activity
             "summary" => $this->summary,
             "postDate" => $this->postDate->format('Y-m-d'),
             "isPublic" => $this->isPublic,
-            "creator" => $this->creator->serialize(),
+            "creator" => $this->creator->serialize("read_activity")
         ];
 
         //Check some attributes to see if they are sets
         if($this->pictureFile){
             $data["picture"] = $this->pictureFile;
         }
-        if($this->project){
-            $data["project"] = $this->project->getId();
+
+        if($this->project && $context === "read_activity"){
+            $data["project"] = $this->project->serialize();
         }
-        if($this->organization){
-            $data["organization"] = $this->organization->getId();
+
+        if($this->organization && $context ==="read_activity"){
+            $data["organization"] = $this->organization->serialize();
+        }
+        //todo maybe add context read_user
+        if(!$this->followers->isEmpty() && $context === "read_activity"){
+            //$data["followers"] = $this->followers->toArray();
+            $data["followers"] = [];
+            foreach($this->followers as $follower){
+                array_push($data["followers"], $follower->serialize());
+            }
         }
 
         return $data;
     }
 
+    public function setFromActivityFile(ActivityFile $activityFile){
+        $this->isPublic = $activityFile->getIsPublic();
+        $this->title = $activityFile->getTitle();
+        $this->summary = $activityFile->getSummary();
+        $this->postDate = $activityFile->getPostDate();
+        $this->picturePath = $activityFile->getPicturePath();
+        $this->creator = $activityFile->getCreator();
+        $this->project = $activityFile->getProject();
+        $this->organization = $activityFile->getOrganization();
+    }
+
+
     public function getId(): ?int
     {
         return $this->id;
+    }
+
+    /**
+     * @param mixed $id
+     */
+    public function setId($id): void
+    {
+        $this->id = $id;
     }
 
     public function getIsPublic(): ?bool
@@ -228,4 +274,57 @@ class Activity
         $this->pictureFile = $pictureFile;
     }
 
+    /**
+     * @return Collection|User[]
+     */
+    public function getFollowers(): Collection
+    {
+        return $this->followers;
+    }
+
+    public function addFollower(User $follower): self
+    {
+        if (!$this->followers->contains($follower)) {
+            $this->followers[] = $follower;
+        }
+
+        return $this;
+    }
+
+    public function removeFollower(User $follower): self
+    {
+        $this->followers->removeElement($follower);
+
+        return $this;
+    }
+
+    //todo retourner si l'activité est suivie par l'utilisateur courant
+    public function isFollowByUserId(int $userId){
+        $res = false;
+        foreach($this->followers as $follower){
+            if($follower->getId() === $userId){
+                $res = true;
+            }
+        }
+        return $res;
+    }
+
+    /**
+     * @param $user
+     * @return bool
+     */
+    public function hasAccess($user){
+        $res = false;
+        if($this->creator->getId() === $user->getId()){
+            $res = true;
+        }
+        else if($this->project !== null && $this->project->isAssign($user)){
+            $res = true;
+        }
+        else if($this->organization !== null && $this->organization->isMember($user)){
+            $res = true;
+        }
+
+        return $res;
+    }
 }

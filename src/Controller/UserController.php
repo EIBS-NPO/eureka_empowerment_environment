@@ -3,7 +3,18 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Exceptions\SecurityException;
+use App\Exceptions\ViolationException;
 use App\Service\FileHandler;
+use App\Service\LogService;
+use App\Service\Request\ParametersValidator;
+use App\Service\Request\RequestParameters;
+use App\Service\Request\ResponseHandler;
+use App\Service\Security\RequestSecurity;
+use Doctrine\ORM\EntityManagerInterface;
+use Exception;
+use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -14,31 +25,74 @@ use Symfony\Component\Security\Core\Encoder\UserPasswordEncoderInterface;
  * @package App\Controller
  * @Route("/user", name="user")
  */
-class UserController extends CommonController
+class UserController extends AbstractController
 {
+    private RequestSecurity $security;
+    private RequestParameters $parameters;
+    private ResponseHandler $responseHandler;
+    private ParametersValidator $validator;
+    protected EntityManagerInterface $entityManager;
+    protected FileHandler $fileHandler;
+    private LogService $logger;
+
+    /**
+     * UserController constructor.
+     * @param RequestSecurity $requestSecurity
+     * @param RequestParameters $requestParameters
+     * @param ResponseHandler $responseHandler
+     * @param ParametersValidator $validator
+     * @param EntityManagerInterface $entityManager
+     * @param FileHandler $fileHandler
+     * @param LogService $logger
+     */
+    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
+    {
+        $this->security = $requestSecurity;
+        $this->parameters = $requestParameters;
+        $this->responseHandler = $responseHandler;
+        $this->validator = $validator;
+        $this->entityManager = $entityManager;
+        $this->fileHandler = $fileHandler;
+        $this->logger = $logger;
+    }
+
+
     /**
      * @Route("/register", name="_registration", methods="post")
-     * @param Request $insecureRequest
+     * @param Request $request
      * @param UserPasswordEncoderInterface $encoder
      * @return Response
      */
-    public function register(Request $insecureRequest, UserPasswordEncoderInterface $encoder): Response
+    public function register(Request $request, UserPasswordEncoderInterface $encoder): Response
     {
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
        // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        //dataRequest Validations
-        if($this->isInvalid(
-            ["email", "firstname", "lastname", "password"],
-            ["phone", "mobile", "picturePath"],
-            User::class)
-        ) return $this->response;
+        $this->parameters->setData($request);
+
+        //check params Validations
+        try{ $this->validator->isInvalid(
+                ["email", "firstname", "lastname", "password"],
+                ["phone", "mobile"],
+                User::class);
+        } catch(ViolationException $e){
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
 
         //create user object && set validated fields
-        $user = $this->setEntity(new User(),["email", "firstname", "lastname", "password", "phone", "mobile", "picturePath"]);
+        $user = new User();
+        foreach( ["email", "firstname", "lastname", "password", "phone", "mobile"]
+            as $field ) {
+                if($this->parameters->getData($field) !== false ) {
+                    $setter = 'set'.ucfirst($field);
+                    $user->$setter($this->parameters->getData($field));
+            }
+        }
 
         //hash password
         $hash = $encoder->encodePassword($user, $user->getPassword());
@@ -47,180 +101,491 @@ class UserController extends CommonController
         $user->setRoles(["ROLE_USER"]);
 
         //persist the new user
-        if($this->persistEntity($user)) return $this->response;
-
-        //final response
-        return $this->successResponse();
-    }
-
-    /**
-     * @Route("", name="_get", methods="get")
-     * @param Request $insecureRequest
-     * @return Response
-     */
-    public function getUserProfile(Request $insecureRequest): Response
-    {
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
-
-        // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest = array_merge($this->dataRequest, ["id" => $this->getUser()->getId()]);
-
-        //get request
-        if($this->getEntities(User::class, ["id"])) return $this->response;
-
-        //download picture
-        $this->dataResponse = [$this->loadPicture($this->dataResponse[0])];
-
-        //final response
-        return $this->successResponse();
-    }
-
-    /**
-     * @Route("", name="_update", methods="put")
-     * @param Request $insecureRequest
-     * @return Response
-     */
-    public function updateUser(Request $insecureRequest) : Response
-    {
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
-
-        // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest = array_merge($this->dataRequest, ["id" => $this->getUser()->getId()]);
-
-        //get query
-        if($this->getEntities(User::class, ["id"] )) return $this->response;
-        if(!empty($this->dataResponse)) {
-            if($this->isInvalid(
-                null,
-                ["firstname", "lastname", "phone", "mobile"],
-                User::class)
-            ) return $this->response;
-
-            //set user's validated fields
-            $user = $this->setEntity($this->dataResponse[0], ["firstname", "lastname", "phone", "mobile"]);
-
-            //return potential violations
-            if(isset($this->response)) return $this->response;
-
-            //persist updated user
-            if ($this->updateEntity($user)) return $this->response;
+        try{
+            $this->entityManager->persist($user);
+            $this->entityManager->flush();
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error");
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
 
         //final response
-        return $this->successResponse();
+        return $this->responseHandler->successResponse([$user]);
     }
 
-    //todo if user have already apicture, delete the old pic
+    /**
+     * return user's data
+     * need param "all" for all user's data
+     * or "id" for a usr by id
+     * if no parameter is given, the current user is return
+     * @Route("", name="_get", methods="get")
+     * @param Request $request
+     * @return Response
+     */
+    public function getUsers(Request $request): Response
+    {
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
+
+        // recover all data's request
+        $this->parameters->setData($request);
+
+        $repository = $this->entityManager->getRepository(User::class);
+
+        $criterias = [];
+        if(!$this->parameters->getData("all")){
+            if (!$this->parameters->getData("id")){
+                //default query for current user
+                $criterias["id"] = $this->getUser()->getId();
+            }else {
+                $criterias["id"] =  $this->parameters->getData("id");
+            }
+
+        }
+        try{
+            if(isset($criterias['id'])){
+                $dataResponse = $repository->findBy($criterias);
+            }else {
+                $dataResponse = $repository->findAll();
+            }
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
+
+        //download picture
+        foreach($dataResponse as $key => $user){
+            try{
+                $dataResponse[$key] = $this->fileHandler->loadPicture($user);
+            }catch(Exception $e){
+                $this->logger->logError($e, $this->getUser(), "error");
+                return $this->responseHandler->serverErrorResponse($e, "An error occured");
+            }
+        }
+
+        //final response
+        return $this->responseHandler->successResponse($dataResponse);
+    }
 
     /**
-     * @param Request $insecureRequest
+     * if id param, the current user must be admin
+     * else no required params, id set by current User
+     * optionnal param are ("firstname", "lastname", "phone", "mobile")
+     * @Route("", name="_update", methods="put")
+     * @param Request $request
+     * @return Response
+     */
+    public function updateUser(Request $request) : Response
+    {
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
+
+        // recover all data's request
+        $this->parameters->setData($request);
+
+        //check access
+        if($this->parameters->getData('id') !== false) {
+            if ($this->getUser()->getRoles()[0] !== "ROLE_ADMIN") {
+                return $this->responseHandler->unauthorizedResponse("unauthorized access");
+            }else {
+                $criterias["id"] = $this->parameters->getData("id");
+            }
+        }else {
+            $criterias["id"] = $this->getUser()->getId();
+        }
+
+        //check params Validations
+        try{
+            $this->validator->isInvalid(
+            [],
+            ["firstname", "lastname", "phone", "mobile"],
+            User::class);
+        } catch(ViolationException $e){
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+
+        $repository = $this->entityManager->getRepository(User::class);
+        try{
+            $userData = $repository->findBy($criterias);
+            if(!empty($userData)) {
+                $user = $userData[0];
+                foreach( ["firstname", "lastname", "phone", "mobile"]
+                         as $field ) {
+                    if($this->parameters->getData($field) !== false ) {
+                        $setter = 'set'.ucfirst($field);
+                        $user->$setter($this->parameters->getData($field));
+                    }
+                }
+
+                $this->entityManager->flush();
+                $user = $this->fileHandler->loadPicture($user);
+                $userData = [$user];
+            }
+
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
+
+        //final response
+        return $this->responseHandler->successResponse($userData);
+    }
+
+    /**
+     * @param Request $request
      * @return Response
      * @Route("/picture", name="_picture_put", methods="post")
      */
-    public function putPicture(Request $insecureRequest ) :Response {
-
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+    public function uploadPicture(Request $request ) :Response {
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest = array_merge($this->dataRequest, ["id" => $this->getUser()->getId()]);
+        $this->parameters->setData($request);
 
-        //todo controle with assert for image and configLimite (dans pictureHandler,( ou fileHandler)
-        /*if(!isset($this->dataRequest["picture"])) {
+        //check access
+        if($this->parameters->getData('id') !== false) {
+            if ($this->getUser()->getRoles()[0] !== "ROLE_ADMIN") {
+                return $this->responseHandler->unauthorizedResponse("unauthorized access");
+            }else {
+                $criterias["id"] = $this->parameters->getData("id");
+            }
+        }else {
+            $criterias["id"] = $this->getUser()->getId();
+        }
 
-        }*/
+        //check if required params exist
+        try{ $this->parameters->hasData(["image"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
 
-        //get query
-        if($this->getEntities(User::class, ["id"] )) return $this->response;
-        $user = $this->dataResponse[0];
+        $repository = $this->entityManager->getRepository(User::class);
+        try{
+            $userData = $repository->findBy($criterias);
+            if(!empty($userData)) {
+                $user = $userData[0];
 
-        //todo gestion des files dans la requête
-        // todo content-type getResponse()->setContentType('image/jpeg')
-        //if($this->uploadPicture($user, $insecureRequest->files->get('image'))) return $this->response;
-        if($this->uploadPicture($user, $this->dataRequest['image'])) return $this->response;
-        //$this->dataRequest["picturePath"] = $picUploader->upload($user, $insecureRequest->files->get('image'));
+                $oldPic = $user->getPicturePath() ? $user->getPicturePath() : null;
 
-        if($this->isInvalid(
-            null,
-            ["picturePath"],
-            User::class)
-        ) return $this->response;
+                $fileDir = '/pictures/User';
+                $picFile = $this->parameters->getData("image");
 
-        //set project's validated fields
-        $user = $this->setEntity($user, ["picturePath"]);
+                //make unique picturePath
+                $user->setPicturePath(uniqid().'_'. $this->fileHandler->getOriginalFilename($picFile).'.'. $picFile->guessExtension());
 
-        //persist updated project
-        if($this->updateEntity($user)) return $this->response;
+                //upload
+                $this->fileHandler->upload($fileDir, $user->getPicturePath(), $picFile);
 
-        //download picture
-        $this->dataResponse = [$this->loadPicture($user)];
+                $this->entityManager->flush();
+                $user = $this->fileHandler->loadPicture($user);
+                $userData = [$user];
+
+                //if a picture already exist, need to remove it
+                if($oldPic !== null){
+                    $this->logger->logInfo(" User with id " . $user->getId() . " remove old Picture " );
+                    $this->fileHandler->removeFile($fileDir.'/'.$oldPic);
+                }
+
+            }else {
+                $this->logger->logInfo(" User with id : ". $criterias["id"] ." not found " );
+                return $this->responseHandler->notFoundResponse();
+            }
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured ");
+        }
+
+        $this->logger->logInfo(" User with id " . $user->getId() . " uploaded Picture " );
 
         //final response
-        return $this->successResponse();
+        return $this->responseHandler->successResponse($userData);
     }
 
     /**
-     * @deprecated
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response
-     * @Route("/picture", name="_picture_get", methods="get")
+     * @("/deletePicture", name="_picture_delete", methods="delete")
      */
-    /*public function getPicProfil(Request $insecureRequest) :Response
-    {
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+    public function deletePicture(Request$request){
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        $this->dataRequest = array_merge($this->dataRequest, ["id" => $this->getUser()->getId()]);
+        $this->parameters->setData($request);
 
-        $destination =  $this->getParameter('kernel.project_dir').'/src/uploads/pictures/';
-        $path = $destination . $this->dataRequest["pic"];
-     //   $path2 = $destination .'/'. $this->dataRequest["pic"] .".png";
-
-        if (file_exists($path)){
-
-            $img = file_get_contents($path);
-            $img = base64_encode($img);
-
-            $this->dataResponse = [$img];
-        }else{
-            return $this->notFoundResponse();
+        //check access
+        if($this->parameters->getData('id') !== false) {
+            if ($this->getUser()->getRoles()[0] !== "ROLE_ADMIN") {
+                return $this->responseHandler->unauthorizedResponse("unauthorized access");
+            }else {
+                $criterias["id"] = $this->parameters->getData("id");
+            }
+        }else {
+            $criterias["id"] = $this->getUser()->getId();
         }
-        return $this->successResponse();
-    }*/
 
-    //todo particular methods for email and password => need refresh token
-    public function resetPassword(){}
-    public function changeEmail(){}
+        $repository = $this->entityManager->getRepository(User::class);
+        try{
+            $userData = $repository->findBy($criterias);
+            if(!empty($userData)) {
+                $user = $userData[0];
+
+                if($user->getPicturePath() !== null){
+                    $this->fileHandler->removeFile('/pictures/User/' .$user->getPicturePath());
+                    $user->setPicturePath(null);
+
+                    $this->entityManager->flush();
+                    $userData = [$user];
+                }
+
+            }else {
+                $this->logger->logInfo(" User with id : ". $criterias["id"] ." not found " );
+                return $this->responseHandler->notFoundResponse();
+            }
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured ");
+        }
+
+        $this->logger->logInfo(" User with id " . $user->getId() . " remove old Picture " );
+
+        //final response
+        return $this->responseHandler->successResponse($userData);
+    }
 
 
 
+    /**
+     * @param Request $request
+     * @param UserPasswordEncoderInterface $encoder
+     * @param JWTTokenManagerInterface $JWTManager
+     * @return Response
+     * @Route("/password", name="_password", methods="post")
+     */
+    public function resetPassword(Request $request, UserPasswordEncoderInterface $encoder, JWTTokenManagerInterface $JWTManager)
+    {
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
+
+        // recover all data's request
+        $this->parameters->setData($request);
+
+        //check access and set $criterias
+        if($this->parameters->getData('id') !== false) {
+            if ($this->getUser()->getRoles()[0] !== "ROLE_ADMIN") {
+                return $this->responseHandler->unauthorizedResponse("unauthorized access");
+            }else {
+                $criterias["id"] = $this->parameters->getData("id");
+            }
+        }else {
+            $criterias["id"] = $this->getUser()->getId();
+        }
+
+        //check if required params exist
+        try{ $this->parameters->hasData(["password", "newPassword", "confirmNewPassword"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
+
+        //check match newPassword and confirmPassword
+        if($this->parameters->getData('newPassword') !== $this->parameters->getData('confirmNewPassword')) {
+            return $this->responseHandler->BadRequestResponse(["newPassword"=>"not match", "confirmNewPassword"=>"not match"]);
+        }
+
+        $repository = $this->entityManager->getRepository(User::class);
+        try{
+            $userData = $repository->findBy($criterias);
+            if(!empty($userData)) {
+                $user = $userData[0];
+
+                if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
+                    //check valid original password, only if current user isn't admin
+                    $hash = $encoder->encodePassword($this->getUser(), $this->parameters->getData('password'));
+                    if(!$user->getPassword() !== $hash) {
+                        return $this->responseHandler->BadRequestResponse(["password"=> "not match"]);
+                    }
+                }
+
+                //check params Validations
+                $this->parameters->putData("password", $this->parameters->getData("newPassword"));
+                try{
+                    $this->validator->isInvalid(
+                        [],
+                        ["password"],
+                        User::class);
+                } catch(ViolationException $e){
+                    $this->logger->logError($e, $this->getUser(), "error");
+                    return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+                }
+
+                $hash = $encoder->encodePassword($this->getUser(), $this->parameters->getData('password'));
+                $user->setPassword($hash);
+
+                //persist the user with new password
+                $this->entityManager->flush();
+                $user = $this->fileHandler->loadPicture($user);
+
+                //if password was change for currentUser, need refresh Token
+                if($criterias["id"] === $this->getUser()->getId()){
+                    $dataResponse = [
+                        $user,
+                        'token' => $JWTManager->create($user),
+                    ];
+                }else {
+                    $dataResponse = [$user];
+                }
+
+            }else {
+                $this->logger->logInfo("user with id : ". $criterias["id"] ." not found" );
+                return $this->responseHandler->notFoundResponse();
+            }
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
+
+        //final response
+        return $this->responseHandler->successResponse($dataResponse);
+    }
 
 
+    /**
+     * @Route("/email", name="_reset_email", methods="post")
+     * @param Request $request
+     * @param JWTTokenManagerInterface $JWTManager
+     * @return Response
+     */
+    public function changeEmail(Request  $request, JWTTokenManagerInterface $JWTManager){
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
+        // recover all data's request
+        $this->parameters->setData($request);
 
+        //check access
+        if($this->parameters->getData('id') !== false) {
+            if ($this->getUser()->getRoles()[0] !== "ROLE_ADMIN") {
+                return $this->responseHandler->unauthorizedResponse("unauthorized access");
+            }else {
+                $criterias["id"] = $this->parameters->getData("id");
+            }
+        }else {
+            $criterias["id"] = $this->getUser()->getId();
+        }
 
+        //check email validity
+        try{
+            $this->validator->isInvalid(
+                ["email"],
+                [],
+                User::class);
+        } catch(ViolationException $e){
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
 
+        $repository = $this->entityManager->getRepository(User::class);
+        try {
+            $userData = $repository->findBy($criterias);
+            if (!empty($userData)) {
+                $user = $userData[0];
+                $user->setEmail($this->parameters->getData('email'));
 
+                $this->entityManager->flush();
+                $user = $this->fileHandler->loadPicture($user);
 
+                //if email was change for currentUser, need refresh Token
+                if($criterias["id"] === $this->getUser()->getId()){
+                    $dataResponse = [
+                        $user,
+                        'token' => $JWTManager->create($user),
+                    ];
+                }else {
+                    $dataResponse = [$user];
+                }
 
+            }else {
+                $this->logger->logInfo("user with id : ". $criterias["id"] ." not found" );
+                return $this->responseHandler->notFoundResponse();
+            }
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
 
+        return $this->responseHandler->successResponse($dataResponse);
+    }
 
+    /**
+     * @param Request $request
+     * @return Response
+     * @Route("/activ", name="_activation", methods="put")
+     */
+    public function activation(Request $request){
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
 
+        try{$request = $this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
+        // recover all data's request
+        $this->parameters->setData($request);
 
+        //check if required params exist
+        try{ $this->parameters->hasData(["id"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+        }
 
+        $repository = $this->entityManager->getRepository(User::class);
+        try{
+            $userData = $repository->findBy(["id" => $this->parameters->getData("id") ]);
+            if(!empty($userData)) {
+                $user = $userData[0];
+                if($user->getRoles()[0] === "ROLE_USER"){
+                    $user->setRoles([""]);
+                }
+                else {$user->setRoles(["ROLE_USER"]);}
 
+                //persist updated user
+                $this->entityManager->flush();
 
+            }else {
+                $this->logger->logInfo("user with id : ". $this->parameters->getData("id") ." not found" );
+                return $this->responseHandler->notFoundResponse();
+            }
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
+
+        $dataResponse = [$user->getRoles()[0]];
+        return $this->responseHandler->successResponse($dataResponse);
+    }
 
 }

@@ -22,9 +22,9 @@ class RequestSecurity
     /**
      * @var ConfigurationHandler ConfigurationHandler object to manipulate the configuration and retrieve configuration keys easily.
      */
-    private $configHandler;
+    private ConfigurationHandler $configHandler;
 
-    private $forbiddenStrings;
+    private ?array $forbiddenStrings;
 
     /**
      * RequestSecurity constructor.
@@ -35,10 +35,10 @@ class RequestSecurity
     {
         $this->config = $configurationHandler->getConfig($user);
         $this->configHandler = $configurationHandler;
-        $this->forbiddenStrings = explode(',', $this->configHandler->getValue("security.fields.forbiddenstrings"));
+        $this->forbiddenStrings = $this->configHandler->getValue("security.fields.forbiddenstrings");
 
         //Trim each forbidden string from spaces
-        foreach ($this->forbiddenStrings as $key=>$value)
+        foreach ($this->configHandler as $key=>$value)
         {
             $this->forbiddenStrings[$key] = trim($value);
         }
@@ -60,7 +60,8 @@ class RequestSecurity
         {
             foreach ($this->forbiddenStrings as $forbiddenString) {
                 if (!(strpos($value, $forbiddenString) === false)) {
-                    throw new SecurityException('Forbidden strings has been found in URL parameters, the string was : '.htmlentities($value));
+                    $currentRoute = $request->attributes->get('_route');
+                    throw new SecurityException('Forbidden strings has been found in route : ' . $currentRoute . ', the string was : '.htmlentities($value));
                 }
             }
 

@@ -25,9 +25,9 @@ class GlobalPropertyAttribute
     private $propertyKey;
 
     /**
-     * @ORM\Column(type="string", length=50)
+     * @ORM\Column(type="json")
      */
-    private $propertyValue;
+    private $propertyValue = [];
 
     /**
      * @ORM\Column(type="string", length=10)
@@ -61,16 +61,33 @@ class GlobalPropertyAttribute
         return $this;
     }
 
-    public function getPropertyValue(): ?string
+    /**
+     * @return array
+     */
+    public function getPropertyValue(): array
     {
         return $this->propertyValue;
     }
 
-    public function setPropertyValue(string $propertyValue): self
+    /**
+     * @param array $propertyValue
+     */
+    public function setPropertyValue(array $propertyValue): void
     {
         $this->propertyValue = $propertyValue;
+    }
 
-        return $this;
+    public function setValue(string $value){
+        $this->propertyValue[] = $value;
+    }
+
+    public function rmvValue(string $value){
+        unset($this->propertyValue[array_search($value, $this->propertyValue)]);
+        sort($this->propertyValue);
+    }
+
+    public function hasValue(string $value) :bool {
+        return array_search($value, $this->propertyValue) !== false;
     }
 
     public function getScope(): ?string

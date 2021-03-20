@@ -4,6 +4,7 @@ namespace App\Entity;
 
 use App\Repository\ProjectRepository;
 use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -59,12 +60,6 @@ class Project
     private ?Organization $organization = null;
 
     /**
-     * @ORM\Column(type="boolean")
-     * @Assert\Type(type="bool", message=" isPublic not valid boolean")
-     */
-    private ?bool $isPublic;
-
-    /**
      * @ORM\OneToMany(targetEntity=Activity::class, mappedBy="project")
      * @Assert\Collection(
      *     fields={
@@ -89,9 +84,19 @@ class Project
      */
     private $description = [];
 
+    /**
+     * @ORM\OneToMany(targetEntity=FollowingProject::class, mappedBy="project")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\FollowingProject")
+     *     }
+     * )
+     */
+    private $followings;
+
     public function __construct()
     {
-        $this->activities = new ArrayCollection();
+        $this->followings = new ArrayCollection();
     }
 
     /**
@@ -124,16 +129,25 @@ class Project
         }*/
 
         //Check some attributes with contexts to see if they are sets
-        if($this->organization && $context != "read_organization"){
-            $data["organization"] = $this->organization->serialize("read_project");
+        if($this->organization && $context === "read_project"){
+            $data["organization"] = $this->organization->serialize();
         }
 
-        if($context != "public"){
-            $data['isPublic'] = $this->getIsPublic();
+        //todo ?? pourquoi j'ai foreach? ====> a cause de la colletion, ? je dois pouvoir faire toArray()
+        if($this->activities !== null && $context === "read_project"){
+            $data["activities"] = [];
+            foreach($this->activities as $activity){
+                array_push($data["activities"], $activity->serialize());
+            }
         }
 
-
-
+        /*if(!$this->followings->isEmpty() && $context === "read_project") {
+            $data["followings"] = [];
+            foreach($this->followings->toArray() as $following){
+            //    dd($following);
+                array_push($data["followings"], $following->serialize());
+            }
+        }*/
         return $data;
     }
 
@@ -218,36 +232,57 @@ class Project
         return $this;
     }
 
-    public function getIsPublic(): ?bool
-    {
-        return $this->isPublic;
-    }
-
-    public function setIsPublic(bool $isPublic): self
-    {
-        $this->isPublic = $isPublic;
-
-        return $this;
-    }
-
-    public function getActivities(): ?Activity
+    public function getActivities()
     {
         return $this->activities;
     }
 
-    public function setActivities(?Activity $activities): self
+    /**
+     * @param int $activityId
+     * @return Activity|null
+     */
+    public function getActivityById(int $activityId){
+        $res = null;
+        foreach($this->activities as $activity ){
+            if($activity->getId() === $activityId){
+                $res = $activity;
+            }
+        }
+        return $res;
+    }
+
+    public function getOnlyPublicActivities(){
+        $res = [];
+        foreach($this->activities as $activity ){
+            if($activity->getIsPublic()){
+                $res[] = $activity;
+            }
+        }
+        return $res;
+    }
+
+    /**
+     * @param mixed $activities
+     */
+    public function setActivities($activities): void
     {
-        // unset the owning side of the relation if necessary
-        if ($activities === null && $this->activities !== null) {
-            $this->activities->setProject(null);
-        }
-
-        // set the owning side of the relation if necessary
-        if ($activities !== null && $activities->getProject() !== $this) {
-            $activities->setProject($this);
-        }
-
         $this->activities = $activities;
+    }
+
+    public function addActivity($activity){
+        if (!$this->activities->contains($activity)) {
+            $this->activities[] = $activity;
+            $activity->setProject($this);
+        }
+
+        return $this;
+    }
+
+    public function removeActivity($activity){
+        if ($this->activities->contains($activity)) {
+            $this->activities->removeElement($activity);
+            $activity->setProject(null);
+        }
 
         return $this;
     }
@@ -280,5 +315,83 @@ class Project
         $this->pictureFile = $pictureFile;
     }
 
+    /**
+     * @return Collection|FollowingProject[]
+     */
+    public function getFollowings(): Collection
+    {
+        return $this->followings;
+    }
 
+    public function addFollowing(FollowingProject $following): self
+    {
+        if (!$this->followings->contains($following)) {
+            $this->followings[] = $following;
+            $following->setProject($this);
+        }
+
+        return $this;
+    }
+
+    public function removeFollowing(FollowingProject $following): self
+    {
+        if ($this->followings->removeElement($following)) {
+            // set the owning side to null (unless already changed)
+            if ($following->getProject() === $this) {
+                $following->setProject(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getAssignedTeam(){
+        $team = [];
+        foreach($this->followings as $following){
+            if($following->getIsAssigning()){
+                $team[]=$following->getFollower();
+            }
+        }
+        return $team;
+    }
+
+    public function getFollowers(){
+        $followers = [];
+        foreach($this->followings as $following){
+            if($following->getIsFollowing()){
+                $followers[]=$following;
+            }
+        }
+        return $followers;
+    }
+
+    /**
+     *
+     * @param int $userId
+     * @return FollowingProject|null
+     */
+    public function getFollowingByUserId(int $userId){
+        $res = null;
+
+        foreach($this->followings as $following){
+            if($following->getFollower()->getId() === $userId){
+                $res = $following;
+            }
+        }
+        return $res;
+    }
+
+    public function isAssign($user){
+        $res = false;
+        if($this->creator->getId() === $user->getId()){
+            $res = true;
+        }
+        else{
+            $following = $this->getFollowingByUserId($user->getId());
+            if($following !== null && $following->getIsAssigning() === true){
+                $res = true;
+            }
+        }
+        return $res;
+    }
 }

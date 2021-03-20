@@ -4,6 +4,15 @@ namespace App\Controller;
 
 use App\Entity\Organization;
 use App\Entity\User;
+use App\Exceptions\SecurityException;
+use App\Exceptions\ViolationException;
+use App\Service\LogService;
+use App\Service\Request\ParametersValidator;
+use App\Service\Request\RequestParameters;
+use App\Service\Request\ResponseHandler;
+use App\Service\Security\RequestSecurity;
+use Doctrine\ORM\EntityManagerInterface;
+use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,67 +23,110 @@ use Symfony\Component\Routing\Annotation\Route;
  * @package App\Controller
  * @Route("/member", name="member")
  */
-class MembershipController extends CommonController
+class MembershipController extends AbstractController
 {
-    //todo empecher les doublons ? ou pdejà fait vi clef?
+    private RequestSecurity $security;
+    private RequestParameters $parameters;
+    private ResponseHandler $responseHandler;
+    protected EntityManagerInterface $entityManager;
+    private ParametersValidator $validator;
+    private LogService $logger;
+
     /**
-     * @param Request $insecureRequest
+     * OrgController constructor.
+     * @param RequestSecurity $requestSecurity
+     * @param RequestParameters $requestParameters
+     * @param ResponseHandler $responseHandler
+     * @param EntityManagerInterface $entityManager
+     * @param LogService $logger
+     */
+    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, EntityManagerInterface $entityManager, ParametersValidator $validator, LogService $logger)
+    {
+        $this->security = $requestSecurity;
+        $this->parameters = $requestParameters;
+        $this->responseHandler = $responseHandler;
+        $this->entityManager = $entityManager;
+        $this->validator = $validator;
+        $this->logger = $logger;
+    }
+
+    /**
+     * @param Request $request
      * @return Response
      * @Route("/add", name="_add", methods="put")
      */
-    public function addMember(Request $insecureRequest) :Response {
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+    public function addMember(Request $request) :Response {
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        if(
-            (!$this->dataRequest["orgId"] || (!($this->dataRequest["email"])) )
-            || $this->dataRequest['email'] === $this->getUser()->getUsername()){
-                return $this->notFoundResponse();
+        $this->parameters->setData($request);
+
+        //check required params
+        try{ $this->parameters->hasData(["orgId","email"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
         }
 
-        $this->dataRequest = array_merge($this->dataRequest, ["referent" => $this->getUser()->getId()]);
+        //if referent try to self add to membership
+        if($this->parameters->getData("email") === $this->getUser()->getUsername() ){
+            return $this->responseHandler->BadRequestResponse(["email"=> "referent can't be added into the membership"]);
+        }
 
-        $this->dataRequest["id"] = $this->dataRequest['orgId'];
+        try{
+            //get Activity target for link
+            $repository = $this->entityManager->getRepository(Organization::class);
+            $orgData = $repository->findBy([
+                "id" => $this->parameters->getData("orgId"),
+                "referent" => $this->getUser()->getId()
+            ]);
 
-        //get query organization object by organization's id && referent's id
-        if ($this->getEntities(Organization::class, ["id", "referent"])) return $this->response;
-        if(empty($this->dataResponse)) return $this->notFoundResponse();
-
-        $org = $this->dataResponse[0];
-        unset($this->dataRequest["orgId"]);
-
-        //Validate fields
-        if ($this->isInvalid(
-            ["email"],
-            null,
-            User::class)
-        ) return $this->response;
-
-        //get query organization object by organization's id && referent's id
-        if ($this->getEntities(User::class, ["email"])) return $this->response;
-        if(empty($this->dataResponse)) return $this->notFoundResponse();
-
-        //new member already in this org?
-        foreach($org->getMembership() as $member){
-            if($member->getId() === $this->dataResponse[0]->getId()){
-                return $this->notFoundResponse();
+            if(count($orgData) === 0 ){
+                $this->logger->logInfo(" Organization with id : ". $this->parameters->getData("orgId") ." not found " );
+                return $this->responseHandler->BadRequestResponse(["Organization"=>"no_org_found"]);
             }
+            $org = $orgData[0];
+
+            //check params Validations
+            try{ $this->validator->isInvalid(
+                ["email"],
+                [],
+                User::class);
+            } catch(ViolationException $e){
+                $this->logger->logError($e, $this->getUser(), "error");
+                return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+            }
+
+            $repository = $this->entityManager->getRepository(User::class);
+            $userData = $repository->findBy([
+                "email" => $this->parameters->getData("email")]
+            );
+            if(count($userData) === 0 ){
+                $this->logger->logInfo(" User with email : ". $this->parameters->getData("email") ." not found " );
+                return $this->responseHandler->BadRequestResponse(["User"=>"no_user_found"]);
+            }
+            $user = $userData[0];
+
+            //new member already in this org?
+            foreach($org->getMembership() as $member){
+                if($member->getId() === $user->getId()){
+                    return $this->responseHandler->BadRequestResponse(["email"=> "user already added into the membership"]);
+                }
+            }
+
+            $org->addMembership($user);
+            $this->entityManager->flush();
+
+            return $this->responseHandler->successResponse($org->getMembership()->toArray());
+
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
-
-        $org->addMembership($this->dataResponse[0]);
-
-        if($this->updateEntity($org)) return $this->response;
-
-        //return updated membership
-        if(!empty($this->dataResponse[0]->getMembership())){
-            $this->dataResponse = $this->dataResponse[0]->getMembership()->toArray();
-        }
-
-        //todo rework logging in CommonCOntroller
-        return $this->successResponse();
     }
 
     /**
@@ -82,91 +134,104 @@ class MembershipController extends CommonController
      * @return Response|null
      * @Route("/remove", name="_remove", methods="put")
      */
-    public function removeMember(Request $insecureRequest){
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+    public function removeMember(Request $request){
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
-        if(!isset($this->dataRequest["orgId"]) || !isset($this->dataRequest["userId"])){
-            return $this->notFoundResponse();
+        $this->parameters->setData($request);
+
+        //check required params
+        try{ $this->parameters->hasData(["orgId","userId"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
         }
-        $this->dataRequest = array_merge($this->dataRequest, ["referent" => $this->getUser()->getId()]);
-        $this->dataRequest["id"] = $this->dataRequest['orgId'];
-        //Validate fields
-        if ($this->isInvalid(
-            ["id"],
-            null,
-            Organization::class)
-        ) return $this->response;
 
-        //get query organization object by organization's id && referent's id
-        if ($this->getEntities(Organization::class, ["id", "referent"])) return $this->response;
-        if(empty($this->dataResponse)) return $this->notFoundResponse();
+        try{
 
-        $org = $this->dataResponse[0];
-        unset($this->dataRequest["orgId"]);
+            $repository = $this->entityManager->getRepository(Organization::class);
+            $orgData = $repository->findBy([
+                    "orgId" => $this->parameters->getData("email"),
+                    "referent" => $this->getUser()->getId()
+                ]
+            );
+            if(count($orgData) === 0 ){
+                $this->logger->logInfo(" Organization with id : ". $this->parameters->getData("orgId") ." not found " );
+                return $this->responseHandler->BadRequestResponse(["Organization"=>"no_org_found"]);
+            }
+            $org = $orgData[0];
 
-        $this->dataRequest["id"] = $this->dataRequest['userId'];
-        if ($this->isInvalid(
-            ["id"],
-            null,
-            User::class)
-        ) return $this->response;
+            $repository = $this->entityManager->getRepository(User::class);
+            $userData = $repository->findBy([
+                    "userId" => $this->parameters->getData("email")]
+            );
+            if(count($userData) === 0 ){
+                $this->logger->logInfo(" User with id : ". $this->parameters->getData("userId") ." not found " );
+                return $this->responseHandler->BadRequestResponse(["User"=>"no_user_found"]);
+            }
+            $user = $userData[0];
 
-        //get query organization object by organization's id && referent's id
-        if ($this->getEntities(User::class, ["id"])) return $this->response;
-        if(empty($this->dataResponse)) return $this->notFoundResponse();
+            $org->removeMembership($user);
+            $this->entityManager->flush();
 
-        $org->removeMembership($this->dataResponse[0]);
+            //return updated membership
+            $tab = $org->getMembership()->toArray();
+            sort($tab);
 
-        if($this->updateEntity($org)) return $this->response;
+            return $this->responseHandler->successResponse($tab);
 
-        //return updated membership
-        $tab = $this->dataResponse[0]->getMembership()->toArray();
-        sort($tab);
-        $this->dataResponse = $tab;
-
-        //todo rework logging
-        return $this->successResponse();
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
     }
 
     /**
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response
      * @Route("/public", name="_get", methods="get")
      */
-    public function getMembers(Request $insecureRequest) : Response {
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
+    public function getMembers(Request $request) : Response {
+        try{$this->security->cleanXSS($request);}
+        catch(SecurityException $e) {
+            $this->logger->logError($e, $this->getUser(), "warning");
+            return $this->responseHandler->forbidden();
+        }
 
         // recover all data's request
-        $this->dataRequest = $this->requestParameters->getData($this->request);
+        $this->parameters->setData($request);
 
-        if(!isset($this->dataRequest["orgId"])){
-            return $this->notFoundResponse();
+
+        //check required params
+        try{ $this->parameters->hasData(["orgId"]); }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
         }
 
-        $this->dataRequest["id"] = $this->dataRequest['orgId'];
-        //Validate fields
-        if ($this->isInvalid(
-            ["id"],
-            null,
-            Organization::class)
-        ) return $this->response;
+        try {
+            $repository = $this->entityManager->getRepository(Organization::class);
+            $orgData = $repository->findBy([
+                    "id" => $this->parameters->getData("orgId")
+                ]
+            );
+            if (count($orgData) === 0) {
+                $this->logger->logInfo(" Organization with id : " . $this->parameters->getData("orgId") . " not found ");
+                return $this->responseHandler->BadRequestResponse(["Organization" => "no_org_found"]);
+            }
+            $org = $orgData[0];
 
-        //get query organization object by organization's id && referent's id
-        if ($this->getEntities(Organization::class, ["id"])) return $this->response;
-        if(!empty($this->dataResponse)){
-            $this->dataResponse = $this->dataResponse[0]->getMembership()->toArray();
-            unset($this->dataRequest["orgId"]);
-        }else {
-            $this->notFoundResponse();
+            return $this->responseHandler->successResponse($org->getMembership()->toArray());
+
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
-
-        return $this->successResponse();
-
     }
+
+
 }
