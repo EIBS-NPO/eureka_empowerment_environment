@@ -375,7 +375,7 @@ class UserController extends AbstractController
      * @param UserPasswordEncoderInterface $encoder
      * @param JWTTokenManagerInterface $JWTManager
      * @return Response
-     * @Route("/password", name="_password", methods="put")
+     * @Route("/password", name="_password", methods="post")
      */
     public function resetPassword(Request $request, UserPasswordEncoderInterface $encoder, JWTTokenManagerInterface $JWTManager)
     {
@@ -469,7 +469,7 @@ class UserController extends AbstractController
 
 
     /**
-     * @Route("/email", name="_reset_email", methods="put")
+     * @Route("/email", name="_reset_email", methods="post")
      * @param Request $request
      * @param JWTTokenManagerInterface $JWTManager
      * @return Response
