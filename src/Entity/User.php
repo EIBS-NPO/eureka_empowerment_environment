@@ -400,7 +400,7 @@ class User implements UserInterface
     public function getOrgById($orgId){
         $res = false;
         foreach($this->organizations as $org){
-            if($org->getId() === $orgId){
+            if($org->getId() === (int)$orgId){
                 $res = $org;
             }
         }
@@ -450,7 +450,7 @@ class User implements UserInterface
     public function getProjectById($projectId){
         $res = null;
         foreach($this->projects as $project){
-            if($project->getId() === $projectId){
+            if($project->getId() === (int)$projectId){
                 $res = $project;
             }
         }

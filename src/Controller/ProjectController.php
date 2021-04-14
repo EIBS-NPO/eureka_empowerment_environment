@@ -313,7 +313,7 @@ class ProjectController extends AbstractController
 
 
     /**
-     * returns all projects
+     * returns all projects in public context
      * @Route("/public", name="_get_public", methods="get")
      * @param Request $request
      * @return Response
@@ -394,7 +394,15 @@ class ProjectController extends AbstractController
         $repository = $this->entityManager->getRepository(Project::class);
         //get query, if id not define, query getALL
         try{
-            $dataResponse = $repository->findBy($criterias);
+            if($this->getUser()->getRoles()[0] === "ROLE_ADMIN"){
+                if($this->parameters->getData("projectId") !== false){
+                    $dataResponse = $repository->findBy(["id" => $this->parameters->getData("projectId")]);
+                }else{
+                    $dataResponse = $repository->findAll();
+                }
+            }else{
+                $dataResponse = $repository->findBy($criterias);
+            }
         }catch(Exception $e){
             $this->logger->logError($e,$this->getUser(),"error" );
             return $this->responseHandler->serverErrorResponse($e, "An error occured");

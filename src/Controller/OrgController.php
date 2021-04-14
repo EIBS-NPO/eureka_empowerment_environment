@@ -200,6 +200,7 @@ class OrgController extends AbstractController
             return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
 
+        $repository = $this->entityManager->getRepository(User::class);
         $criterias["id"] = $this->getUser()->getId() ;
         try {
             $userData = $repository->findBy($criterias);
@@ -207,7 +208,6 @@ class OrgController extends AbstractController
             $this->logger->logError($e,$this->getUser(),"error" );
             return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
-
         $user = $userData[0];
 
         //check if public or private data return
@@ -264,7 +264,7 @@ class OrgController extends AbstractController
         //check params Validations
         try{ $this->validator->isInvalid(
             [],
-            ["name", "type", "email", "phone", 'description'],
+            ["name", "type", "email", "phone", 'description', "isPartner"],
             Organization::class);
         } catch(ViolationException $e){
             $this->logger->logError($e, $this->getUser(), "error");
@@ -291,11 +291,12 @@ class OrgController extends AbstractController
 
         //only for referent or admin
         if($orgData !== false ){
-            foreach( ["name", "type", "email", "phone", 'description']
-                     as $field ) {
-                if($this->parameters->getData($field) !== false ) {
-                    $setter = 'set'.ucfirst($field);
-                    $orgData->$setter($this->parameters->getData($field));
+            foreach( ["name", "type", "email", "phone", 'description', "isPartner"] as $field ) {
+                if(isset($this->parameters->getAllData()[$field]) ) {
+                    if($field !=="isPartner" || ($field === "isPartner" && $this->getUser()->getRoles()[0] == "ROLE_ADMIN")){
+                        $setter = 'set'.ucfirst($field);
+                        $orgData->$setter($this->parameters->getData($field));
+                    }
                 }
             }
 
@@ -588,8 +589,9 @@ class OrgController extends AbstractController
         return $this->responseHandler->successResponse(["success"]);
     }
 
-    //todo for what??
+
     /**
+     * return membered orgs for a user.
      * @param Request $request
      * @return Response
      * @Route("/membered", name="_membered", methods="get")
@@ -603,7 +605,10 @@ class OrgController extends AbstractController
             return $this->responseHandler->serverErrorResponse($e, "An error occured ");
         }
 
+        //get refered and membered orgs,
         $orgsData = $userData->getMemberOf()->toArray();
+        $orgsData = array_merge($orgsData, $userData->getOrganizations()->toArray());
+    //    $orgsData = array_unique($orgsData);
 
         return $this->responseHandler->successResponse($orgsData);
     }

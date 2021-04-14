@@ -82,7 +82,7 @@ class ActivityController extends AbstractController
 
         //check params Validations
         try{ $this->validator->isInvalid(
-            ["title", "summary", "postDate", "creator"],
+            ["title", "summary", "postDate", "creator", "isPublic"],
             [],
             Activity::class);
         } catch(ViolationException $e){
@@ -92,7 +92,7 @@ class ActivityController extends AbstractController
 
         //create Activity object && set validated fields
         $activity = new Activity();
-        foreach( ["title", "summary", "postDate", "creator"]
+        foreach( ["title", "summary", "postDate", "creator", "isPublic"]
                  as $field ) {
             if($this->parameters->getData($field) !== false ) {
                 $setter = 'set'.ucfirst($field);
@@ -336,7 +336,7 @@ class ActivityController extends AbstractController
 
 
     /**
-     * returns to a user his created projects
+     * returns to a user his created activities
      * @Route("", name="_get", methods="get")
      * @param Request $request
      * @return Response
@@ -353,12 +353,10 @@ class ActivityController extends AbstractController
         // recover all data's request
         $this->parameters->setData($request);
 
-
-        $criterias = [];
         if ($this->parameters->getData('id') !== false) {
             $criterias["id"] = $this->parameters->getData('id');
         }
-        if( $this->parameters->getData("creator") !== false){
+        if( $this->parameters->getData("ctx") !== false && $this->parameters->getData("ctx") === "creator"){
             $criterias["creator"] = $this->getUser()->getId();
         }
 
@@ -371,6 +369,7 @@ class ActivityController extends AbstractController
             return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
 
+        $criterias = [];
         $repository = $this->entityManager->getRepository(User::class);
         $criterias["id"] = $this->getUser()->getId();
         try {

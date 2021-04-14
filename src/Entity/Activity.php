@@ -121,7 +121,7 @@ class Activity
         if($this->organization && $context ==="read_activity"){
             $data["organization"] = $this->organization->serialize();
         }
-        //todo maybe add context read_user
+
         if(!$this->followers->isEmpty() && $context === "read_activity"){
             //$data["followers"] = $this->followers->toArray();
             $data["followers"] = [];

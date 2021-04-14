@@ -108,7 +108,7 @@ class ResponseHandler
     {
         //todo check message
         return $this->response = new Response(
-            json_encode($e->getMessage()),
+            json_encode($logInfo),
             Response::HTTP_INTERNAL_SERVER_ERROR,
             ["Content-Type" => "application/json"]
         );
