@@ -190,7 +190,7 @@ class UserController extends AbstractController
         $this->parameters->setData($request);
 
         //check access
-        if($this->parameters->getData('id') !== false) {
+       /* if($this->parameters->getData('id') !== false) {
             if ($this->getUser()->getRoles()[0] !== "ROLE_ADMIN") {
                 return $this->responseHandler->unauthorizedResponse("unauthorized access");
             }else {
@@ -198,7 +198,12 @@ class UserController extends AbstractController
             }
         }else {
             $criterias["id"] = $this->getUser()->getId();
-        }
+        }*/
+            if ($this->getUser()->getRoles()[0] === "ROLE_ADMIN") {
+                $criterias["id"] = $this->parameters->getData("id");
+            }else {
+                $criterias["id"] = $this->getUser()->getId();
+            }
 
         //check params Validations
         try{
@@ -420,7 +425,7 @@ class UserController extends AbstractController
                 if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
                     //check valid original password, only if current user isn't admin
                     $hash = $encoder->encodePassword($this->getUser(), $this->parameters->getData('password'));
-                    if(!$user->getPassword() !== $hash) {
+                    if($user->getPassword() !== $hash) {
                         return $this->responseHandler->BadRequestResponse(["password"=> "not match"]);
                     }
                 }

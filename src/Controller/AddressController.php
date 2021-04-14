@@ -71,6 +71,7 @@ class AddressController extends CommonController
 
         // recover all data's request
         $this->parameters->setData($request);
+    //    dd($this->parameters->getAllData());
 
         try{
             //address for an org

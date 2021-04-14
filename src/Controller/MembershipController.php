@@ -155,7 +155,7 @@ class MembershipController extends AbstractController
 
             $repository = $this->entityManager->getRepository(Organization::class);
             $orgData = $repository->findBy([
-                    "orgId" => $this->parameters->getData("email"),
+                    "id" => $this->parameters->getData("orgId"),
                     "referent" => $this->getUser()->getId()
                 ]
             );
@@ -167,7 +167,7 @@ class MembershipController extends AbstractController
 
             $repository = $this->entityManager->getRepository(User::class);
             $userData = $repository->findBy([
-                    "userId" => $this->parameters->getData("email")]
+                    "id" => $this->parameters->getData("userId")]
             );
             if(count($userData) === 0 ){
                 $this->logger->logInfo(" User with id : ". $this->parameters->getData("userId") ." not found " );

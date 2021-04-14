@@ -49,7 +49,7 @@ class ActivityFile extends Activity
 
     public function serialize(String $context = null): array
     {
-        $data = Parent::serialize();
+        $data = Parent::serialize($context);
         $data = array_merge($data, [
             "filename" => $this->filename,
             "fileType" => $this->fileType,

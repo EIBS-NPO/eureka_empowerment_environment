@@ -124,6 +124,9 @@ class Organization
             "referent" => $this->referent->serialize()
         ];
 
+        if($this->isPartner){
+            $data["partner"] = $this->isPartner;
+        }
         //Check some attributes to see if they are sets
         if($this->phone){
             $data["phone"] = $this->phone;

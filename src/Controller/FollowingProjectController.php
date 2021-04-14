@@ -172,7 +172,7 @@ class FollowingProjectController extends AbstractController
             return $this->responseHandler->BadRequestResponse($e->getViolationsList());
         }
 //for following
-        if($this->parameters->getData('isAssigning') === false){
+        if(!isset($this->parameters->getAllData()['isAssigning'])){
             try{ $this->parameters->hasData(["isFollowing"]); }
             catch(ViolationException $e) {
                 $this->logger->logError($e, $this->getUser(), "error");
@@ -180,7 +180,7 @@ class FollowingProjectController extends AbstractController
             }
         }
         //for assigning
-        if($this->parameters->getData('isFollowing') === false ){
+        if(!isset($this->parameters->getAllData()['isFollowing'])){
             try{ $this->parameters->hasData(["isAssigning", "userId"]); }
             catch(ViolationException $e) {
                 $this->logger->logError($e, $this->getUser(), "error");
@@ -191,7 +191,7 @@ class FollowingProjectController extends AbstractController
         //need id variable for column id in database
         $criterias["id"] = $this->parameters->getData('projectId');
 
-        if($this->parameters->getData('isAssigning') !== false ){
+        if(isset($this->parameters->getAllData()['isAssigning'])){
             //need current user id as creator
             $criterias["creator"] = $this->getUser()->getId();
         }
@@ -207,7 +207,7 @@ class FollowingProjectController extends AbstractController
         $projectData = $projectData[0];
 
         //check if it's an assign query by project creator
-        if($this->parameters->getData('isAssigning') !== false)
+        if(isset($this->parameters->getAllData()['isAssigning']))
         {
             if(!$this->rmvAssigned($projectData)) return $this->responseHandler->BadRequestResponse(["user"=>"no_found_in_assigned"]); // error response
         }
@@ -264,7 +264,7 @@ class FollowingProjectController extends AbstractController
             return $this->responseHandler->BadRequestResponse($e->getViolationsList());
         }
         //for following
-        if($this->parameters->getData('isAssigning') === false){
+        if(!isset($this->parameters->getAllData()['isAssigning'])){
             try{ $this->parameters->hasData(["isFollowing"]); }
             catch(ViolationException $e) {
                 $this->logger->logError($e, $this->getUser(), "error");
@@ -272,7 +272,7 @@ class FollowingProjectController extends AbstractController
             }
         }
         //for assigning
-        if($this->parameters->getData('isFollowing') === false ){
+        if(!isset($this->parameters->getAllData()['isFollowing'])){
             try{ $this->parameters->hasData(["isAssigning"]); }
             catch(ViolationException $e) {
                 $this->logger->logError($e, $this->getUser(), "error");
@@ -291,19 +291,16 @@ class FollowingProjectController extends AbstractController
         $projectData = $projectData[0];
 
         $response = false;
-        if($projectData->getCreator()->getId() !== $this->getUser()->getId()){
+        if(isset($this->parameters->getAllData()["isAssigning"])){
+            $response = $projectData->isAssign($this->getUser());
+        }else if(isset($this->parameters->getAllData()["isFollowing"])){
             $following = $projectData->getFollowingByUserId($this->getUser()->getId());
-
             if($following !== null){
-                if($this->parameters->getData("isFollowing") !== false){
+                if(isset($this->parameters->getAllData()["isFollowing"])){
                     $response = $following->getIsFollowing();
-                }
-                else if($this->parameters->getData("isAssigning") !== false){
-                    $response = $following->getIsAssigning();
                 }
             }
         }
-        else $response = true;
 
         return $this->responseHandler->successResponse([$response]);
     }
