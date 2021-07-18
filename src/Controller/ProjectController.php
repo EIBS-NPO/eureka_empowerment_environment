@@ -477,7 +477,7 @@ class ProjectController extends AbstractController
 
             //filter for private resources
             foreach($followingsProjects as $project){
-                if(!$project->isAssign($user)){
+                if(!$this->followingHandler->isAssign($project, $user)) {
                     $project->setActivities($project->getOnlyPublicActivities());
                 }
             }

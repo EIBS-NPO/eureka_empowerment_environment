@@ -190,7 +190,7 @@ class FollowingHandler
     public function isFollowed(TrackableObject $object, UserInterface $follower){
         $res = false;
         $following = $this->getFollowingByFollowerId($object, $follower->getId());
-        dd($following);
+
         if($following !== null && $following->getIsAssigning() === true){
             $res = true;
         }
