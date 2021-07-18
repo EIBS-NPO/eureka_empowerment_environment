@@ -9,6 +9,7 @@ use App\Entity\User;
 use App\Exceptions\SecurityException;
 use App\Exceptions\ViolationException;
 use App\Service\FileHandler;
+use App\Service\Security\FollowingHandler;
 use App\Service\LogService;
 use App\Service\Request\ParametersValidator;
 use App\Service\Request\RequestParameters;
@@ -22,6 +23,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
+//todo remove cleanXss
 /**
  * Class ProjectController
  * @package App\Controller
@@ -37,6 +39,7 @@ class ProjectController extends AbstractController
     protected EntityManagerInterface $entityManager;
     protected FileHandler $fileHandler;
     private LogService $logger;
+    private FollowingHandler $followingHandler;
 
     /**
      * UserController constructor.
@@ -47,8 +50,9 @@ class ProjectController extends AbstractController
      * @param EntityManagerInterface $entityManager
      * @param FileHandler $fileHandler
      * @param LogService $logger
+     * @param FollowingHandler $followingHandler
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
+    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger, FollowingHandler $followingHandler)
     {
         $this->security = $requestSecurity;
         $this->parameters = $requestParameters;
@@ -57,6 +61,7 @@ class ProjectController extends AbstractController
         $this->entityManager = $entityManager;
         $this->fileHandler = $fileHandler;
         $this->logger = $logger;
+        $this->followingHandler = $followingHandler;
     }
 
     /**
@@ -418,10 +423,14 @@ class ProjectController extends AbstractController
 
         $user = $userData[0];
 
-        //check if public or private data return
-        foreach($dataResponse as $project){
-            if(!$project->isAssign($user)){
-                $project->setActivities($project->getOnlyPublicActivities());
+        //only if user isn't an admin.
+        if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
+            //check if public or private data return
+            foreach($dataResponse as $project){
+                if(!$this->followingHandler->isAssign($project, $this->getUser()))
+                {
+                    $project->setActivities($project->getOnlyPublicActivities());
+                }
             }
         }
 
@@ -548,7 +557,7 @@ class ProjectController extends AbstractController
             }
 
             //get collection of assigned user
-            $team = $projectData[0]->getAssignedTeam();
+            $team = $this->followingHandler->getAssignedTeam($projectData[0]);
             //download picture
             foreach($team as $key => $member){
                 $team[$key] = $this->fileHandler->loadPicture($member);

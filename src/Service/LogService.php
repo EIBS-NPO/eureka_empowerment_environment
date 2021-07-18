@@ -90,16 +90,22 @@ class LogService
      * @param Exception $exception
      * @param UserInterface|null $currentUser
      * @param null $level
+     * @param String|null $userInfo for the case where userInterface is null, it'possible to add userInfo like ClientIp.
      */
-    public function logError(Exception $exception, ?UserInterface $currentUser, $level = null): void
+    public function logError(Exception $exception, ?UserInterface $currentUser, $level = null, String $userInfo = null): void
     {
         if ($currentUser AND get_class($currentUser) == 'App\Entity\User') {
-            $uid = $currentUser->getId();
+            $message = $this->level . " | UserID : ".$currentUser->getId()." | ";
         } else {
-            $uid = 'undefined';
+            if($userInfo === null){
+                $message = $this->level . " | UserInfo : undefined | ";
+            }else{
+                $message = $this->level . " | UserInfo : ".$userInfo." | ";
+            }
+
         }
 
-        $message = $this->level . " | UID : ".$uid." | Error : " . $exception->getMessage();
+        $message .= mb_strtoupper($this->level) . " : " . $exception->getMessage();
 
         // Choose what monolog method to use
         if ($level) {

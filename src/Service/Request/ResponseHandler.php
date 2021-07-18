@@ -8,7 +8,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ResponseHandler
 {
-    private array $dataResponse;
+    private array $dataResponse = [];
     private Response $response;
 
     /**
@@ -63,7 +63,7 @@ class ResponseHandler
         );
     }
 
-    //todo itilité?
+    //todo useless?
     /**
      * @return Response
      */

@@ -163,7 +163,7 @@ class User implements UserInterface
     private $followingActivities;
 
     /**
-     * @ORM\OneToMany(targetEntity=FollowingProject::class, mappedBy="follower")
+     * @ORM\OneToMany(targetEntity=Following::class, mappedBy="follower")
      * @Assert\Collection(
      *     fields={
      *         @Assert\Type(type="App\Entity\FollowingProject")
@@ -605,14 +605,14 @@ class User implements UserInterface
     }
 
     /**
-     * @return Collection|FollowingProject[]
+     * @return Collection|Following[]
      */
     public function getFollowingProjects(): Collection
     {
         return $this->followingProjects;
     }
 
-    public function addFollowingProject(FollowingProject $followingProject): self
+    public function addFollowingProject(Following $followingProject): self
     {
         if (!$this->followingProjects->contains($followingProject)) {
             $this->followingProjects[] = $followingProject;
@@ -622,7 +622,7 @@ class User implements UserInterface
         return $this;
     }
 
-    public function removeFollowingProject(FollowingProject $followingProject): self
+    public function removeFollowingProject(Following $followingProject): self
     {
         if ($this->followingProjects->removeElement($followingProject)) {
             // set the owning side to null (unless already changed)

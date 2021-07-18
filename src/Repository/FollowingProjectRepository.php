@@ -2,21 +2,21 @@
 
 namespace App\Repository;
 
-use App\Entity\FollowingProject;
+use App\Entity\Following;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
- * @method FollowingProject|null find($id, $lockMode = null, $lockVersion = null)
- * @method FollowingProject|null findOneBy(array $criteria, array $orderBy = null)
- * @method FollowingProject[]    findAll()
- * @method FollowingProject[]    findBy(array $criteria, array $orderBy = null, $limit = null, $offset = null)
+ * @method Following|null find($id, $lockMode = null, $lockVersion = null)
+ * @method Following|null findOneBy(array $criteria, array $orderBy = null)
+ * @method Following[]    findAll()
+ * @method Following[]    findBy(array $criteria, array $orderBy = null, $limit = null, $offset = null)
  */
 class FollowingProjectRepository extends ServiceEntityRepository
 {
     public function __construct(ManagerRegistry $registry)
     {
-        parent::__construct($registry, FollowingProject::class);
+        parent::__construct($registry, Following::class);
     }
 
     public function getTeammate($id){

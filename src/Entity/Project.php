@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Interfaces\TrackableObject;
 use App\Repository\ProjectRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -11,7 +12,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 /**
  * @ORM\Entity(repositoryClass=ProjectRepository::class)
  */
-class Project
+class Project implements TrackableObject
 {
     /**
      * @ORM\Id
@@ -55,12 +56,14 @@ class Project
 
     /**
      * @ORM\ManyToOne(targetEntity=Organization::class, inversedBy="projects")
+     * @ORM\JoinColumn(onDelete="SET NULL")
      * @Assert\Type(type={"App\Entity\Organization", "integer"})
      */
     private ?Organization $organization = null;
 
     /**
      * @ORM\OneToMany(targetEntity=Activity::class, mappedBy="project")
+     * @ORM\JoinColumn(nullable=true)
      * @Assert\Collection(
      *     fields={
      *         @Assert\Type(type="App\Entity\Activity")
@@ -85,7 +88,7 @@ class Project
     private $description = [];
 
     /**
-     * @ORM\OneToMany(targetEntity=FollowingProject::class, mappedBy="project")
+     * @ORM\OneToMany(targetEntity=Following::class, mappedBy="object")
      * @Assert\Collection(
      *     fields={
      *         @Assert\Type(type="App\Entity\FollowingProject")
@@ -316,82 +319,82 @@ class Project
     }
 
     /**
-     * @return Collection|FollowingProject[]
+     * @return Collection|Following[]
      */
     public function getFollowings(): Collection
     {
         return $this->followings;
     }
 
-    public function addFollowing(FollowingProject $following): self
+    public function addFollowing(Following $following): self
     {
         if (!$this->followings->contains($following)) {
             $this->followings[] = $following;
-            $following->setProject($this);
+            $following->setObject($this);
         }
 
         return $this;
     }
 
-    public function removeFollowing(FollowingProject $following): self
+    public function removeFollowing(Following $following): self
     {
         if ($this->followings->removeElement($following)) {
             // set the owning side to null (unless already changed)
-            if ($following->getProject() === $this) {
-                $following->setProject(null);
+            if ($following->getObject() === $this) {
+                $following->setObject(null);
             }
         }
 
         return $this;
     }
 
-    public function getAssignedTeam(){
-        $team = [];
-        foreach($this->followings as $following){
-            if($following->getIsAssigning()){
-                $team[]=$following->getFollower();
-            }
-        }
-        return $team;
-    }
-
-    public function getFollowers(){
-        $followers = [];
-        foreach($this->followings as $following){
-            if($following->getIsFollowing()){
-                $followers[]=$following;
-            }
-        }
-        return $followers;
-    }
-
-    /**
-     *
-     * @param int $userId
-     * @return FollowingProject|null
-     */
-    public function getFollowingByUserId(int $userId){
-        $res = null;
-
-        foreach($this->followings as $following){
-            if($following->getFollower()->getId() === $userId){
-                $res = $following;
-            }
-        }
-        return $res;
-    }
-
-    public function isAssign($user){
-        $res = false;
-        if($this->creator->getId() === $user->getId()){
-            $res = true;
-        }
-        else{
-            $following = $this->getFollowingByUserId($user->getId());
-            if($following !== null && $following->getIsAssigning() === true){
-                $res = true;
-            }
-        }
-        return $res;
-    }
+//    public function getAssignedTeam(){
+//        $team = [];
+//        foreach($this->followings as $following){
+//            if($following->getIsAssigning()){
+//                $team[]=$following->getFollower();
+//            }
+//        }
+//        return $team;
+//    }
+//
+//    public function getFollowers(){
+//        $followers = [];
+//        foreach($this->followings as $following){
+//            if($following->getIsFollowing()){
+//                $followers[]=$following;
+//            }
+//        }
+//        return $followers;
+//    }
+//
+//    /**
+//     *
+//     * @param int $userId
+//     * @return FollowingProject|null
+//     */
+//    public function getFollowingByUserId(int $userId){
+//        $res = null;
+//
+//        foreach($this->followings as $following){
+//            if($following->getFollower()->getId() === $userId){
+//                $res = $following;
+//            }
+//        }
+//        return $res;
+//    }
+//
+//    public function isAssign($user){
+//        $res = false;
+//        if($this->creator->getId() === $user->getId()){
+//            $res = true;
+//        }
+//        else{
+//            $following = $this->getFollowingByUserId($user->getId());
+//            if($following !== null && $following->getIsAssigning() === true){
+//                $res = true;
+//            }
+//        }
+//        return $res;
+//    }
 }

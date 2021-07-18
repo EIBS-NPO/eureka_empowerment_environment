@@ -63,12 +63,14 @@ class Activity
 
     /**
      * @ORM\ManyToOne(targetEntity=Project::class, inversedBy="activities")
+     * @ORM\JoinColumn(onDelete="SET NULL")
      * @Assert\Type(type={"App\Entity\Project", "integer"})
      */
     protected ?Project $project = null;
 
     /**
      * @ORM\ManyToOne(targetEntity=Organization::class, inversedBy="activities")
+     * @ORM\JoinColumn(onDelete="SET NULL")
      * @Assert\Type(type={"App\Entity\Organization", "integer"})
      */
     protected ?Organization $organization = null;

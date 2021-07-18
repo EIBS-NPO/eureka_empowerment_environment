@@ -63,6 +63,7 @@ class Organization
 
     /**
      * @ORM\OneToMany(targetEntity=Project::class, mappedBy="organization")
+     * @ORM\JoinColumn(nullable=true)
      */
     private $projects = null;
 
