@@ -27,7 +27,6 @@ use Symfony\Component\Routing\Annotation\Route;
  */
 class AddressController extends CommonController
 {
-    private RequestSecurity $security;
     private RequestParameters $parameters;
     private ResponseHandler $responseHandler;
     private ParametersValidator $validator;
@@ -37,7 +36,6 @@ class AddressController extends CommonController
 
     /**
      * UserController constructor.
-     * @param RequestSecurity $requestSecurity
      * @param RequestParameters $requestParameters
      * @param ResponseHandler $responseHandler
      * @param ParametersValidator $validator
@@ -45,9 +43,8 @@ class AddressController extends CommonController
      * @param FileHandler $fileHandler
      * @param LogService $logger
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
+    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
     {
-        $this->security = $requestSecurity;
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
         $this->validator = $validator;
@@ -63,15 +60,8 @@ class AddressController extends CommonController
      */
     public function post(Request $request): Response
     {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
-    //    dd($this->parameters->getAllData());
 
         try{
             //address for an org
@@ -134,12 +124,6 @@ class AddressController extends CommonController
      * @Route("", name="_update", methods="put")
      */
     public function update(Request $request) :Response {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -193,17 +177,11 @@ class AddressController extends CommonController
 
 
     /**
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response
      * @Route("", name="_get", methods="get")
      */
     public function getAddress(Request $request) :Response {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -235,12 +213,6 @@ class AddressController extends CommonController
      * @Route("", name="_delete", methods="delete")
      */
     public function remove(Request $request){
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 

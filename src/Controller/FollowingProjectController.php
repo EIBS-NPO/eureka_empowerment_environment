@@ -27,7 +27,6 @@ use Symfony\Component\Routing\Annotation\Route;
  */
 class FollowingProjectController extends AbstractController
 {
-    private RequestSecurity $security;
     private RequestParameters $parameters;
     private ResponseHandler $responseHandler;
     private FollowingHandler $followingHandler;
@@ -36,16 +35,14 @@ class FollowingProjectController extends AbstractController
 
     /**
      * OrgController constructor.
-     * @param RequestSecurity $requestSecurity
      * @param RequestParameters $requestParameters
      * @param ResponseHandler $responseHandler
      * @param FollowingHandler $followingHandler
      * @param EntityManagerInterface $entityManager
      * @param LogService $logger
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, FollowingHandler $followingHandler, EntityManagerInterface $entityManager, LogService $logger)
+    public function __construct( RequestParameters $requestParameters, ResponseHandler $responseHandler, FollowingHandler $followingHandler, EntityManagerInterface $entityManager, LogService $logger)
     {
-        $this->security = $requestSecurity;
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
         $this->followingHandler = $followingHandler;
@@ -63,12 +60,6 @@ class FollowingProjectController extends AbstractController
      * @Route("", name="_add", methods="post")
      */
     public function add(Request $request) :Response {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
         //check required params
@@ -173,12 +164,6 @@ class FollowingProjectController extends AbstractController
      * @Route("", name="_remove", methods="put")
      */
     public function remove(Request $request){
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -268,12 +253,6 @@ class FollowingProjectController extends AbstractController
      * @Route("", name="_get", methods="get")
      */
     public function getFollowingStatus(Request $request) :Response{
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 

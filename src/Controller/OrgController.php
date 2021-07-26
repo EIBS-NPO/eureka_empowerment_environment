@@ -21,6 +21,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
+//todo remove requestSecurity dependance
 /**
  * Class OrgController
  * @package App\Controller
@@ -28,7 +29,6 @@ use Symfony\Component\Routing\Annotation\Route;
  */
 class OrgController extends AbstractController
 {
-    private RequestSecurity $security;
     private RequestParameters $parameters;
     private ResponseHandler $responseHandler;
     private ParametersValidator $validator;
@@ -46,9 +46,8 @@ class OrgController extends AbstractController
      * @param FileHandler $fileHandler
      * @param LogService $logger
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
+    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
     {
-        $this->security = $requestSecurity;
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
         $this->validator = $validator;
@@ -65,12 +64,6 @@ class OrgController extends AbstractController
      */
     public function create(Request $request) :Response
     {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
         $this->parameters->addParam("referent", $this->getUser());
@@ -116,12 +109,6 @@ class OrgController extends AbstractController
      */
     public function getPublicOrg(Request $request) :Response
     {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -173,12 +160,6 @@ class OrgController extends AbstractController
      * @return Response|null
      */
     public function getOrg(Request $request){
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -245,12 +226,6 @@ class OrgController extends AbstractController
      */
     public function updateOrganization(Request $request) :Response
     {
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -312,17 +287,11 @@ class OrgController extends AbstractController
     }
 
     /**
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response
      * @Route("/picture", name="_picture_put", methods="post")
      */
     public function putPicture(Request $request ) :Response {
-
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
 
         // recover all data's request
         $this->parameters->setData($request);
@@ -397,12 +366,6 @@ class OrgController extends AbstractController
      * @("/deletePicture", name="_picture_delete", methods="delete")
      */
     public function deletePicture(Request$request){
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -460,12 +423,6 @@ class OrgController extends AbstractController
      * @Route("/manageActivity", name="_manage_Activity", methods="put")
      */
     public function manageActivity(Request $request){
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -525,12 +482,6 @@ class OrgController extends AbstractController
      * @Route("/manageProject", name="_manage_Project", methods="put")
      */
     public function manageProject(Request $request){
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 

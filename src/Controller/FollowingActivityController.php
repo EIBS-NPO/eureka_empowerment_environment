@@ -25,7 +25,6 @@ use Symfony\Component\Routing\Annotation\Route;
  */
 class FollowingActivityController extends AbstractController
 {
-    private RequestSecurity $security;
     private RequestParameters $parameters;
     private ResponseHandler $responseHandler;
     protected EntityManagerInterface $entityManager;
@@ -34,15 +33,14 @@ class FollowingActivityController extends AbstractController
 
     /**
      * OrgController constructor.
-     * @param RequestSecurity $requestSecurity
      * @param RequestParameters $requestParameters
      * @param ResponseHandler $responseHandler
      * @param EntityManagerInterface $entityManager
+     * @param FileHandler $fileHandler
      * @param LogService $logger
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
+    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
     {
-        $this->security = $requestSecurity;
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
         $this->entityManager = $entityManager;
@@ -56,12 +54,6 @@ class FollowingActivityController extends AbstractController
      * @Route("/add", name="_add", methods="put")
      */
     public function addFollower(Request $request) :Response {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -107,12 +99,6 @@ class FollowingActivityController extends AbstractController
      * @Route("/remove", name="_remove", methods="put")
      */
     public function removeFollower(Request $request){
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -159,12 +145,6 @@ class FollowingActivityController extends AbstractController
      * @Route("/public", name="_get", methods="get")
      */
     public function getFellowers(Request $request) : Response {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -205,12 +185,6 @@ class FollowingActivityController extends AbstractController
      * @Route("/myFavorites", name="_myFavorites", methods="get")
      */
     public function getMyFollowing (Request $request) {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -239,12 +213,6 @@ class FollowingActivityController extends AbstractController
      * @Route("", name="_get", methods="get")
      */
     public function getFollowingStatus(Request $request) :Response{
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 

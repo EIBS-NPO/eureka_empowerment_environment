@@ -43,7 +43,6 @@ class ProjectController extends AbstractController
 
     /**
      * UserController constructor.
-     * @param RequestSecurity $requestSecurity
      * @param RequestParameters $requestParameters
      * @param ResponseHandler $responseHandler
      * @param ParametersValidator $validator
@@ -52,9 +51,8 @@ class ProjectController extends AbstractController
      * @param LogService $logger
      * @param FollowingHandler $followingHandler
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger, FollowingHandler $followingHandler)
+    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger, FollowingHandler $followingHandler)
     {
-        $this->security = $requestSecurity;
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
         $this->validator = $validator;
@@ -72,12 +70,6 @@ class ProjectController extends AbstractController
      */
     public function create(Request $request): Response
     {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
         $this->parameters->addParam("creator", $this->getUser());
@@ -153,12 +145,6 @@ class ProjectController extends AbstractController
      */
     public function updateProject (Request $request) :Response
     {
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
         if($this->parameters->getData('startDate') !== false){
@@ -243,13 +229,6 @@ class ProjectController extends AbstractController
      * @Route("/picture", name="_picture_put", methods="post")
      */
     public function putPicture(Request $request ) :Response {
-
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -324,12 +303,6 @@ class ProjectController extends AbstractController
      * @return Response
      */
     public function getPublicProjects(Request $request): Response {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -378,12 +351,6 @@ class ProjectController extends AbstractController
      * @return Response
      */
     public function getProjects(Request $request): Response {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
         $criterias = [];
@@ -455,12 +422,6 @@ class ProjectController extends AbstractController
      * @Route("/followed", name="_followed", methods="get")
      */
     public function getMyFollowing (Request $request) {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -496,12 +457,6 @@ class ProjectController extends AbstractController
      * @Route("/assigned", name="_assigned", methods="get")
      */
     public function getAssignedProject(Request $request){
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -531,12 +486,6 @@ class ProjectController extends AbstractController
      * @Route("/team/public", name="_team", methods="get")
      */
     public function getTeam(Request $request) :Response {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -577,12 +526,6 @@ class ProjectController extends AbstractController
      * @Route("/manageActivity", name="_add_activity", methods="put")
      */
     public function manageActivity(Request $request) {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -647,12 +590,6 @@ class ProjectController extends AbstractController
      * @Route("/manageOrg", name="_manage_org", methods="put")
      */
     public function manageOrg(Request $request){
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -719,12 +656,6 @@ class ProjectController extends AbstractController
      * @Route("", name="_delete", methods="delete")
      */
     public function deleteProject(Request $request){
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 

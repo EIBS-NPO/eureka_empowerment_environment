@@ -32,6 +32,15 @@ services:
         arguments:
             $targetDirectory: '%upload_directory%'
 
+
+    App\Service\Secuity\RequestSecurity:
+        tags:
+            - {
+                  name: kernel.event_listener,
+                  event: request_security.clean_xss,
+                  method: cleanXSS
+            }
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
     App\Event\Listener\JWTCreatedListener:

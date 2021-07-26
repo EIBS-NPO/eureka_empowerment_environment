@@ -16,16 +16,13 @@ use Symfony\Component\Routing\Annotation\Route;
  * @Route("/admin/org", name="org")
  */
 class OrgAdminController extends CommonController
-{
+{ //todo suppr commonController
     /**
      * @Route("", name="_get", methods="get")
      * @param Request $insecureRequest
      * @return Response
      */
     public function getOrganization(Request $insecureRequest){
-        //cleanXSS
-        if($this->cleanXSS($insecureRequest)
-        ) return $this->response;
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);

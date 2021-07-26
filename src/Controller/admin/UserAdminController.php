@@ -2,7 +2,6 @@
 
 namespace App\Controller\admin;
 
-use App\Controller\CommonController;
 use App\Entity\Organization;
 use App\Entity\User;
 use App\Exceptions\SecurityException;
@@ -24,7 +23,7 @@ use Symfony\Component\Routing\Annotation\Route;
  * @package App\Controller
  * @Route("/admin/user", name="admin")
  */
-class UserAdminController extends CommonController
+class UserAdminController
 {
     private RequestSecurity $security;
     private RequestParameters $parameters;
@@ -57,16 +56,16 @@ class UserAdminController extends CommonController
 
     /**
      * @Route("", name="_get_user", methods="get")
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response
      */
     public function getUserInfo(Request $request): Response
     {
-        try{$this->security->cleanXSS($request);}
+        /*try{$this->security->cleanXSS($request);}
         catch(SecurityException $e) {
             $this->logger->logError($e, $this->getUser(), "warning");
             return $this->responseHandler->forbidden();
-        }
+        }*/
 
         // recover all data's request
         $this->parameters->setData($request);
@@ -119,11 +118,11 @@ class UserAdminController extends CommonController
      */
     public function updateUserInfo(Request $request) : Response
     {
-        try{$this->security->cleanXSS($request);}
+        /*try{$this->security->cleanXSS($request);}
         catch(SecurityException $e) {
             $this->logger->logError($e, $this->getUser(), "warning");
             return $this->responseHandler->forbidden();
-        }
+        }*/
 
         // recover all data's request
         $this->parameters->setData($request);

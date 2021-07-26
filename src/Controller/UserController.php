@@ -37,7 +37,6 @@ class UserController extends AbstractController
 
     /**
      * UserController constructor.
-     * @param RequestSecurity $requestSecurity
      * @param RequestParameters $requestParameters
      * @param ResponseHandler $responseHandler
      * @param ParametersValidator $validator
@@ -45,9 +44,8 @@ class UserController extends AbstractController
      * @param FileHandler $fileHandler
      * @param LogService $logger
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
+    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
     {
-        $this->security = $requestSecurity;
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
         $this->validator = $validator;
@@ -65,12 +63,6 @@ class UserController extends AbstractController
      */
     public function register(Request $request, UserPasswordEncoderInterface $encoder): Response
     {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
        // recover all data's request
         $this->parameters->setData($request);
 
@@ -124,12 +116,6 @@ class UserController extends AbstractController
      */
     public function getUsers(Request $request): Response
     {
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -180,12 +166,6 @@ class UserController extends AbstractController
      */
     public function updateUser(Request $request) : Response
     {
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -249,12 +229,6 @@ class UserController extends AbstractController
      * @Route("/picture", name="_picture_put", methods="post")
      */
     public function uploadPicture(Request $request ) :Response {
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -324,12 +298,6 @@ class UserController extends AbstractController
      * @("/deletePicture", name="_picture_delete", methods="delete")
      */
     public function deletePicture(Request$request){
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -384,12 +352,6 @@ class UserController extends AbstractController
      */
     public function resetPassword(Request $request, UserPasswordEncoderInterface $encoder, JWTTokenManagerInterface $JWTManager)
     {
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -480,12 +442,6 @@ class UserController extends AbstractController
      * @return Response
      */
     public function changeEmail(Request  $request, JWTTokenManagerInterface $JWTManager){
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -550,12 +506,6 @@ class UserController extends AbstractController
      */
     public function activation(Request $request){
         $this->denyAccessUnlessGranted('ROLE_ADMIN');
-
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
 
         // recover all data's request
         $this->parameters->setData($request);
