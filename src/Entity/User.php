@@ -638,7 +638,7 @@ class User implements UserInterface
         $res = [];
         foreach($this->followingProjects as $following){
             if($following->getIsAssigning() === true ){
-                $res[] = $following->getProject();
+                $res[] = $following->getObject();
             }
         }
         return $res;
