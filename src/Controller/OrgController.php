@@ -38,7 +38,6 @@ class OrgController extends AbstractController
 
     /**
      * OrgController constructor.
-     * @param RequestSecurity $requestSecurity
      * @param RequestParameters $requestParameters
      * @param ResponseHandler $responseHandler
      * @param ParametersValidator $validator
@@ -116,11 +115,14 @@ class OrgController extends AbstractController
         if($this->parameters->getData('id') !== false){
             $criterias["id"]= $this->parameters->getData('id') ;
         }
+        if($this->parameters->getData('isPartner') !== false){
+            $criterias["isPartner"]= true;
+        }
 
         $repository = $this->entityManager->getRepository(Organization::class);
         //get query, if id not define, query getALL
         try{
-            if(isset($criterias['id'])){
+            if(count($criterias) > 0 ){
                 $dataResponse = $repository->findBy($criterias);
             }else {
                 $dataResponse = $repository->findAll();
@@ -154,6 +156,29 @@ class OrgController extends AbstractController
         return $this->responseHandler->successResponse($dataResponse, "read_org");
     }
 
+//    /**
+//     * @Route("/partner", name="_get_partner", methods="get")
+//     * @param Request $request
+//     * @return Response
+//     */
+//    public function getPartnerOrg(Request $request) :Response {
+//        // recover all data's request
+//        $this->parameters->setData($request);
+//
+//        $criterias = ["isPartner" => true];
+//        $repository = $this->entityManager->getRepository(Organization::class);
+//        //get query, if id not define, query getALL
+//        try{
+//            $dataResponse = $repository->findBy($criterias);
+//        }catch(Exception $e){
+//        $this->logger->logError($e,$this->getUser(),"error" );
+//        return $this->responseHandler->serverErrorResponse($e, "An error occured");
+//        }
+//
+//        //success response
+//        return $this->responseHandler->successResponse($dataResponse, "read_org");
+//    }
+
     /**
      * @Route("", name="_get", methods="get")
      * @param Request $request
@@ -171,7 +196,7 @@ class OrgController extends AbstractController
         $repository = $this->entityManager->getRepository(Organization::class);
         //get query, if id not define, query getALL
         try{
-            if(isset($criterias['id'])){
+            if(count($criterias) > 0){
                 $dataResponse = $repository->findBy($criterias);
             }else {
                 $dataResponse = $repository->findAll();
