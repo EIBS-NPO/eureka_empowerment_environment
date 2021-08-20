@@ -141,7 +141,7 @@ class ActivityFileController extends AbstractController
         $this->logger->logEvent($this->getUser(),$activityData->getId(), ActivityFile::class, "uploaded file");
 
         if($activityData->getPicturePath()){
-            $activityData = [$this->fileHandler->loadPicture($activityData)];
+            $activityData = $this->fileHandler->loadPicture($activityData);
         }
 
         //success response
@@ -154,7 +154,8 @@ class ActivityFileController extends AbstractController
      * @return Response|null
      * @Route("/update", name="_put", methods="post")
      */
-    public function updateActivityFile (Request $request) {
+    public function updateActivityFile (Request $request): ?Response
+    {
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -199,7 +200,7 @@ class ActivityFileController extends AbstractController
         $this->entityManager->flush();
 
         if($activityData->getPicturePath()){
-            $activityData = [$this->fileHandler->loadPicture($activityData)];
+            $activityData = $this->fileHandler->loadPicture($activityData);
         }
 
         //success response
@@ -259,7 +260,7 @@ class ActivityFileController extends AbstractController
             }
 
             if ($activityData->getPicturePath()) {
-                $activityData = [$this->fileHandler->loadPicture($activityData)];
+                $activityData = $this->fileHandler->loadPicture($activityData);
             }
 
             //success response
@@ -292,7 +293,7 @@ class ActivityFileController extends AbstractController
                 $userData = $repository->findBy(["id" => $this->getUser()->getId()]);
                 $user = $userData[0];
 
-                $activityData = $user->getActivity($this->parameters->getData("id"))[0];
+                $activityData = $user->getActivity($this->parameters->getData("id"));
             } else {//for admin
                 $repository = $this->entityManager->getRepository(Activity::class);
                 $activityData = $repository->findBy(["id" => $this->parameters->getData("id")]);
@@ -313,7 +314,7 @@ class ActivityFileController extends AbstractController
             $this->entityManager->flush();
 
             if($simpleActivity->getPicturePath()){
-                $simpleActivity = [$this->fileHandler->loadPicture($simpleActivity)];
+                $simpleActivity = $this->fileHandler->loadPicture($simpleActivity);
             }
 
             return $this->responseHandler->successResponse([$simpleActivity], "read_activity");

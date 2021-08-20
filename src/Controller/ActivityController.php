@@ -271,9 +271,10 @@ class ActivityController extends AbstractController
         // recover all data's request
         $this->parameters->setData($request);
 
+      //  dd($this->parameters->getAllData());
         $criterias = [];
         if($this->parameters->getData('id') !== false){
-            $criterias["id"]= $this->parameters->getData('id') ;
+            $criterias["id"]= (int)$this->parameters->getData('id') ;
         }
         $criterias["isPublic"] = true;
 

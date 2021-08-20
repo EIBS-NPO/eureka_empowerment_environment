@@ -233,7 +233,8 @@ class UserController extends AbstractController
         $this->parameters->setData($request);
 
         //check access
-        if($this->parameters->getData('id') !== false) {
+        //todo deplace l'admin dans un admin controller
+        /*if($this->parameters->getData('id') !== false) {
             if ($this->getUser()->getRoles()[0] !== "ROLE_ADMIN") {
                 return $this->responseHandler->unauthorizedResponse("unauthorized access");
             }else {
@@ -241,7 +242,10 @@ class UserController extends AbstractController
             }
         }else {
             $criterias["id"] = $this->getUser()->getId();
-        }
+        }*/
+        
+        $criterias["id"] = $this->getUser()->getId();
+
 
         //check if required params exist
         try{ $this->parameters->hasData(["image"]); }
