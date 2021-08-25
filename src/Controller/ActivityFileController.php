@@ -7,6 +7,7 @@ use App\Entity\ActivityFile;
 use App\Entity\User;
 use App\Exceptions\SecurityException;
 use App\Exceptions\ViolationException;
+use App\Service\Configuration\ConfigurationHandler;
 use App\Service\FileHandler;
 use App\Service\LogService;
 use App\Service\Request\ParametersValidator;
@@ -428,5 +429,17 @@ class ActivityFileController extends AbstractController
         else { return $this->responseHandler->notFoundResponse();}
 
         return $response;
+    }
+
+    /**
+     * @param Request $request
+     * @param ConfigurationHandler $configHandler
+     * @return Response
+     * @Route("/allowed", name="_allowed", methods="get")
+     */
+    public function getAllowedFileFormat(Request $request, ConfigurationHandler $configHandler) :Response{
+
+        $allowedMime = $configHandler->getValue("mime.type.allowed");
+        return $this->responseHandler->successResponse($allowedMime );
     }
 }
