@@ -164,7 +164,7 @@ class UserController extends AbstractController
      * @param Request $request
      * @return Response
      */
-    public function updateUser(Request $request) : Response
+    public function updateUser(Request $request, JWTTokenManagerInterface $JWTManager) : Response
     {
         // recover all data's request
         $this->parameters->setData($request);
@@ -211,7 +211,9 @@ class UserController extends AbstractController
 
                 $this->entityManager->flush();
                 $user = $this->fileHandler->loadPicture($user);
-                $userData = [$user];
+                $userData = [$user,
+                    'token' => $JWTManager->create($user)
+                ];
             }
 
         }catch(Exception $e){
@@ -243,7 +245,7 @@ class UserController extends AbstractController
         }else {
             $criterias["id"] = $this->getUser()->getId();
         }*/
-        
+
         $criterias["id"] = $this->getUser()->getId();
 
 
@@ -445,7 +447,8 @@ class UserController extends AbstractController
      * @param JWTTokenManagerInterface $JWTManager
      * @return Response
      */
-    public function changeEmail(Request  $request, JWTTokenManagerInterface $JWTManager){
+    public function changeEmail(Request  $request, JWTTokenManagerInterface $JWTManager): Response
+    {
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -502,49 +505,4 @@ class UserController extends AbstractController
 
         return $this->responseHandler->successResponse($dataResponse);
     }
-
-    /**
-     * @param Request $request
-     * @return Response
-     * @Route("/activ", name="_activation", methods="put")
-     */
-    public function activation(Request $request){
-        $this->denyAccessUnlessGranted('ROLE_ADMIN');
-
-        // recover all data's request
-        $this->parameters->setData($request);
-
-        //check if required params exist
-        try{ $this->parameters->hasData(["id"]); }
-        catch(ViolationException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
-        }
-
-        $repository = $this->entityManager->getRepository(User::class);
-        try{
-            $userData = $repository->findBy(["id" => $this->parameters->getData("id") ]);
-            if(!empty($userData)) {
-                $user = $userData[0];
-                if($user->getRoles()[0] === "ROLE_USER"){
-                    $user->setRoles([""]);
-                }
-                else {$user->setRoles(["ROLE_USER"]);}
-
-                //persist updated user
-                $this->entityManager->flush();
-
-            }else {
-                $this->logger->logInfo("user with id : ". $this->parameters->getData("id") ." not found" );
-                return $this->responseHandler->notFoundResponse();
-            }
-        }catch(Exception $e){
-            $this->logger->logError($e,$this->getUser(),"error" );
-            return $this->responseHandler->serverErrorResponse($e, "An error occured");
-        }
-
-        $dataResponse = [$user->getRoles()[0]];
-        return $this->responseHandler->successResponse($dataResponse);
-    }
-
 }
