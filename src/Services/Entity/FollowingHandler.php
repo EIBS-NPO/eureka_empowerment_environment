@@ -1,7 +1,7 @@
 <?php
 
 
-namespace App\Service\Security;
+namespace App\Services\Entity;
 
 
 use App\Entity\Following;
@@ -58,13 +58,16 @@ class FollowingHandler
             $following = $this->newFollowing($object, $follower);
         }
 
-        // assinging only for Project object
-        if(get_class($object) === Project::class){
+        //todo and for org ?
+        // assinging only for Project object ou juste pas du tout en faite tant que l'objet implémente TrackableObject!
+    //    if(get_class($object) === Project::class) {
             //follower have already a following?
-            $following->setIsAssigning(true);
-        }else{
-            $following->setIsAssigning(false);
-        }
+            if (!$following->getIsAssigning()) {
+                $following->setIsAssigning(true);
+            } else {
+                $following->setIsAssigning(false);
+            }
+     //   }
 
         return $following;
     }
@@ -77,7 +80,7 @@ class FollowingHandler
         //follower have already a following?
 
     //    $following = $this->getFollowingByFollowerId($object, $follower->getId());
-        if($following === null) return false;
+     //   if($following === null) return false;
 
         $following->setIsAssigning(false);
 
@@ -90,7 +93,7 @@ class FollowingHandler
      * @return bool
      */
     public function rmvFollower(Following $following) :bool {
-        if($following === null) return false;
+    //    if($following === null) return false;
 
         $following->setIsFollowing(false);
         return true;
@@ -101,7 +104,8 @@ class FollowingHandler
      * @param Following $following
      * @return bool
      */
-    public function isStillValid(Following $following){
+    public function isStillValid(Following $following): bool
+    {
         return $following->getIsAssigning() || $following->getIsFollowing();
     }
 
@@ -111,7 +115,8 @@ class FollowingHandler
      * @param UserInterface $follower
      * @return Following
      */
-    private function newFollowing(TrackableObject $object, UserInterface $follower){
+    private function newFollowing(TrackableObject $object, UserInterface $follower): Following
+    {
         $following = new Following();
         $following->setIsFollowing(false);
         $following->setIsAssigning(false);
@@ -125,7 +130,8 @@ class FollowingHandler
      * @param TrackableObject $object
      * @return array
      */
-    public function getAssignedTeam(TrackableObject $object){
+    public function getAssignedTeam(TrackableObject $object): array
+    {
         $team = [$object->getCreator()];
         foreach($object->getFollowings() as $following){
             if($following->getIsAssigning()){
@@ -140,7 +146,8 @@ class FollowingHandler
      * @param TrackableObject $object
      * @return array
      */
-    public function getFollowers(TrackableObject $object){
+    public function getFollowers(TrackableObject $object): array
+    {
         $followers = [];
         foreach($object->getFollowings() as $following){
             if($following->getIsFollowing()){
@@ -156,7 +163,8 @@ class FollowingHandler
      * @param int $id
      * @return Following|null
      */
-    public function getFollowingByFollowerId(TrackableObject $object, int $id){
+    public function getFollowingByFollowerId(TrackableObject $object, int $id): ?Following
+    {
         $res = null;
 
         foreach($object->getFollowings() as $following){
@@ -173,7 +181,8 @@ class FollowingHandler
      * @param UserInterface $follower
      * @return bool
      */
-    public function isAssign(TrackableObject $object, UserInterface $follower){
+    public function isAssign(TrackableObject $object, UserInterface $follower): bool
+    {
         $res = false;
         if($object->getCreator()->getId() === $follower->getId()){
             $res = true;
@@ -187,7 +196,8 @@ class FollowingHandler
         return $res;
     }
 
-    public function isFollowed(TrackableObject $object, UserInterface $follower){
+    public function isFollowed(TrackableObject $object, UserInterface $follower): bool
+    {
         $res = false;
         $following = $this->getFollowingByFollowerId($object, $follower->getId());
 

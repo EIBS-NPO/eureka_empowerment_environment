@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Interfaces\PictorialObject;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -15,7 +16,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * @UniqueEntity("email", message="this email already exist for user account")
  *
  */
-class User implements UserInterface
+class User implements UserInterface, PictorialObject
 {
     /**
      * @ORM\Id
@@ -140,12 +141,12 @@ class User implements UserInterface
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
      */
-    private $picturePath;
+    private $picturePath = null;
 
     /**
      * base64_encode(picture)
      */
-    private $pictureFile;
+    private $pictureFile = null;
 
     /**
      * @ORM\OneToOne(targetEntity=Address::class, inversedBy="owner", cascade={"persist", "remove"})
@@ -171,6 +172,17 @@ class User implements UserInterface
      * )
      */
     private $followingProjects;
+
+    /**
+     * @ORM\Column(type="string", length=255, nullable=true)
+     */
+    private ?String $activationToken = null;
+
+    /**
+     * @ORM\Column(type="string")symfony server:start
+     *
+     */
+    private String $refresh_token;
 
     public function __construct()
     {
@@ -295,6 +307,22 @@ class User implements UserInterface
         $this->email = $email;
 
         return $this;
+    }
+
+    /**
+     * @return String|null
+     */
+    public function getActivationToken(): ?string
+    {
+        return $this->activationToken;
+    }
+
+    /**
+     * @param String|null $activation_token
+     */
+    public function setActivationToken($activation_token): void
+    {
+        $this->activationToken = $activation_token;
     }
 
     public function getPhone(): ?string
@@ -552,7 +580,7 @@ class User implements UserInterface
     /**
      * @return mixed
      */
-    public function getPictureFile()
+    public function getPictureFile() :String
     {
         return $this->pictureFile;
     }
@@ -560,9 +588,10 @@ class User implements UserInterface
     /**
      * @param mixed $pictureFile
      */
-    public function setPictureFile($pictureFile): void
+    public function setPictureFile($pictureFile): self
     {
         $this->pictureFile = $pictureFile;
+        return $this;
     }
 
     public function getAddress(): ?Address

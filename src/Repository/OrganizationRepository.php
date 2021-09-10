@@ -19,6 +19,50 @@ class OrganizationRepository extends ServiceEntityRepository
         parent::__construct($registry, Organization::class);
     }
 
+    public function findAssigned($userId){
+        return $this->createQueryBuilder('o')
+            ->join('o.membership', 'm' )
+            ->andWhere('m.id = :userId')
+            ->setParameter('userId', $userId)
+            ->getQuery()
+            ->getResult()
+            ;
+    }
+
+    public function findAssignedById($userId, $orgId){
+        return $this->createQueryBuilder('o')
+            ->join('o.membership', 'm' )
+            ->andWhere('m.id = :userId AND o.id = :orgId')
+            ->setParameter('userId', $userId)
+            ->setParameter('orgId', $orgId)
+            ->getQuery()
+            ->getResult()
+            ;
+    }
+
+
+    //todo no follow-up relationship on organizations yet
+    public function findFollowed($userId){
+        return $this->createQueryBuilder('o')
+            ->join('o.followings', 'f' )
+            ->andWhere('f.follower = :userId AND f.isFollowing = true')
+            ->setParameter('userId', $userId)
+            ->getQuery()
+            ->getResult()
+            ;
+    }
+
+    //todo no follow-up relationship on organizations yet
+    public function findFollowedById($userId, $orgId){
+        return $this->createQueryBuilder('o')
+            ->join('o.followings', 'f' )
+            ->andWhere('f.follower = :userId AND f.isFollowing = true AND o.id = :orgId')
+            ->setParameter('userId', $userId)
+            ->setParameter('orgId', $orgId)
+            ->getQuery()
+            ->getResult()
+            ;
+    }
     // /**
     //  * @return Organization[] Returns an array of Organization objects
     //  */

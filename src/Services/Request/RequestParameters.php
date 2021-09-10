@@ -1,7 +1,7 @@
 <?php
 
 
-namespace App\Service\Request;
+namespace App\Services\Request;
 
 
 use App\Exceptions\ViolationException;
@@ -34,6 +34,7 @@ class RequestParameters
      * @param Request $request
      */
     public function setData(Request $request) :void {
+
         switch($request->getMethod()){
             case "DELETE":
             case "GET":
@@ -41,7 +42,13 @@ class RequestParameters
                 break;
             case "PUT":
             case "POST":
-                $this->data = array_merge($this->data, $request->request->all());
+                foreach($request->request->all() as $key => $value){
+                    if($this->isJSON($value)){
+                        $value = json_decode($value,JSON_OBJECT_AS_ARRAY);
+                    }
+                    $this->data[$key]=$value;
+                }
+
                 $this->data = array_merge($this->data, $request->files->all());
                 break;
         }
@@ -84,7 +91,9 @@ class RequestParameters
         foreach(explode("&", $content) as $value){
             $value = urldecode($value);
             $line = explode("=", $value);
+
             $this->data = array_merge($this->data, [$line[0] => $line[1]]);
+
         }
     }
 
@@ -102,7 +111,7 @@ class RequestParameters
             }
         }
         if (count($tabMissing) > 0) {
-            throw new ViolationException($tabMissing);
+            throw new ViolationException(json_encode($tabMissing));
         }
     }
 }

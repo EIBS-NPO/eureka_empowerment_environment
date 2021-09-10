@@ -5,9 +5,9 @@ namespace App\Event\Listener;
 
 
 use App\Exceptions\SecurityException;
-use App\Service\LogService;
-use App\Service\Request\ResponseHandler;
-use App\Service\Security\RequestSecurity;
+use App\Services\LogService;
+use App\Services\Request\ResponseHandler;
+use App\Services\Security\RequestSecurity;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\RequestEvent;

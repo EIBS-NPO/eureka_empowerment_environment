@@ -1,9 +1,10 @@
 <?php
 
 
-namespace App\Controller;
+namespace App\Controller\admin;
 
 
+use App\Controller\CommonController;
 use App\Entity\Organization;
 use Exception;
 use Symfony\Component\HttpFoundation\Request;
@@ -17,12 +18,13 @@ use Symfony\Component\Routing\Annotation\Route;
  */
 class OrgAdminController extends CommonController
 { //todo suppr commonController
-    /**
+    /*
      * @Route("", name="_get", methods="get")
      * @param Request $insecureRequest
      * @return Response
      */
-    public function getOrganization(Request $insecureRequest){
+    /*public function getOrganization(Request $insecureRequest): Response
+    {
 
         // recover all data's request
         $this->dataRequest = $this->requestParameters->getData($this->request);
@@ -72,7 +74,7 @@ class OrgAdminController extends CommonController
             Response::HTTP_OK,
             ["content-type" => "application/json"]
         );
-    }
+    }*/
 
     //todo update org for change a referent ?
 }

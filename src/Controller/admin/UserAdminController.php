@@ -4,12 +4,12 @@ namespace App\Controller\admin;
 
 use App\Entity\User;
 use App\Exceptions\ViolationException;
-use App\Service\FileHandler;
-use App\Service\LogService;
-use App\Service\Request\ParametersValidator;
-use App\Service\Request\RequestParameters;
-use App\Service\Request\ResponseHandler;
-use App\Service\Security\RequestSecurity;
+use App\Services\FileHandler;
+use App\Services\LogService;
+use App\Services\Request\ParametersValidator;
+use App\Services\Request\RequestParameters;
+use App\Services\Request\ResponseHandler;
+use App\Services\Security\RequestSecurity;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;

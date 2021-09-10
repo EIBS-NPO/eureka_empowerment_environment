@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Interfaces\PictorialObject;
 use App\Entity\Interfaces\TrackableObject;
 use App\Repository\ProjectRepository;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -12,7 +13,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 /**
  * @ORM\Entity(repositoryClass=ProjectRepository::class)
  */
-class Project implements TrackableObject
+class Project implements TrackableObject, PictorialObject
 {
     /**
      * @ORM\Id
@@ -70,17 +71,17 @@ class Project implements TrackableObject
      *     }
      * )
      */
-    private $activities;
+    private $activities = [];
 
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
      */
-    private $picturePath;
+    private $picturePath = null;
 
     /**
      * base64_encode(picture)
      */
-    private $pictureFile;
+    private $pictureFile = null;
 
     /**
      * @ORM\Column(type="json")
@@ -305,7 +306,7 @@ class Project implements TrackableObject
     /**
      * @return mixed
      */
-    public function getPictureFile()
+    public function getPictureFile(): ?String
     {
         return $this->pictureFile;
     }
@@ -313,9 +314,11 @@ class Project implements TrackableObject
     /**
      * @param mixed $pictureFile
      */
-    public function setPictureFile($pictureFile): void
+    public function setPictureFile($pictureFile): self
     {
         $this->pictureFile = $pictureFile;
+
+        return $this;
     }
 
     /**

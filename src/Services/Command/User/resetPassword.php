@@ -1,7 +1,7 @@
 <?php
 
 
-namespace App\Service\Command\User;
+namespace App\Services\Command\User;
 
 
 use App\Entity\User;

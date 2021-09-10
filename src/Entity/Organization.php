@@ -2,6 +2,8 @@
 
 namespace App\Entity;
 
+use App\Entity\Interfaces\PictorialObject;
+use App\Entity\Interfaces\TrackableObject;
 use App\Repository\OrganizationRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -12,9 +14,9 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * @ORM\Entity(repositoryClass=OrganizationRepository::class)
- * @UniqueEntity("name", message="this organization name already exist")
+ * @UniqueEntity(fields={"name"}, message="this organization name already exist")B
  */
-class Organization
+class Organization implements PictorialObject //TrackableObject
 {
     /**
      * @ORM\Id
@@ -46,6 +48,7 @@ class Organization
     /**
      * @ORM\Column(type="string", length=50)
      * @Assert\NotBlank(message="the email is required")
+     * @Assert\Type(type="string", message=" email is not valid string")
      * @Assert\Email(message="invalid email")
      */
     private $email;
@@ -80,12 +83,27 @@ class Organization
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
      */
-    private $picturePath;
+    private $picturePath = null;
 
+    /*
+     * /**
+     * @Assert\Image(
+     *     minWidth = 200,
+     *     maxWidth = 400,
+     *     minHeight = 200,
+     *     maxHeight = 400
+     * )
+     *  /**
+     * @Assert\File(
+     *     maxSize = "1024k",
+     *     mimeTypes = {"application/pdf", "application/x-pdf"},
+     *     mimeTypesMessage = "Please upload a valid PDF"
+     * )
+     */
     /**
      * base64_encode(picture)
      */
-    private $pictureFile;
+    private $pictureFile = null;
 
     /**
      * @ORM\Column(type="json")
@@ -356,7 +374,7 @@ class Organization
     /**
      * @return mixed
      */
-    public function getPictureFile()
+    public function getPictureFile(): ?String
     {
         return $this->pictureFile;
     }
@@ -364,9 +382,11 @@ class Organization
     /**
      * @param mixed $pictureFile
      */
-    public function setPictureFile($pictureFile): void
+    public function setPictureFile($pictureFile): self
     {
         $this->pictureFile = $pictureFile;
+
+        return $this;
     }
 
     public function getDescription(): ?array
@@ -374,6 +394,7 @@ class Organization
         return $this->description;
     }
 
+    //todo array non...
     public function setDescription(array $description): self
     {
         $this->description = $description;

@@ -1,8 +1,9 @@
 <?php
 
 
-namespace App\Service\Request;
+namespace App\Services\Request;
 
+use App\Exceptions\PartialContentException;
 use Exception;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -27,7 +28,6 @@ class ResponseHandler
         $this->dataResponse = $dataResponse;
     }
 
-
     /**
      * @param $datas
      * @param String|null $context
@@ -35,6 +35,7 @@ class ResponseHandler
      */
     public function serialize($datas, String $context = null){
         foreach($datas as $key => $data){
+            //todo handle case of array, => do not serialize. (but is content must be)
             if(gettype( $data) !== "string" && gettype( $data) !== "boolean" && gettype( $data) !== "array"){
                 $datas[$key] =  $data->serialize($context);
             }
@@ -55,9 +56,9 @@ class ResponseHandler
         );
     }
 
-    public function BadRequestResponse(Array $violations) :Response{
+    public function BadRequestResponse(String $violations) :Response{
         return  $this->response =  new Response(
-            json_encode($violations),
+            $violations,
             Response::HTTP_BAD_REQUEST,
             ["content-type" => "application/json"]
         );
@@ -69,9 +70,7 @@ class ResponseHandler
      */
     public function notFoundResponse() :Response{
         return  $this->response =  new Response(
-        //todo stocker/ construire la chaine message log dans le service log
-        //$logInfo .= " | DATA_NOT_FOUND";
-            json_encode(["DATA_NOT_FOUND"]),
+            json_encode("data no found"),
             Response::HTTP_OK,
             ["content-type" => "application/json"]
         );
@@ -100,15 +99,14 @@ class ResponseHandler
 
 
     /**
-     * @param Exception $e
-     * @param String $logInfo
+     * @param String $publicErrorMessage
      * @return Response
      */
-    public function serverErrorResponse(Exception $e, String $logInfo) :Response
+    public function serverErrorResponse(String $publicErrorMessage) :Response
     {
         //todo check message
         return $this->response = new Response(
-            json_encode($logInfo),
+            json_encode($publicErrorMessage),
             Response::HTTP_INTERNAL_SERVER_ERROR,
             ["Content-Type" => "application/json"]
         );
@@ -135,5 +133,23 @@ class ResponseHandler
             json_encode(["error" => "ACCESS_FORBIDDEN"]),
             Response::HTTP_FORBIDDEN,
             ["Content-Type" => "application/json"]);
+    }
+
+    public function partialResponse(PartialContentException $exception, String $context = null) :Response {
+       // array_unshift($data, $exception->getMessage());
+        $data = [$exception->getMessage(), $exception->getData()];
+        return $this->response = new Response(
+            json_encode( $this->serialize( $data, $context ) ),
+            Response::HTTP_PARTIAL_CONTENT,
+            ["content-type" => "application/json"]
+        );
+    }
+
+    public function exceptionResponse($exception) : Response{
+        return $this->response = new Response(
+            $exception->getMessage(),
+            $exception->getCode(),
+            ["Content-Type" => "application/json"]
+        );
     }
 }

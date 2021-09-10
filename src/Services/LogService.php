@@ -1,7 +1,7 @@
 <?php
 
 
-namespace App\Service;
+namespace App\Services;
 
 use App\Entity\Events;
 use DateTime;
@@ -12,7 +12,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
  * Class LogService
- * @package App\Service
+ * @package App\Services
  */
 class LogService
 {
@@ -105,7 +105,7 @@ class LogService
 
         }
 
-        $message .= mb_strtoupper($this->level) . " : " . $exception->getMessage();
+        $message .= mb_strtoupper($this->level) . " : " . $exception->getMessage() . " : " . $exception->getTraceAsString();
 
         // Choose what monolog method to use
         if ($level) {

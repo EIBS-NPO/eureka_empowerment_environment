@@ -19,6 +19,7 @@ class ActivityRepository extends ServiceEntityRepository
         parent::__construct($registry, Activity::class);
     }
 
+    //todo useless?
     public function getActivityDType($id){
         return $this->createQueryBuilder('qb')
             ->select('qb.dtype')
@@ -27,6 +28,28 @@ class ActivityRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    public function findFollowed($userId){
+        return $this->createQueryBuilder('a')
+            ->join('a.followers', 'f' )
+            ->andWhere('f.id = :userId')
+            ->setParameter('userId', $userId)
+            ->getQuery()
+            ->getResult()
+            ;
+    }
+
+    public function findFollowedById($userId, $activityId){
+        return $this->createQueryBuilder('a')
+            ->join('a.followings', 'f' )
+            ->andWhere('f.follower = :userId AND a.id = :activityId')
+            ->setParameter('userId', $userId)
+            ->setParameter('activityId', $activityId)
+            ->getQuery()
+            ->getResult()
+            ;
+    }
+
 
     // /**
     //  * @return Activity[] Returns an array of Activity objects

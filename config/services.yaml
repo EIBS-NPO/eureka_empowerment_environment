@@ -28,12 +28,20 @@ services:
         resource: '../src/Controller/'
         tags: ['controller.service_arguments']
 
-    App\Service\FileHandler:
+    App\Services\FileHandler:
         arguments:
             $targetDirectory: '%upload_directory%'
 
 
-    App\Service\Secuity\RequestSecurity:
+#    App\Services\Mailer\MailHandler:
+#        tags:
+#            - {
+#                  name: kernel.event_listener,
+#                  event: mail_handler.send_confirm_email,
+#                  method: sendConfirmEmail
+#            }
+            
+    App\Services\Secuity\RequestSecurity:
         tags:
             - {
                   name: kernel.event_listener,

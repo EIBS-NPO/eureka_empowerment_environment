@@ -1,7 +1,7 @@
 <?php
 
 
-namespace App\Service\Request;
+namespace App\Services\Request;
 
 
 use App\Exceptions\ViolationException;
@@ -44,7 +44,7 @@ class ParametersValidator
         $this->className = $className;
     }
 
-    /**
+    /*
      * @param $object
      * @param $fields
      * @throws ViolationException
@@ -126,7 +126,25 @@ class ParametersValidator
         $this->getViolations();
 
         if(count($this->violations) > 0 ){
-            throw new ViolationException($this->violations);
+            throw new ViolationException(json_encode($this->violations));
+        }
+    }
+
+    /**
+     * @param array $dataKeys
+     * @return void
+     * @throws ViolationException
+     */
+    public function hasData(array $dataKeys) :void
+    {
+        $tabMissing = [];
+        foreach ($dataKeys as $key) {
+            if (!isset($this->data[$key])) {
+                $tabMissing[] = "missing parameter : " . $key . " is required. ";
+            }
+        }
+        if (count($tabMissing) > 0) {
+            throw new ViolationException(json_encode($tabMissing));
         }
     }
 }

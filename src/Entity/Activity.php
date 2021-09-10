@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Interfaces\PictorialObject;
 use App\Repository\ActivityRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -13,7 +14,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * @ORM\Entity(repositoryClass=ActivityRepository::class)
  * @InheritanceType("JOINED")
  */
-class Activity
+class Activity implements PictorialObject
 {
     /**
      * @ORM\Id
@@ -135,7 +136,7 @@ class Activity
         return $data;
     }
 
-    public function setFromActivityFile(ActivityFile $activityFile){
+    public function setFromActivityFile(Activity $activityFile){
         $this->isPublic = $activityFile->getIsPublic();
         $this->title = $activityFile->getTitle();
         $this->summary = $activityFile->getSummary();
@@ -263,7 +264,7 @@ class Activity
     /**
      * @return mixed
      */
-    public function getPictureFile()
+    public function getPictureFile() : ?String
     {
         return $this->pictureFile;
     }
@@ -271,9 +272,11 @@ class Activity
     /**
      * @param mixed $pictureFile
      */
-    public function setPictureFile($pictureFile): void
+    public function setPictureFile($pictureFile): self
     {
         $this->pictureFile = $pictureFile;
+
+        return $this;
     }
 
     /**
@@ -312,10 +315,12 @@ class Activity
     }
 
     /**
+     * return if User|Project|Organization have a private to this.Activity.
      * @param $user
      * @return bool
      */
-    public function hasAccess($user){
+    public function hasAccess($user): bool
+    {
         $res = false;
         if($this->creator->getId() === $user->getId()){
             $res = true;

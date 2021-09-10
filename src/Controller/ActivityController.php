@@ -3,21 +3,28 @@
 namespace App\Controller;
 
 use App\Entity\Activity;
+use App\Entity\ActivityFile;
 use App\Entity\Project;
 use App\Entity\User;
-use App\Exceptions\SecurityException;
+use App\Exceptions\BadMediaFileException;
+use App\Exceptions\NoFoundException;
+use App\Exceptions\PartialContentException;
 use App\Exceptions\ViolationException;
-use App\Service\FileHandler;
-use App\Service\LogService;
-use App\Service\Request\ParametersValidator;
-use App\Service\Request\RequestParameters;
-use App\Service\Request\ResponseHandler;
-use App\Service\Security\RequestSecurity;
+use App\Services\Entity\ActivityHandler;
+use App\Services\FileHandler;
+use App\Services\LogService;
+use App\Services\Request\ParametersValidator;
+use App\Services\Request\RequestParameters;
+use App\Services\Request\ResponseHandler;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\File\Exception\NoFileException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\ResponseHeaderBag;
+use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use Symfony\Component\Routing\Annotation\Route;
 
 /**
@@ -33,6 +40,7 @@ class ActivityController extends AbstractController
     protected EntityManagerInterface $entityManager;
     protected FileHandler $fileHandler;
     private LogService $logger;
+    private ActivityHandler $activityHandler;
 
     /**
      * UserController constructor.
@@ -41,9 +49,10 @@ class ActivityController extends AbstractController
      * @param ParametersValidator $validator
      * @param EntityManagerInterface $entityManager
      * @param FileHandler $fileHandler
+     * @param ActivityHandler $activityHandler
      * @param LogService $logger
      */
-    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
+    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, ActivityHandler $activityHandler, LogService $logger)
     {
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
@@ -51,6 +60,8 @@ class ActivityController extends AbstractController
         $this->entityManager = $entityManager;
         $this->fileHandler = $fileHandler;
         $this->logger = $logger;
+
+        $this->activityHandler = $activityHandler;
     }
 
 
@@ -61,46 +72,37 @@ class ActivityController extends AbstractController
      */
     public function create(Request $request): Response
     {
-        // recover all data's request
-        $this->parameters->setData($request);
-        $this->parameters->addParam("creator", $this->getUser());
-        $this->parameters->addParam("postDate", New \DateTime("now"));
+        try {
+            // recover all data's request
+            $this->parameters->setData($request);
 
-        if(!$this->parameters->getData('isPublic')){
-            $this->parameters->addParam("isPublic", false);
+            $this->parameters->addParam("creator", $this->getUser());
+            $this->parameters->addParam("postDate", New \DateTime("now"));
+
+            //force boolean type
+            if(!$this->parameters->getData('isPublic') || $this->parameters->getData('isPublic') === "false"){
+                $this->parameters->putData("isPublic", false);
+            }else{$this->parameters->putData("isPublic", true);}
+
+            $activity = $this->activityHandler->create($this->parameters->getAllData());
+
+            $activity = $this->activityHandler->withPictures([$activity]);
+
+        return $this->responseHandler->successResponse($activity);
         }
-
-        //check params Validations
-        try{ $this->validator->isInvalid(
-            ["title", "summary", "postDate", "creator", "isPublic"],
-            [],
-            Activity::class);
-        } catch(ViolationException $e){
+        catch(PartialContentException $e){
             $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+            return $this->responseHandler->partialResponse($e, "read_activity");
         }
-
-        //create Activity object && set validated fields
-        $activity = new Activity();
-        foreach( ["title", "summary", "postDate", "creator", "isPublic"]
-                 as $field ) {
-            if($this->parameters->getData($field) !== false ) {
-                $setter = 'set'.ucfirst($field);
-                $activity->$setter($this->parameters->getData($field));
-            }
+        catch(ViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getMessage());
         }
-
-        //persist the new activity
-        try{
-            $this->entityManager->persist($activity);
-            $this->entityManager->flush();
-        }catch(Exception $e){
+        catch(Exception $e){
             $this->logger->logError($e,$this->getUser(),"error");
-            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+            return $this->responseHandler->serverErrorResponse( "An error occured");
         }
 
-        //success response
-        return $this->responseHandler->successResponse([$activity]);
     }
 
 
@@ -115,75 +117,45 @@ class ActivityController extends AbstractController
      */
     public function updateActivity (Request $request) :Response
     {
-        // recover all data's request
-        $this->parameters->setData($request);
+     try   {// recover all data's request
+            $this->parameters->setData($request);
 
-        //check if required params exist
-        try{ $this->parameters->hasData(["id"]); }
-        catch(ViolationException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
-        }
+            //check if required params exist
+            $this->parameters->hasData(["id", "isPublic"]);
 
-        //check params Validations
-        try{ $this->validator->isInvalid(
-            [],
-            ["title", "summary", "isPublic"],
-            Project::class);
-        } catch(ViolationException $e){
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
-        }
+            //convert Date
+            $this->parameters->addParam("postDate", New \DateTime("now"));
 
-        //for no admin get org by user
-        if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
-            $repository = $this->entityManager->getRepository(User::class);
-            $userData = $repository->findBy(["id" => $this->getUser()->getId()]);
-            $user = $userData[0];
-
-            $activityData = $user->getActivity($this->parameters->getData("id"));
-        }
-        else{//for admin
-            $repository = $this->entityManager->getRepository(Activity::class);
-            $activityData = $repository->findBy(["id" => $this->parameters->getData("id")]);
-            if(count($activityData) === 0 ){
-                $this->logger->logInfo(" Activity with id : ". $this->parameters->getData("id") ." not found " );
-                return $this->responseHandler->notFoundResponse();
-            }
-            $activityData = $activityData[0];
-        }
-
-//only for referent or admin
-        if($activityData !== false ){
-            foreach( ["title", "summary", "isPublic"]
-                     as $field ) {
-                if($this->parameters->getData($field) !== false ) {
-                    $setter = 'set'.ucfirst($field);
-                    $activityData->$setter($this->parameters->getData($field));
-                }
+            //force boolean type
+            if ($this->parameters->getData('isPublic') === "false") {
+                $this->parameters->putData("isPublic", false);
+            } else {
+                $this->parameters->putData("isPublic", true);
             }
 
-            $this->entityManager->flush();
-            if(gettype($activityData) !== "array"){
-                $activityData = [$activityData];
-            }
-            //load picture
-            foreach($activityData as $key => $activity){
-                if($activity->getProject() !== null ){
-                    $activity->setProject( $this->fileHandler->loadPicture($activity->getProject()));
-                }
-                if($activity->getOrganization() !== null ){
-                    $activity->setOrganization( $this->fileHandler->loadPicture($activity->getOrganization()));
-                }
-                $activityData[$key] = $this->fileHandler->loadPicture($activity);
-            }
+            $activity = $this->activityHandler->getActivities(
+                $this->getUser(),
+                $this->parameters->getAllData(),
+                true
+            )[0];
 
-        }else{
-            $this->responseHandler->unauthorizedResponse("unauthorized");
+            $activity = $this->activityHandler->update(
+                $activity,
+                $this->parameters->getAllData()
+            );
+
+            $activity = $this->activityHandler->withPictures([$activity]);
+            //success response
+    return $this->responseHandler->successResponse($activity, "read_activity");
         }
-
-        //success response
-        return $this->responseHandler->successResponse($activityData, "read_activity");
+    catch (ViolationException | NoFoundException $e) {
+         $this->logger->logError($e, $this->getUser(), "error");
+         return $this->responseHandler->BadRequestResponse($e->getMessage());
+        }
+    catch (Exception $e) {//unexpected error
+         $this->logger->logError($e, $this->getUser(), "error");
+         return $this->responseHandler->serverErrorResponse("An error occurred");
+        }
     }
 
 
@@ -195,70 +167,122 @@ class ActivityController extends AbstractController
      * @Route("/picture", name="_picture_put", methods="post")
      */
     public function putPicture(Request $request ) :Response {
-        // recover all data's request
-        $this->parameters->setData($request);
-
-        //check if required params exist
-        try{ $this->parameters->hasData(["id", "image"]); }
-        catch(ViolationException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
-        }
-
         try{
-            //for no admin get org by user
-            if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
-                $repository = $this->entityManager->getRepository(User::class);
-                $userData = $repository->findBy(["id" => $this->getUser()->getId()]);
-                $user = $userData[0];
+            // recover all data's request
+            $this->parameters->setData($request);
+            $this->parameters->hasData(["id", "pictureFile"]);
 
-                $activityData = $user->getActivity($this->parameters->getData("id"));
-            }
-            else{//for admin
-                $repository = $this->entityManager->getRepository(Activity::class);
-                $activityData = $repository->findBy(["id" => $this->parameters->getData("id")]);
-                if(count($activityData) === 0 ){
-                    $this->logger->logInfo(" Activity with id : ". $this->parameters->getData("id") ." not found " );
-                    return $this->responseHandler->notFoundResponse();
-                }
-                $activityData = $activityData[0];
-            }
+            //get activity by id with owned context and notFoundException
+            $activity = $this->activityHandler->getActivities(
+                $this->getUser(), [
+                    "id" => $this->parameters->getData("id"),
+                    "access" => "owned"],
+                true
+            )[0];
 
-            if($activityData !== false ){
-                $oldPic = $activityData->getPicturePath() ? $activityData->getPicturePath() : null;
+            $activity = $this->activityHandler->putPicture($activity,$this->parameters->getAllData());
 
-                $fileDir = '/pictures/Activity';
-                $picFile = $this->parameters->getData("image");
+            $activity = $this->activityHandler->withPictures([$activity]);
 
-                //make unique picturePath
-                $activityData->setPicturePath(uniqid().'_'. $this->fileHandler->getOriginalFilename($picFile).'.'. $picFile->guessExtension());
-
-                //upload
-                $this->fileHandler->upload($fileDir, $activityData->getPicturePath(), $picFile);
-
-                $this->entityManager->flush();
-                $activityData = $this->fileHandler->loadPicture($activityData);
-
-                //if a picture already exist, need to remove it
-                if($oldPic !== null){
-                    $this->logger->logInfo(" User with id " . $this->getUser()->getId() . " remove old Picture for Activity with id ". $activityData->getId() );
-                    $this->fileHandler->removeFile($fileDir.'/'.$oldPic);
-                }
-
-            }else{
-                $this->responseHandler->unauthorizedResponse("unauthorized");
-            }
-
-        }catch(Exception $e){
-            $this->logger->logError($e,$this->getUser(),"error" );
-            return $this->responseHandler->serverErrorResponse($e, "An error occured ");
+            return $this->responseHandler->successResponse($activity, "read_activity");
         }
-
-        //final response
-        return $this->responseHandler->successResponse([$activityData], "read_activity");
+        catch(ViolationException | NoFoundException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getMessage());
+        }
+        catch (BadMediaFileException $e){
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadMediaResponse($e->getMessage());
+        }
+        catch (Exception $e) {//unexpected error
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->serverErrorResponse("An error occurred");
+        }
     }
 
-//todo delete picture
+    /**
+     * @param Request $request
+     * @return Response|null
+     * @Route("/file", name="_put", methods="post")
+     */
+    public function updateFile (Request $request): ?Response
+    {
+    try{
+        // recover all data's request
+        $this->parameters->setData($request);
+        $this->parameters->hasData(["id", "file"]);
+
+        //get activity by id with owned context and notFoundException
+        $activity = $this->activityHandler->getActivities(
+            $this->getUser(), [
+            "id" => $this->parameters->getData("id"),
+            "access" => "owned"],
+            true
+        )[0];
+
+        $activity = $this->activityHandler->putFile($activity, $this->parameters->getAllData());
+
+        $activity = $this->activityHandler->withPictures([$activity]);
+    return $this->responseHandler->successResponse($activity, "read_activity");
+    }
+    catch(ViolationException | NoFoundException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getMessage());
+        }
+    catch (BadMediaFileException $e){
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadMediaResponse($e->getMessage());
+        }
+    catch (Exception $e) {//unexpected error
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->serverErrorResponse("An error occurred");
+        }
+    }
+
+    /**
+     * @param Request $request
+     * @return BinaryFileResponse|Response
+     * @Route("/download/public", name="_download", methods="get")
+     */
+    public function downloadFile(Request $request)
+    {
+        try{
+            // recover all data's request
+            $this->parameters->setData($request);
+            //check if required params exist
+            $this->parameters->hasData(["id", "access"]);
+
+            $activityFile = $this->activityHandler->getActivities(
+                $this->getUser(),
+                $this->parameters->getAllData(),
+                true
+            )[0];
+
+            $file = $this->activityHandler->loadFile($activityFile, $this->getUser());
+
+            $response = new BinaryFileResponse($file);
+            $response->headers->set('Content-Type',$activityFile->getFileType());
+
+            //todo théoriquement c'est là que je passe le non d'origine
+            $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $activityFile->getFilename());
+
+        return $response;
+        }
+        catch(NoFoundException $e){
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->notFoundResponse();
+        }
+        catch(ViolationException | NoFileException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getMessage());
+        }catch(UnauthorizedHttpException $e){
+            return $this->responseHandler->unauthorizedResponse($e->getMessage());
+        }
+        catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
+    }
 
 
     /**
@@ -267,45 +291,26 @@ class ActivityController extends AbstractController
      * @param Request $request
      * @return Response
      */
-    public function getPublicActivities(Request $request): Response {
-        // recover all data's request
-        $this->parameters->setData($request);
+    public function getPublic(Request $request): Response {
 
-      //  dd($this->parameters->getAllData());
-        $criterias = [];
-        if($this->parameters->getData('id') !== false){
-            $criterias["id"]= (int)$this->parameters->getData('id') ;
-        }
-        $criterias["isPublic"] = true;
-
-        $repository = $this->entityManager->getRepository(Activity::class);
-        //get query, if id not define, query getALL
         try{
-            $dataResponse = $repository->findBy($criterias);
-//            dd($dataResponse[0]->getOrganization());
-        }catch(Exception $e){
+            // recover all data's request
+            $this->parameters->setData($request);
+        //    $this->parameters->hasData(["access"]);
+
+            $activities = $this->activityHandler->getActivities(
+                null,
+                $this->parameters->getAllData());
+
+            $activities = $this->activityHandler->withPictures($activities);
+
+            return $this->responseHandler->successResponse($activities, "read_activity");
+        }
+        catch(Exception $e){
             $this->logger->logError($e,$this->getUser(),"error" );
             return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
-
-        //load picture
-        foreach($dataResponse as $key => $activity){
-            if($activity->getProject() !== null ){
-                $activity->setProject( $this->fileHandler->loadPicture($activity->getProject()));
-            }
-            if($activity->getOrganization() !== null ){
-                $activity->setOrganization( $this->fileHandler->loadPicture($activity->getOrganization()));
-            }
-            $dataResponse[$key] = $this->fileHandler->loadPicture($activity);
-        }
-
-        return $this->responseHandler->successResponse($dataResponse, "read_activity");
     }
-
-
-
-
-
 
     /**
      * returns to a user his created activities
@@ -313,70 +318,33 @@ class ActivityController extends AbstractController
      * @param Request $request
      * @return Response
      */
-    public function getActivities(Request $request): Response
+    public function getPrivate(Request $request): Response
     {
-        // recover all data's request
-        $this->parameters->setData($request);
+    try{
+            // recover all data's request
+            $this->parameters->setData($request);
+         //   $this->parameters->hasData(["access"]);
 
-        if ($this->parameters->getData('id') !== false) {
-            $criterias["id"] = $this->parameters->getData('id');
-        }
-        if( $this->parameters->getData("ctx") !== false && $this->parameters->getData("ctx") === "creator"){
-            $criterias["creator"] = $this->getUser()->getId();
-        }
+            $activities = $this->activityHandler->getActivities($this->getUser(), $this->parameters->getAllData());
 
-        $repository = $this->entityManager->getRepository(Activity::class);
-        //get query, if id not define, query getALL
-        try {
-            $dataResponse = $repository->findBy($criterias);
-        } catch (Exception $e) {
+            $activities = $this->activityHandler->withPictures($activities);
+
+    return $this->responseHandler->successResponse($activities, "read_activity");
+        }
+    catch (Exception $e) {
             $this->logger->logError($e, $this->getUser(), "error");
             return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
-
-        $criterias = [];
-        $repository = $this->entityManager->getRepository(User::class);
-        $criterias["id"] = $this->getUser()->getId();
-        try {
-            $userData = $repository->findBy($criterias);
-        } catch (Exception $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->serverErrorResponse($e, "An error occured");
-        }
-        $user = $userData[0];
-
-        //check if public or private data return
-        $tab=[];
-        foreach ($dataResponse as $activity) {
-            if ($activity->hasAccess($user)) {
-                $tab[] = $activity;
-            }
-        }
-        $dataResponse = $tab;
-
-        //load picture
-        foreach ($dataResponse as $key => $activity) {
-            if ($activity->getProject() !== null) {
-                $activity->setProject($this->fileHandler->loadPicture($activity->getProject()));
-            }
-            if ($activity->getOrganization() !== null) {
-                $activity->setOrganization($this->fileHandler->loadPicture($activity->getOrganization()));
-            }
-            $dataResponse[$key] = $this->fileHandler->loadPicture($activity);
-        }
-
-        //success response
-        return $this->responseHandler->successResponse($dataResponse, "read_activity");
     }
 
-    /**
+    /*
      * @param Request $request
      * @return Response
      * @Route("", name="_delete", methods="delete")
      */
-    public function remove(Request $request) : Response {
+ //   public function remove(Request $request) : Response {
         // recover all data's request
-        $this->parameters->setData($request);
+        /*$this->parameters->setData($request);
 
         //check if required params exist
         try{ $this->parameters->hasData(["id"]); }
@@ -411,8 +379,8 @@ class ActivityController extends AbstractController
         }catch(Exception $e){
             $this->logger->logError($e,$this->getUser(),"error" );
             return $this->responseHandler->serverErrorResponse($e, "An error occured");
-        }
-    }
+        }*/
+  //  }
 
     /*public function getPics($activities){
         //download picture

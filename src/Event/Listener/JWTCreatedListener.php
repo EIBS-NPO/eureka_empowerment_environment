@@ -19,13 +19,19 @@ class JWTCreatedListener
         /** @var $user ..\Entity\User */
         $user = $event->getUser();
 
+        $isConfirm = true;
+        if($user->getActivationToken() !== null){
+           $isConfirm = false;
+        }
+
         // merge with existing event data
         $payload = array_merge(
             $event->getData(),
             [
                 'id' => $user->getId(),
                 'firstname' => $user->getFirstname(),
-                'lastname' => $user->getLastname()
+                'lastname' => $user->getLastname(),
+                'isConfirm' => $isConfirm
             ]
         );
 

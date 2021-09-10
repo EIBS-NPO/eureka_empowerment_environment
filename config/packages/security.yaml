@@ -15,24 +15,29 @@ security:
         dev:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
             security: false
+
         login:
-            pattern: ^/security/login
+            pattern: ^/login
+            user_checker: App\Services\Security\UserChecker
             stateless: true
             anonymous: true
             json_login:
                 username_path: email
-                check_path: /security/login
+                check_path: /login
                 success_handler: lexik_jwt_authentication.handler.authentication_success
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
+
         register:
                 pattern: ^/user/register
                 security: false
+
         public:
-                pattern: ^/(org|project|activity|member|file/download|followActivity|project/team)/public
+                pattern: ^/file/allowed|/user/(sendActivation|activation)|(org|project|activity|activity/download|member|file/download|followActivity|project/team)/public
                 anonymous : true
 
         main:
             pattern: ^/
+            user_checker: App\Services\Security\UserChecker
             stateless: true
             guard:
                 authenticators:
@@ -48,9 +53,11 @@ security:
     # Easy way to control access for large sections of your site
     # Note: Only the *first* access control that matches will be used
     access_control:
-        - { path: ^/security/login, roles: IS_AUTHENTICATED_ANONYMOUSLY }
+        - { path: ^/login, roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/user/register, roles: IS_AUTHENTICATED_ANONYMOUSLY }
-        - { path: ^/(org|project|activity|member|file/download|followActivity|project/team)/public, roles: IS_AUTHENTICATED_ANONYMOUSLY }
+        - { path: ^/user/(sendActivation|activation), roles: IS_AUTHENTICATED_ANONYMOUSLY }
+        - { path: ^/file/allowed, roles: IS_AUTHENTICATED_ANONYMOUSLY }
+        - { path: ^/(org|project|activity|activity/download|member|file/download|followActivity|project/team)/public, roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/admin, roles: ROLE_ADMIN }
 #        - { path: ^/(user|address), roles: IS_AUTHENTICATED_FULLY }
 #        - { path: ^/, roles: [ROLE_USER, ROLE_ADMIN] }

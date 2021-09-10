@@ -1,15 +1,15 @@
 <?php
 
-namespace App\Service\Security;
+namespace App\Services\Security;
 
 use App\Exceptions\SecurityException;
-use App\Service\Configuration\ConfigurationHandler;
+use App\Services\Configuration\ConfigurationHandler;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
  * Class RequestSecurity
- * @package App\Service\Security
+ * @package App\Services\Security
  * @author Antoine ALEXANDRE <antoine@antoinealexandre.eu>
  */
 class RequestSecurity

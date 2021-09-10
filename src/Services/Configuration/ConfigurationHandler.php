@@ -1,7 +1,7 @@
 <?php
 
 
-namespace App\Service\Configuration;
+namespace App\Services\Configuration;
 
 
 use App\Entity\GlobalPropertyAttribute;
