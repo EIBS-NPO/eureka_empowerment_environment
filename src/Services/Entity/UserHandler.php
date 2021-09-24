@@ -53,14 +53,7 @@ class UserHandler {
         $this->mailer = $mailer;
     }
 
-    /*
-     * //todo on doit pouvoir récuperer sont propre Profile :SELF
-     * //todo pouvoir recupérer la liste des utilisateurs par id/ ?projet/ ?org
-     */
-    //todo add mailer for activated
-// todo tout ce qui concerne jwt et la securité dans le SecurityController!
-//todo ajout byProject byOrg? seulement si besoin
-    public function getUsers($params): array
+    public function getUsers(?UserInterface $user, $params): array
     {
 
         //check access
@@ -73,17 +66,29 @@ class UserHandler {
             $params["access"] = 'self';
         }*/
 
-        if(isset($params['id'])){
-            $this->validator->isInvalid(
-                ["id"],
-                [],
-                User::class);
-            $id = $params['id'];
+        if(isset($params["access"])){
+            if(is_int($params["access"])){//if access have an id
+                $dataResponse = $this->userRepo->findBy(["id" => $params["access"]]);
+            }
+            else{ //other access possibility
+                switch($params["access"]){
+                    case "owned":
+                        if($user !== null){
+                            $dataResponse[] = $this->userRepo->findOneBy(["email" => $user->getUsername()]);
+                        }
+                        break;
+                    case "byProject":
+                        break;
+                    case "byOrg":
+                        break;
+                    case "all":
+                            $dataResponse = $this->userRepo->findAll();
+                        break;
+                    default:
+                        $dataResponse = $this->userRepo->findAll();
 
-            $dataResponse = $dataResponse = $this->userRepo->findBy(["id" => $id]);
-        }else {
-            if(isset($params["projectId"]))
-            $dataResponse = $this->userRepo->findAll();
+                }
+            }
         }
 
         return $dataResponse;
@@ -101,7 +106,6 @@ class UserHandler {
             ["phone", "mobile"],
             User::class);
 
-        //todo add active to false when mailer enable
         //create user object && set validated fields
         $user = new User();
         $this->setUser($user, $params);
@@ -127,6 +131,7 @@ class UserHandler {
      */
     public function updateUser(User $user, $params): User
     {
+
         //check params Validations
         $this->validator->isInvalid(
             [],
@@ -201,7 +206,6 @@ class UserHandler {
 
                 $this->entityManager->flush();
 
-                //todo dispath et faire appel au securityHandler ?
         //    }
 
         return [$this->withPictures([$user]),

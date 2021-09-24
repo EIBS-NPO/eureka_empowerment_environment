@@ -30,7 +30,6 @@ class gpaTypeMime extends Command
 
     protected function configure()
     {
-        //todo help
         $this
             ->setDescription('Add MIME types to allow uploading files')
             ->setHelp('')

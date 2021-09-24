@@ -75,6 +75,4 @@ class OrgAdminController extends CommonController
             ["content-type" => "application/json"]
         );
     }*/
-
-    //todo update org for change a referent ?
 }

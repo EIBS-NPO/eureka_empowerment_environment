@@ -89,7 +89,7 @@ class Project implements TrackableObject, PictorialObject
     private $description = [];
 
     /**
-     * @ORM\OneToMany(targetEntity=Following::class, mappedBy="object")
+     * @ORM\OneToMany(targetEntity=FollowingProject::class, mappedBy="object")
      * @Assert\Collection(
      *     fields={
      *         @Assert\Type(type="App\Entity\FollowingProject")
@@ -137,7 +137,6 @@ class Project implements TrackableObject, PictorialObject
             $data["organization"] = $this->organization->serialize();
         }
 
-        //todo ?? pourquoi j'ai foreach? ====> a cause de la colletion, ? je dois pouvoir faire toArray()
         if($this->activities !== null && $context === "read_project"){
             $data["activities"] = [];
             foreach($this->activities as $activity){
@@ -322,14 +321,14 @@ class Project implements TrackableObject, PictorialObject
     }
 
     /**
-     * @return Collection|Following[]
+     * @return Collection|FollowingProject[]
      */
     public function getFollowings(): Collection
     {
         return $this->followings;
     }
 
-    public function addFollowing(Following $following): self
+    public function addFollowing(FollowingProject $following): self
     {
         if (!$this->followings->contains($following)) {
             $this->followings[] = $following;
@@ -339,7 +338,7 @@ class Project implements TrackableObject, PictorialObject
         return $this;
     }
 
-    public function removeFollowing(Following $following): self
+    public function removeFollowing(FollowingProject $following): self
     {
         if ($this->followings->removeElement($following)) {
             // set the owning side to null (unless already changed)

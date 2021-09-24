@@ -3,7 +3,7 @@
 namespace App\Entity\Interfaces;
 
 
-//use App\Entity\Following;
+//use App\Entity\FollowingProject;
 
 /**
  * Interface TrackableObject

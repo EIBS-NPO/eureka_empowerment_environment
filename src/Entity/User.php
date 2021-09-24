@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Interfaces\AddressableObject;
 use App\Entity\Interfaces\PictorialObject;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -16,7 +17,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * @UniqueEntity("email", message="this email already exist for user account")
  *
  */
-class User implements UserInterface, PictorialObject
+class User implements UserInterface, PictorialObject, AddressableObject
 {
     /**
      * @ORM\Id
@@ -26,7 +27,6 @@ class User implements UserInterface, PictorialObject
      */
     private ?int $id;
 
-    //todo assert?
     /**
      * @ORM\Column(type="json")
      */
@@ -164,7 +164,7 @@ class User implements UserInterface, PictorialObject
     private $followingActivities;
 
     /**
-     * @ORM\OneToMany(targetEntity=Following::class, mappedBy="follower")
+     * @ORM\OneToMany(targetEntity=FollowingProject::class, mappedBy="follower")
      * @Assert\Collection(
      *     fields={
      *         @Assert\Type(type="App\Entity\FollowingProject")
@@ -178,11 +178,10 @@ class User implements UserInterface, PictorialObject
      */
     private ?String $activationToken = null;
 
-    /**
-     * @ORM\Column(type="string")symfony server:start
-     *
+    /*
+     * @ORM\OneToOne(targetEntity=JwtRefreshToken::class, mappedBy="user")
      */
-    private String $refresh_token;
+ //   private ?JwtRefreshToken $refreshToken = null;
 
     public function __construct()
     {
@@ -228,7 +227,7 @@ class User implements UserInterface, PictorialObject
             $data["address"] = $this->address->serialize();
         }
 
-        //todo maybe add context read_activity
+
        /* if(!$this->followingActivities->isEmpty() && $context !== "read_activity"){
             //$data["followingActivities"] = $this->followingActivities->toArray();
             $data["followingActivities"] = [];
@@ -237,14 +236,6 @@ class User implements UserInterface, PictorialObject
             }
         }*/
 
-        //todo deprecated
-        //Check some attributes with contexts to see if they are sets
-        /*if($this->projects && $context != "read_project" && $context != "read_organization"){
-            $data["projects"] = [];
-            foreach($this->projects as $project){
-                array_push($data["projects"], $project->serialize("read_creator"));
-            }
-        }*/
 
         /*if($this->organizations && $context != "read_organization" && $context != "read_project"){
             $data["organization"] = [];
@@ -634,14 +625,14 @@ class User implements UserInterface, PictorialObject
     }
 
     /**
-     * @return Collection|Following[]
+     * @return Collection|FollowingProject[]
      */
     public function getFollowingProjects(): Collection
     {
         return $this->followingProjects;
     }
 
-    public function addFollowingProject(Following $followingProject): self
+    public function addFollowingProject(FollowingProject $followingProject): self
     {
         if (!$this->followingProjects->contains($followingProject)) {
             $this->followingProjects[] = $followingProject;
@@ -651,7 +642,7 @@ class User implements UserInterface, PictorialObject
         return $this;
     }
 
-    public function removeFollowingProject(Following $followingProject): self
+    public function removeFollowingProject(FollowingProject $followingProject): self
     {
         if ($this->followingProjects->removeElement($followingProject)) {
             // set the owning side to null (unless already changed)
@@ -700,4 +691,6 @@ class User implements UserInterface, PictorialObject
         }
         return $res;
     }
+
+
 }

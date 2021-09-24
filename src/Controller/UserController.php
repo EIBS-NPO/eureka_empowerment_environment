@@ -162,7 +162,7 @@ class UserController extends AbstractController
         try{
             $this->parameters->setData($request);
 
-            $users = $this->userHandler->getUsers($this->parameters->getAllData());
+            $users = $this->userHandler->getUsers($this->getUser(), $this->parameters->getAllData());
 
             $users = $this->userHandler->withPictures($users);
         //final response

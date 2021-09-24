@@ -4,7 +4,7 @@
 namespace App\Entity\Interfaces;
 
 
-use App\Entity\Following;
+use App\Entity\FollowingProject;
 
 /**
  * Interface TrackableObject
@@ -15,8 +15,7 @@ interface TrackableObject
 {
     public function getFollowings();
     public function getCreator();
-    //todo change followingNme, need more generic
-    //just following?
-    public function addFollowing(Following $following);
-    public function removeFollowing(Following $following);
+
+    public function addFollowing(FollowingProject $following);
+    public function removeFollowing(FollowingProject $following);
 }

@@ -2,7 +2,7 @@
 
 namespace App\Controller;
 
-use App\Entity\Following;
+use App\Entity\FollowingProject;
 use App\Entity\Project;
 use App\Entity\User;
 use App\Exceptions\SecurityException;
@@ -19,7 +19,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
-//TODO remove cleanXss
 /**
  * Class FollowingProjectController
  * @package App\Controller
@@ -51,7 +50,7 @@ class FollowingProjectController extends AbstractController
     }
 
     /**
-     * API endPoint: create or update a Following entity in a project
+     * API endPoint: create or update a FollowingProject entity in a project
      * need $projectId, the project id target
      * need $email, the user target email, for an Assigned action, not for isFollowing( it's the current user)
      * need $isAssigning boolean for assign a user OR $isFollowing boolean for follow a user
@@ -90,7 +89,6 @@ class FollowingProjectController extends AbstractController
         $criterias["id"] = $this->parameters->getData('projectId');
 
         if($this->parameters->getData('isAssigning') !== false ){
-            //todo check authorization only for creator or admin
             //need current user id as creator
             $criterias["creator"] = $this->getUser()->getId();
         }
@@ -104,7 +102,6 @@ class FollowingProjectController extends AbstractController
             return $this->responseHandler->BadRequestResponse(["project"=>"no_project_found"]);
         }
 
-        //todo : doctrine probably not return a Project object but just an Object... see by repo for typage?
        /* if(get_class($projectData[0]) === Project::class){
             $projectData = $projectData[0];
         }*/
@@ -155,7 +152,7 @@ class FollowingProjectController extends AbstractController
 
 
     /**
-     * API endPoint: update or remove a Following entity in a project
+     * API endPoint: update or remove a FollowingProject entity in a project
      * need $projectId, the project id target
      * need $userId, the user target id, for an Assigned action, not for isFollowing( it's the current user)
      * need $isAssigning boolean for unAssign a user OR $isFollowing boolean for unFollow a user
@@ -351,7 +348,7 @@ class FollowingProjectController extends AbstractController
         $following = $project->getFollowingByUserId($this->getUser()->getId());
 
         if($following === null){
-            $following = new Following();
+            $following = new FollowingProject();
             $following->setIsAssigning(false);
             $following->setFollower($this->getUser());
             $following->setObject($project);
@@ -362,7 +359,6 @@ class FollowingProjectController extends AbstractController
         return true;
     }*/
 
-    //todo check for mailService
     /**
      * add an assigned user into project by his creator
      * @param $project
@@ -383,7 +379,7 @@ class FollowingProjectController extends AbstractController
         //user have already a following?
         $following = $project->getFollowingByUserId($user->getId());
         if($following === null) { //if need a new following object
-            $following = new Following();
+            $following = new FollowingProject();
             $following->setIsFollowing(false);
             $following->setFollower($user);
             $following->setObject($project);

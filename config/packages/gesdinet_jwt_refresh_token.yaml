@@ -1,0 +1,5 @@
+gesdinet_jwt_refresh_token:
+  ttl: '%env(int:REFRESH_JWT_TTL)%'
+  single_use: true
+  user_provider: security.user.provider.concrete.app_user_provider
+  refresh_token_class: App\Entity\JwtRefreshToken

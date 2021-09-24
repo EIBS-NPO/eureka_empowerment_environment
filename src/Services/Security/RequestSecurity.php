@@ -51,7 +51,6 @@ class RequestSecurity
      */
     public function cleanXSS(Request $request) : Request
     {
-        // TODO : Retrieve the parameters of the query
 
         //Clean URL parameters
         $param = $request->query->getIterator()->getArrayCopy();

@@ -11,7 +11,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 /**
  * @ORM\Entity(repositoryClass=FollowingProjectRepository::class)
  */
-class Following
+class FollowingProject
 {
     /**
      * @ORM\Id
@@ -20,7 +20,7 @@ class Following
      */
     private $id;
 
-    //todo rendre dynamique (heritage? polymorphe?)
+
     /**
      * @ORM\ManyToOne(targetEntity=project::class, inversedBy="followers")
      * @ORM\JoinColumn(nullable=false)

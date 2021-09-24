@@ -27,12 +27,17 @@ security:
                 success_handler: lexik_jwt_authentication.handler.authentication_success
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
 
+        refresh:
+            pattern:  ^/token/refresh
+            stateless: true
+            anonymous: true
+
         register:
                 pattern: ^/user/register
                 security: false
 
         public:
-                pattern: ^/file/allowed|/user/(sendActivation|activation)|(org|project|activity|activity/download|member|file/download|followActivity|project/team)/public
+                pattern: ^/file/allowed|/user/(sendActivation|activation)|(org|project|activity|activity/download|member|file/download|followActivity|project/team)/public|/activation
                 anonymous : true
 
         main:
@@ -54,7 +59,9 @@ security:
     # Note: Only the *first* access control that matches will be used
     access_control:
         - { path: ^/login, roles: IS_AUTHENTICATED_ANONYMOUSLY }
+        - { path: ^/token/refresh, roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/user/register, roles: IS_AUTHENTICATED_ANONYMOUSLY }
+        - { path: ^/activation, roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/user/(sendActivation|activation), roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/file/allowed, roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/(org|project|activity|activity/download|member|file/download|followActivity|project/team)/public, roles: IS_AUTHENTICATED_ANONYMOUSLY }

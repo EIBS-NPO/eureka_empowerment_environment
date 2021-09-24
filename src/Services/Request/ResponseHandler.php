@@ -29,18 +29,19 @@ class ResponseHandler
     }
 
     /**
-     * @param $datas
+     * @param array $dataTable
      * @param String|null $context
      * @return mixed
      */
-    public function serialize($datas, String $context = null){
-        foreach($datas as $key => $data){
-            //todo handle case of array, => do not serialize. (but is content must be)
+    public function serialize(array $dataTable, String $context = null){
+
+        foreach($dataTable as $key => $data){
             if(gettype( $data) !== "string" && gettype( $data) !== "boolean" && gettype( $data) !== "array"){
-                $datas[$key] =  $data->serialize($context);
+                $dataTable[$key] =  $data->serialize($context);
             }
         }
-        return $datas;
+
+        return $dataTable;
     }
 
     /**
@@ -64,7 +65,6 @@ class ResponseHandler
         );
     }
 
-    //todo useless?
     /**
      * @return Response
      */
@@ -104,7 +104,6 @@ class ResponseHandler
      */
     public function serverErrorResponse(String $publicErrorMessage) :Response
     {
-        //todo check message
         return $this->response = new Response(
             json_encode($publicErrorMessage),
             Response::HTTP_INTERNAL_SERVER_ERROR,
@@ -136,10 +135,11 @@ class ResponseHandler
     }
 
     public function partialResponse(PartialContentException $exception, String $context = null) :Response {
-       // array_unshift($data, $exception->getMessage());
-        $data = [$exception->getMessage(), $exception->getData()];
+        $data = $this->serialize($exception->getData(), $context);
+        array_unshift($data, $exception->getMessage());
+     //   $data = [$exception->getMessage(), $exception->getData()];
         return $this->response = new Response(
-            json_encode( $this->serialize( $data, $context ) ),
+            json_encode( $data ),
             Response::HTTP_PARTIAL_CONTENT,
             ["content-type" => "application/json"]
         );

@@ -35,14 +35,41 @@ class SecurityController extends AbstractController
         $this->logger = $logger;
     }
 
-    /**
+    /*
      * @Route("/login", name="login")
+     * @param Request $request
+     * @param JwtHandler $jwtManager
      * @return Response
      */
-    public function login(): Response
+     /* public function login(Request $request,  JwtHandler $jwtManager, JWTTokenAuthenticator $authenticator): Response
+     {
+         $this->parameters->setData($request);
+         $user = new User(
+             $this->parameters->getData("email"),
+             $this->parameters->getData("password")
+         );
+         $authenticator->checkCredentials();
+            $authenticationSuccessHandler = $this->container->get('lexik_jwt_authentication.handler.authentication_success');
+            $res = $authenticationSuccessHandler->handleAuthenticationSuccess($user);
+            dd($res);
+      //   dd($jwtManager->create($user));
+        // $jwtManager->setUserIdentityField();
+
+      //   $authenticationSuccessHandler = $this->container->get('lexik_jwt_authentication.handler.authentication_success');
+
+     //    $authenticationSuccessHandler->handleAuthenticationSuccess($user);
+
+         return $this->responseHandler->successResponse([$jwtManager->create($this->getUser())]);
+     }*/
+
+    /*
+     * @return Response
+     * @Route("/token/refresh", name="refresh_token")
+     */
+    /*public function refresh_token(): Response
     {
         return $this->responseHandler->successResponse([]);
-    }
+    }*/
 
      /**
      * @Route("/activation", name="_activation", methods="put")

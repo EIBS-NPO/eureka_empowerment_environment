@@ -29,12 +29,14 @@ class OrgHandler {
     private FileHandler $fileHandler;
     private FollowingHandler $followingHandler;
     private ParametersValidator $validator;
+    private AddressHandler $addressHandler;
 
-    public function __construct(EntityManagerInterface $entityManager, FileHandler $fileHandler, FollowingHandler $followingHandler, ParametersValidator $validator, OrganizationRepository $orgRepo)
+    public function __construct(EntityManagerInterface $entityManager, FileHandler $fileHandler, AddressHandler $addressHandler, FollowingHandler $followingHandler, ParametersValidator $validator, OrganizationRepository $orgRepo)
     {
         $this->entityManager = $entityManager;
         $this->orgRepo = $orgRepo;
         $this->fileHandler = $fileHandler;
+        $this->addressHandler = $addressHandler;
         $this->followingHandler = $followingHandler;
         $this->validator = $validator;
     }
@@ -46,7 +48,7 @@ class OrgHandler {
      */
     public function getOrgs(?UserInterface $user, $params, bool $withNotFound=false): array
     {
-        //todo maybe do an AccessService (if use into many other service)
+
         //check access
         if (!isset($params["access"]) ||
             ($user === null
@@ -129,7 +131,6 @@ class OrgHandler {
             }
         }
 
-        //just renvoyer created.
         return $dataResponse;
     }
 
@@ -153,8 +154,12 @@ class OrgHandler {
 
         //Optional image management without blocking the creation of the entity
         try{
+            //handle optionnal address
+            if(isset($params["address"])) $org = $this->addressHandler->putAddress($org, $params);
+
+            //handle optionnal picture
             if(isset($params["pictureFile"])){ //can't be null for creating
-                $org = $this->fileHandler->uploadPicture($org,self::PICTURE_DIR, $params["pictureFile"]);
+                $org= $this->fileHandler->uploadPicture($org,self::PICTURE_DIR, $params["pictureFile"]);
             }
         }catch(FileException | BadMediaFileException $e){
             throw new PartialContentException([$org], $e->getMessage());
@@ -186,7 +191,24 @@ class OrgHandler {
 
         $org = $this->setOrg($org, $params);
 
-        $this->entityManager->flush();
+        try{
+            //handle optionnal address
+            if(isset($params["address"])) $org = $this->addressHandler->putAddress($org, $params);
+
+            //handle optionnal picture
+            if(isset($params["pictureFile"])){ //can't be null for creating
+                $org= $this->fileHandler->uploadPicture($org,self::PICTURE_DIR, $params["pictureFile"]);
+            }
+        }catch(FileException | BadMediaFileException $e){
+            throw new PartialContentException([$org], $e->getMessage());
+        } finally {
+            //persist
+            $this->entityManager->persist($org);
+            $this->entityManager->flush();
+        }
+
+
+     //   $this->entityManager->flush();
 
         return $org;
     }

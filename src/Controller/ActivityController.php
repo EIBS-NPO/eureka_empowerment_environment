@@ -263,7 +263,6 @@ class ActivityController extends AbstractController
             $response = new BinaryFileResponse($file);
             $response->headers->set('Content-Type',$activityFile->getFileType());
 
-            //todo théoriquement c'est là que je passe le non d'origine
             $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $activityFile->getFilename());
 
         return $response;

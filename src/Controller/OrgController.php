@@ -61,7 +61,6 @@ class OrgController extends AbstractController
         $this->orgHandler = $orgHandler;
     }
 
-//todo add pictureFile for add directly a picture into creation
     /**
      * @Route("", name="_registration", methods="post")
      * @param Request $request
@@ -80,11 +79,11 @@ class OrgController extends AbstractController
 
             $newOrg = $this->orgHandler->withPictures([$newOrg]);
 
-        return $this->responseHandler->successResponse($newOrg, "read_project");
+        return $this->responseHandler->successResponse($newOrg, "read_org");
         }
         catch(PartialContentException $e){
             $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->partialResponse($e, "read_project");
+            return $this->responseHandler->partialResponse($e, "read_org");
         }
         catch(ViolationException $e) {
             $this->logger->logError($e, $this->getUser(), "error");

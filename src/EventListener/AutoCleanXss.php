@@ -1,7 +1,7 @@
 <?php
 
 
-namespace App\Event\Listener;
+namespace App\EventListener;
 
 
 use App\Exceptions\SecurityException;

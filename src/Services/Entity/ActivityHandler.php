@@ -135,8 +135,7 @@ class ActivityHandler {
 
 
         //create Activity object && set validated fields
-        $activity = new Activity();
-        $activity = $this->setActivity($activity, $params);
+        $activity = $this->setActivity(new Activity(), $params);
         $activity->setCreator($params["creator"]);
 
         //Optional image && file management without blocking the creation of the entity
@@ -330,7 +329,7 @@ class ActivityHandler {
      */
     private function hasAccess(Activity $activity, ?UserInterface $user): bool
     {
-        //todo gérer ici le cas ou user === null (non connecté? )
+        //need to handle if user ===null
         $res = false;
         if(!$activity->getIsPublic() && $user !== null){
             if($activity->getCreator()->getId() === $user->getId()){

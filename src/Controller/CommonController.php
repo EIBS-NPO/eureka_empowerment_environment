@@ -39,7 +39,6 @@ class CommonController extends AbstractController
 
     private $logInfo = "";
 
-    //todo maybe add context here?
 
     /**
      * @var Response
@@ -67,7 +66,7 @@ class CommonController extends AbstractController
 
     /**
      * @var array
-     * Storage of dynamic Event message construction for LogEvent Service
+     * Storage of dynamic EventListener message construction for LogEvent Service
      */
     protected array $eventInfo;
 
@@ -106,7 +105,7 @@ class CommonController extends AbstractController
             $this->request = $this->requestSecurity->cleanXSS($request);
         } catch (SecurityException $e) {
 
-            //todo test log
+
             $this->logService->logError($e,$this->getUser(), "WARNING");
 
             $this->response = new Response(
@@ -119,7 +118,6 @@ class CommonController extends AbstractController
 
 
 
-    //todo just trhow?
     /**
      * @param $requiredFields
      * @param $optionalFields
@@ -308,7 +306,6 @@ class CommonController extends AbstractController
 
 
 
-//todo logg for pics
     /**
      * @param $entity
      * @return mixed
@@ -434,7 +431,7 @@ class CommonController extends AbstractController
 
         $className = $this->getClassName($activityFile);
 
-        //todo
+
         if($activityFile->getFilename() !== null && $activityFile->getUniqId() !== null )
         {
             $path = '/files/Activity/'.$activityFile->getUniqId(). '_'. $activityFile->getFilename();
@@ -447,7 +444,7 @@ class CommonController extends AbstractController
             }
 
             try {
-                //todo dowload File
+
                 $fileDir = $this->fileHandler->getFile($path);
                 $this->dataResponse = [$this->fileHandler->getFile($path)];
 
@@ -493,9 +490,6 @@ class CommonController extends AbstractController
 
 
 
-    //todo dsipatch in RequestDataService
-    //todo just contenu? ca sera déjà plus propre,
-    //
     /**
      * @param array $criterias
      * @return bool
@@ -533,7 +527,7 @@ class CommonController extends AbstractController
      */
     public function successResponse(String $context = null) : Response {
 
-        //todo retrait a verif regression
+
       /*  if(empty($this->dataResponse)){
             $this->logService->logInfo('Request was success with no data. ');
              return $this->notFoundResponse();
@@ -557,15 +551,11 @@ class CommonController extends AbstractController
 
 
 
-
-
-    //todo retourne vide ou data non found? vide serait plus simple pou rle front...
     /**
      * @return Response
      */
     public function notFoundResponse() :Response{
         return  $this->response =  new Response(
-            //todo stocker/ construire la chaine message log dans le service log
             //$logInfo .= " | DATA_NOT_FOUND";
             json_encode(["DATA_NOT_FOUND"]),
             Response::HTTP_OK,
@@ -622,7 +612,6 @@ class CommonController extends AbstractController
      */
     public function serverErrorResponse(Exception $e, String $logInfo) :void
     {
-        //todo check message
         $this->response = new Response(
             json_encode($e->getMessage()),
             Response::HTTP_INTERNAL_SERVER_ERROR,
@@ -644,8 +633,6 @@ class CommonController extends AbstractController
     }
 
 
-
-    //todo really usefull?
     /**
      * @param $entity
      * @return String

@@ -209,10 +209,6 @@ class ActivityFileController extends AbstractController
     }
 
 
-
-
-    //todo vraiment utilisé?
-
     /**
      * @param Request $request
      * @return Response|null
@@ -244,7 +240,6 @@ class ActivityFileController extends AbstractController
             $activityData = $activityData[0];
             $completName = $activityData->getUniqId() . '_' . $activityData->getFilename();
 
-            //todo a finir!
             if (get_class($activityData) === ActivityFile::class) {
                 try {
                     $this->fileHandler->controlChecksum('/files/Activity/' . $completName, $activityData->getChecksum());

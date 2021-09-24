@@ -25,7 +25,7 @@ class MailHandler
      */
     public function sendConfirmEmail(String $clientUrl, User $user)
     {
-        //todo pour to remetre email de l'user
+        //todo to finish
    //     $confirmLink = $_ENV['APP_DNS']."/user/activation?token=".$user->getActivationToken();
         //for classic url params of react needed format
         if(substr($clientUrl, -1) === "/"){//for react

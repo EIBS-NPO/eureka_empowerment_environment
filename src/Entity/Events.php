@@ -33,7 +33,7 @@ class Events
 
     /**
      * @ORM\Column(type="string", length=20)
-     * //todo regex User or Organization or Project
+     *
      */
     private ?string $targetType;
 

@@ -79,7 +79,6 @@ class ProjectAdminController extends AbstractController
 
             $projects = $this->projectHandler->getProjects($this->getUser(), $this->parameters->getAllData());
 
-            //todo move into fileHandler? generised !!
             //download picture
             foreach ($projects as $key => $project) {
                 foreach ($project->getActivities() as $activity) {

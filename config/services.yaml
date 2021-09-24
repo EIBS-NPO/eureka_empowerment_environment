@@ -51,7 +51,7 @@ services:
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
-    App\Event\Listener\JWTCreatedListener:
+    App\EventListener\JWTCreatedListener:
         tags:
             - {
                 name: kernel.event_listener,

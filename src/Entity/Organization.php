@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Interfaces\AddressableObject;
 use App\Entity\Interfaces\PictorialObject;
 use App\Entity\Interfaces\TrackableObject;
 use App\Repository\OrganizationRepository;
@@ -16,7 +17,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * @ORM\Entity(repositoryClass=OrganizationRepository::class)
  * @UniqueEntity(fields={"name"}, message="this organization name already exist")B
  */
-class Organization implements PictorialObject //TrackableObject
+class Organization implements PictorialObject, AddressableObject //TrackableObject
 {
     /**
      * @ORM\Id
@@ -113,7 +114,7 @@ class Organization implements PictorialObject //TrackableObject
     /**
      * @ORM\OneToOne(targetEntity=Address::class, inversedBy="orgOwner", cascade={"persist", "remove"})
      */
-    private $address;
+    private ?Address $address = null;
 
     /**
      * @ORM\Column(type="boolean")
@@ -159,7 +160,7 @@ class Organization implements PictorialObject //TrackableObject
             $data["description"] = $this->description;
         }
 
-        if($this->address){
+        if($this->address !== null){
             $data["address"] = $this->address->serialize();
         }
 
@@ -187,19 +188,6 @@ class Organization implements PictorialObject //TrackableObject
                 array_push($data["membership"], $member->serialize());
             }
         }
-
-        //todo deprecated
-        //Check some attributes with contexts to see if they are sets
-        /*if($this->referent && $context != "read_referent"){
-            $data["referent"] = $this->referent->serialize("read_organization");
-        }
-
-        if($this->projects && $context != "read_project" && $context != "read_organization"){
-            $data["projects"] = [];
-            foreach($this->projects as $project){
-                array_push($data["projects"], $project->serialize("read_organization"));
-            }
-        }*/
 
         return $data;
     }
@@ -409,6 +397,7 @@ class Organization implements PictorialObject //TrackableObject
 
     public function setAddress(?Address $address): self
     {
+        $address->setOwnerType("Organization");
         $this->address = $address;
 
         return $this;

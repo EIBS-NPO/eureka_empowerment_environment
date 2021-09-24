@@ -43,14 +43,9 @@ class FileHandler
         $this->slugger = $slugger;
         $this->configHandler = $configurationHandler;
         $this->logger = $logger;
-        $this->allowedMime = $this->configHandler->getValue("mime.type.allowed");
+        $this->allowedMime = explode(",",$this->configHandler->getValue("mime.type.allowed")[0]);
     }
 
-    //todo make interface
-/*
- * todo séparation des role, upload envoie le fichier et retourne le filePath
- *  todo si vieux fichier et setter dans object, laisser les parents faire.
- */
     /**
      * @param PictorialObject $object
      * @param $pictureDir
@@ -143,14 +138,14 @@ class FileHandler
      */
     public function getPic($filePath)
     {
-//todo throw exception
+
         $fileDir = $this->targetDirectory.$filePath;
 
         if (file_exists($fileDir)){
             return base64_encode(file_get_contents($fileDir));
         }
         else {
-            return "File not found ";
+            return "File not found ";//todo throw exception
         }
     }
 
@@ -188,6 +183,7 @@ class FileHandler
      * @throws BadMediaFileException
      */
     public function isAllowedMime(UploadedFile $file) :void{
+    //    dd($file->getMimeType());
         if(!(array_search($file->getMimeType(), $this->allowedMime) !== false)){
             $mimeTabText = explode("/", $file->getMimeType());
             $msg = $mimeTabText[0] . " " . $mimeTabText[1] . " not allowed";
@@ -213,20 +209,4 @@ class FileHandler
         $namespace = explode("\\", get_class($entity));
         return end($namespace);
     }
-
-    /*
-     * return if $data is 64_based_encode
-     * @param $data
-     * @return bool
-     * @throws BadMediaFileException
-     */
-    /*public function is64basedEncoded($data): bool
-    {
-        //todo throw an Exception
-        if (preg_match('%^[a-zA-Z0-9/+]*={0,2}$%', $data)) {
-            return true;
-        } else {
-            throw new BadMediaFileException("file must be 64_encoded");
-        }
-    }*/
 }

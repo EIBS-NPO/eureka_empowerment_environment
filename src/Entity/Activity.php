@@ -303,7 +303,6 @@ class Activity implements PictorialObject
         return $this;
     }
 
-    //todo retourner si l'activité est suivie par l'utilisateur courant
     public function isFollowByUserId(int $userId){
         $res = false;
         foreach($this->followers as $follower){
