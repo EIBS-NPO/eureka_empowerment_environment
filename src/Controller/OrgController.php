@@ -11,6 +11,7 @@ use App\Exceptions\NoFoundException;
 use App\Exceptions\PartialContentException;
 use App\Exceptions\ViolationException;
 use App\Services\Entity\OrgHandler;
+use App\Services\Entity\UserHandler;
 use App\Services\FileHandler;
 use App\Services\LogService;
 use App\Services\Request\ParametersValidator;
@@ -38,6 +39,7 @@ class OrgController extends AbstractController
     protected FileHandler $fileHandler;
     private LogService $logger;
     private OrgHandler $orgHandler;
+    private UserHandler $userHandler;
 
     /**
      * OrgController constructor.
@@ -48,14 +50,17 @@ class OrgController extends AbstractController
      * @param FileHandler $fileHandler
      * @param LogService $logger
      * @param OrgHandler $orgHandler
+     * @param UserHandler $userHandler
      */
-    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger, OrgHandler $orgHandler)
+    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger, OrgHandler $orgHandler, UserHandler $userHandler)
     {
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
         $this->validator = $validator;
         $this->entityManager = $entityManager;
         $this->fileHandler = $fileHandler;
+
+        $this->userHandler = $userHandler;
         $this->logger = $logger;
 
         $this->orgHandler = $orgHandler;
@@ -181,12 +186,12 @@ class OrgController extends AbstractController
         }
     }
 
-    /**
+    /*
      * @param Request $request
      * @return Response
      * @Route("/picture", name="_picture_put", methods="post")
      */
-    public function putPicture(Request $request ) :Response {
+   /* public function putPicture(Request $request ) :Response {
        try{
            // recover all data's request
            $this->parameters->setData($request);
@@ -218,7 +223,7 @@ class OrgController extends AbstractController
            $this->logger->logError($e, $this->getUser(), "error");
            return $this->responseHandler->serverErrorResponse("An error occurred");
        }
-    }
+    }*/
 
     /**
      * @param Request $request
@@ -343,7 +348,39 @@ class OrgController extends AbstractController
         return $this->responseHandler->successResponse(["success"]);
     }
 
+    /**
+     * @param Request $request
+     * need orgId and userId
+     * if the user already in the membership of the organization, he will be remove.
+     * @return Response
+     * @Route("/putMember", name="_putMember", methods="put")
+     */
+    public function updateMembership(Request $request){
 
+        try{
+            // recover all data's request
+            $this->parameters->setData($request);
+
+            $user = $this->userHandler->getUsers(null, ["access"=> $this->parameters->getData("userId")])[0];
+
+            $org = $this->orgHandler->getOrgs(
+                $this->getUser(),
+                [
+                    "access" => "owned",
+                    "id" => $this->parameters->getData("orgId")
+                ]
+            )[0];
+
+           $org = $this->orgHandler->putMember($org, $user);
+           $org = $this->orgHandler->withPictures([$org]);
+
+       return $this->responseHandler->successResponse($org, "read_org");
+//todo other exception
+        }catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error");
+            return $this->responseHandler->serverErrorResponse( "An error occured");
+        }
+    }
     /*
      * return membered orgs for a user.
      * @param Request $request

@@ -276,4 +276,25 @@ class OrgHandler {
         return $orgs;
     }
 
+    public function putMember (Organization $org, User $user):Organization {
+
+        //new user is already in this org?
+        foreach($org->getMembership() as $member){
+            if($member->getId() === $user->getId()){
+                //todo remove user
+                $org->removeMembership($user);
+            }
+            else {
+                $org->addMembership($user);
+                //todo add user
+            }
+
+           /*     return $this->responseHandler->BadRequestResponse(["email"=> "user already added into the membership"]);
+            }*/
+        }
+
+        $this->entityManager->flush();
+        return $org;
+    }
+
 }
