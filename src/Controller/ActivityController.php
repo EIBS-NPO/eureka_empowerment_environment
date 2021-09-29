@@ -11,6 +11,8 @@ use App\Exceptions\NoFoundException;
 use App\Exceptions\PartialContentException;
 use App\Exceptions\ViolationException;
 use App\Services\Entity\ActivityHandler;
+use App\Services\Entity\OrgHandler;
+use App\Services\Entity\ProjectHandler;
 use App\Services\FileHandler;
 use App\Services\LogService;
 use App\Services\Request\ParametersValidator;
@@ -30,7 +32,7 @@ use Symfony\Component\Routing\Annotation\Route;
 /**
  * Class ActivityController
  * @package App\Controller
- * @Route("activity", name="activity")
+ * @Route("/activity", name="activity")
  */
 class ActivityController extends AbstractController
 {
@@ -41,6 +43,8 @@ class ActivityController extends AbstractController
     protected FileHandler $fileHandler;
     private LogService $logger;
     private ActivityHandler $activityHandler;
+    private OrgHandler $orgHandler;
+    private ProjectHandler $projectHandler;
 
     /**
      * UserController constructor.
@@ -50,15 +54,19 @@ class ActivityController extends AbstractController
      * @param EntityManagerInterface $entityManager
      * @param FileHandler $fileHandler
      * @param ActivityHandler $activityHandler
+     * @param OrgHandler $orgHandler
+     * @param ProjectHandler $projectHandler
      * @param LogService $logger
      */
-    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, ActivityHandler $activityHandler, LogService $logger)
+    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, ActivityHandler $activityHandler, OrgHandler $orgHandler, ProjectHandler $projectHandler, LogService $logger)
     {
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
         $this->validator = $validator;
         $this->entityManager = $entityManager;
         $this->fileHandler = $fileHandler;
+        $this->orgHandler = $orgHandler;
+        $this->projectHandler = $projectHandler;
         $this->logger = $logger;
 
         $this->activityHandler = $activityHandler;
@@ -84,7 +92,7 @@ class ActivityController extends AbstractController
                 $this->parameters->putData("isPublic", false);
             }else{$this->parameters->putData("isPublic", true);}
 
-            $activity = $this->activityHandler->create($this->parameters->getAllData());
+            $activity = $this->activityHandler->create($this->getUser(), $this->parameters->getAllData());
 
             $activity = $this->activityHandler->withPictures([$activity]);
 
@@ -110,23 +118,22 @@ class ActivityController extends AbstractController
 
 
     /**
+     * @Route("/update", name="_put", methods="post")
      * @param Request $request
      * @return Response
-     * @throws Exception
-     * @Route("", name="_put", methods="put")
      */
     public function updateActivity (Request $request) :Response
     {
      try   {// recover all data's request
             $this->parameters->setData($request);
 
-            //check if required params exist
+    //check if required params exist
             $this->parameters->hasData(["id", "isPublic"]);
 
-            //convert Date
+    //convert Date
             $this->parameters->addParam("postDate", New \DateTime("now"));
 
-            //force boolean type
+    //force boolean type
             if ($this->parameters->getData('isPublic') === "false") {
                 $this->parameters->putData("isPublic", false);
             } else {
@@ -139,13 +146,42 @@ class ActivityController extends AbstractController
                 true
             )[0];
 
+    //handle potential link with an org
+            $orgId = $this->parameters->getData("organization");
+            if($orgId !== false){
+                $org = "null"; //by default for delete linking
+                if( $orgId !== "null"){
+                    $org = $this->orgHandler->getOrgs(
+                        $this->getUser(),
+                        ["id" => $orgId],
+                        true
+                    )[0];
+                }
+                $this->parameters->putData("organization", $org);
+            }
+
+     //handle potential link with a project
+             $projectId = $this->parameters->getData("project");
+             if($projectId !== false){
+                 $project = "null"; // by default for delete linking
+                 if( $projectId !== "null"){
+                     $project = $this->projectHandler->getProjects(
+                         $this->getUser(),
+                         ["id" => $projectId],
+                         true
+                     )[0];
+                 }
+                 $this->parameters->putData("project", $project);
+             }
+
             $activity = $this->activityHandler->update(
+                $this->getUser(),
                 $activity,
                 $this->parameters->getAllData()
             );
 
             $activity = $this->activityHandler->withPictures([$activity]);
-            //success response
+    //success response
     return $this->responseHandler->successResponse($activity, "read_activity");
         }
     catch (ViolationException | NoFoundException $e) {
@@ -161,12 +197,12 @@ class ActivityController extends AbstractController
 
 
 
-    /**
+    /*
      * @param Request $request
      * @return Response
      * @Route("/picture", name="_picture_put", methods="post")
      */
-    public function putPicture(Request $request ) :Response {
+   /* public function putPicture(Request $request ) :Response {
         try{
             // recover all data's request
             $this->parameters->setData($request);
@@ -198,12 +234,12 @@ class ActivityController extends AbstractController
             $this->logger->logError($e, $this->getUser(), "error");
             return $this->responseHandler->serverErrorResponse("An error occurred");
         }
-    }
+    }*/
 
     /**
+     * @Route("/file", name="file_put", methods="post")
      * @param Request $request
      * @return Response|null
-     * @Route("/file", name="_put", methods="post")
      */
     public function updateFile (Request $request): ?Response
     {

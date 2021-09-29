@@ -5,6 +5,8 @@ namespace App\Services\Entity;
 use App\Entity\Activity;
 use App\Entity\ActivityFile;
 use App\Entity\Interfaces\PictorialObject;
+use App\Entity\Organization;
+use App\Entity\Project;
 use App\Entity\User;
 use App\Exceptions\BadMediaFileException;
 use App\Exceptions\NoFoundException;
@@ -125,7 +127,7 @@ class ActivityHandler {
      * @throws PartialContentException
      * @throws ViolationException
      */
-    public function create(array $params) :Activity
+    public function create(UserInterface $user, array $params) :Activity
     {
         //check params Validations
          $this->validator->isInvalid(
@@ -135,7 +137,7 @@ class ActivityHandler {
 
 
         //create Activity object && set validated fields
-        $activity = $this->setActivity(new Activity(), $params);
+        $activity = $this->setActivity($user, new Activity(), $params);
         $activity->setCreator($params["creator"]);
 
         //Optional image && file management without blocking the creation of the entity
@@ -166,7 +168,7 @@ class ActivityHandler {
     /**
      * @throws ViolationException
      */
-    public function update($activity, $params) :Activity
+    public function update(UserInterface $user, $activity, $params) :Activity
     {
         //check params Validations
         $this->validator->isInvalid(
@@ -174,7 +176,7 @@ class ActivityHandler {
             ["title", "summary", "isPublic"],
             Activity::class);
 
-        $activity = $this->setActivity($activity, $params);
+        $activity = $this->setActivity($user, $activity, $params);
 
         $this->entityManager->flush();
     return $activity;
@@ -253,7 +255,6 @@ class ActivityHandler {
             throw new UnauthorizedHttpException("unauthorized file access");
         }
 
-      //      $path = '/files/Activity/'.$activityFile->getUniqId(). '_'. $activityFile->getFilename();
         $completFilename = $activityFile->getUniqId(). '_'. $activityFile->getFilename();
         $file = $this->fileHandler->getFile($completFilename);
 
@@ -283,11 +284,44 @@ class ActivityHandler {
         return $activities;
     }
 
-    private function setActivity(Activity $activity, array $attributes): Activity {
-        foreach( ["title", "summary", "postDate", "isPublic"] as $field ) {
-            if (isset($attributes[$field])) {
+    /**
+     * @param UserInterface $user
+     * @param Activity $activity
+     * @param array $attributes
+     * @return Activity
+     */
+    private function setActivity(UserInterface $user, Activity $activity, array $attributes): Activity {
+        foreach( ["title", "summary", "postDate", "isPublic", "organization", "project"] as $field ) {
+            if (isset($attributes[$field]) ) {
+                $canSet = false;
                 $setter = 'set' . ucfirst($field);
-                $activity->$setter($attributes[$field]);
+
+
+                if(($field === "organization" || $field === "project")){
+                    if(!is_null($activity->getId() && $activity->getCreator()->getId() === $user->getId()) ){//only if Activity isn't a new Object and currentUser is owner
+
+                        if($attributes[$field] === "null"){ $attributes[$field] = null;}
+
+                        //handle org linking
+                        if($field === "organization") {
+                            if ((is_null($attributes[$field]) || $attributes[$field]->isMember($user))) {
+                                $canSet = true;
+                            }
+                        }
+
+                        //handle project linking
+                        else if ($field === "project"){
+                            if((is_null($attributes[$field] ) || $this->followingHandler->isAssign($attributes[$field], $user))) {
+                                $canSet = true;
+                            }
+                        }
+
+                    }
+                }else{ $canSet = true; }
+
+                if($canSet){
+                    $activity->$setter($attributes[$field]);
+                }
             }
         }
         return $activity;
@@ -324,12 +358,11 @@ class ActivityHandler {
      * check if user is assigned in project share the activity
      * check if the user is assigned in an organization share the activty
      * @param Activity $activity
-     * @param UserInterface $user
+     * @param UserInterface|null $user
      * @return bool
      */
     private function hasAccess(Activity $activity, ?UserInterface $user): bool
     {
-        //need to handle if user ===null
         $res = false;
         if(!$activity->getIsPublic() && $user !== null){
             if($activity->getCreator()->getId() === $user->getId()){
@@ -355,4 +388,26 @@ class ActivityHandler {
     {
         return get_class($activity) === ActivityFile::class;
     }
+/*
+    public function putOnOrganization(UserInterface $user, Organization $org, Activity $activity): Activity
+    {
+        if($activity->getCreator()->getId() === $user->getId()){
+            $activity->setOrganization($org);
+        }else {
+            throw new UnauthorizedHttpException();
+        }
+        $this->entityManager->flush();
+        return $activity;
+    }
+
+    public function putOnProject(UserInterface $user,Project $project, Activity $activity): Activity
+    {
+        if($activity->getCreator()->getId() === $user->getId()){
+            $activity->setProject($project);
+        }else {
+            throw new UnauthorizedHttpException();
+        }
+        $this->entityManager->flush();
+        return $activity;
+    }*/
 }
