@@ -128,7 +128,7 @@ class ActivityController extends AbstractController
             $this->parameters->setData($request);
 
     //check if required params exist
-            $this->parameters->hasData(["id", "isPublic"]);
+            $this->parameters->hasData(["id"]);
 
     //convert Date
             $this->parameters->addParam("postDate", New \DateTime("now"));
@@ -142,7 +142,10 @@ class ActivityController extends AbstractController
 
             $activity = $this->activityHandler->getActivities(
                 $this->getUser(),
-                $this->parameters->getAllData(),
+                [
+                    "id" => $this->parameters->getData("id"),
+                    "access" => "owned"
+                ],
                 true
             )[0];
 
@@ -250,9 +253,11 @@ class ActivityController extends AbstractController
 
         //get activity by id with owned context and notFoundException
         $activity = $this->activityHandler->getActivities(
-            $this->getUser(), [
-            "id" => $this->parameters->getData("id"),
-            "access" => "owned"],
+            $this->getUser(),
+            [
+                "id" => $this->parameters->getData("id"),
+                "access" => "owned"
+            ],
             true
         )[0];
 

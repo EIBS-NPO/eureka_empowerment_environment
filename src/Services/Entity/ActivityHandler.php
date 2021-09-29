@@ -166,7 +166,7 @@ class ActivityHandler {
 
 
     /**
-     * @throws ViolationException
+     * @throws ViolationException|PartialContentException
      */
     public function update(UserInterface $user, $activity, $params) :Activity
     {
@@ -178,7 +178,25 @@ class ActivityHandler {
 
         $activity = $this->setActivity($user, $activity, $params);
 
-        $this->entityManager->flush();
+        try{
+            //handle optionnal picture
+            if(isset($params["pictureFile"])){ //can't be null for creating
+                if($params["pictureFile"] === "null"){$params["pictureFile"] = null;}
+                $activity= $this->fileHandler->uploadPicture($activity,self::PICTURE_DIR, $params["pictureFile"]);
+            }
+
+            //handle optionnal File
+            if(isset($params["file"])){
+                $activity = $this->putFile($activity, $params);
+            }
+
+        }catch(FileException | BadMediaFileException $e){
+            throw new PartialContentException([$activity], $e->getMessage());
+        }finally {
+            $this->entityManager->flush();
+        }
+
+
     return $activity;
     }
 
@@ -190,15 +208,13 @@ class ActivityHandler {
      */
     public function putPicture(Activity $activity, array $params): PictorialObject
     {
-        $activity = $this->fileHandler->uploadPicture(
+        //    $this->entityManager->flush();
+
+        return $this->fileHandler->uploadPicture(
             $activity,
             self::PICTURE_DIR,
             $params["pictureFile"] === "null" ? null : $params["pictureFile"]
         );
-
-        $this->entityManager->flush();
-
-        return $activity;
     }
 
     /**
@@ -239,7 +255,7 @@ class ActivityHandler {
             $this->entityManager->remove($activityOld);
         }
 
-        $this->entityManager->flush();
+    //    $this->entityManager->flush();
    return $activity;
     }
 
