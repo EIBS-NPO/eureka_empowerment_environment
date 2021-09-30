@@ -31,70 +31,51 @@ class FollowingHandler
      * add and return a follower into project, if any followingProject exist for this user in this project. It's created.
      * @param TrackableObject $object
      * @param UserInterface $follower
-     * @return FollowingProject
+     * @return TrackableObject
      */
-    public function addFollower(TrackableObject $object, UserInterface $follower) :FollowingProject {
+    public function putFollower(TrackableObject $object, UserInterface $follower) : TrackableObject
+    {
         //follower have already a following?
         $following = $this->getFollowingByFollowerId($object, $follower->getId());
 
         if($following === null){
             $following = $this->newFollowing($object, $follower);
         }
-        $following->setIsFollowing(true);
 
-        return $following;
+        //put with reverse of init bool state
+        $newFollow = !$this->isFollowed($object,$follower);
+        $following->setIsFollowing($newFollow);
+        $object->setIsFollowed($newFollow);
+
+        if(!$this->isStillValid($following)){
+            $this->entityManager->remove($following);
+        }
+         return $object;
     }
 
     /**
      * add and return an assigned user into project by his creator, if any followingProject exist for this user in this project. It's created.
      * @param TrackableObject $object
      * @param UserInterface $follower
-     * @return FollowingProject
+     * @return TrackableObject
      */
-    public function addAssigned(TrackableObject $object, UserInterface $follower) :FollowingProject {
+    public function putAssigned(TrackableObject $object, UserInterface $follower) : TrackableObject
+    {
 
         $following = $this->getFollowingByFollowerId($object, $follower->getId());
         if($following === null){
             $following = $this->newFollowing($object, $follower);
         }
 
+        //put with reverse of init bool state
+        $newAssign = !$this->isAssign($object,$follower);
+        $following->setIsAssigning($newAssign);
+        $object->setIsAssigned($newAssign);
 
-            //follower have already a following?
-            if (!$following->getIsAssigning()) {
-                $following->setIsAssigning(true);
-            } else {
-                $following->setIsAssigning(false);
-            }
-
-
-        return $following;
-    }
-
-    /**
-     * @param FollowingProject $following
-     * @return bool
-     */
-    public function rmvAssigned(FollowingProject $following) :bool {
-        //follower have already a following?
-
-    //    $following = $this->getFollowingByFollowerId($object, $follower->getId());
-     //   if($following === null) return false;
-
-        $following->setIsAssigning(false);
-
-        return true;
-    }
-
-    /**
-     * if follower have a following like a follower in the trackableObject, it's remove and return true, else return false
-     * @param FollowingProject $following
-     * @return bool
-     */
-    public function rmvFollower(FollowingProject $following) :bool {
-    //    if($following === null) return false;
-
-        $following->setIsFollowing(false);
-        return true;
+        if(!$this->isStillValid($following)){
+            $this->entityManager->remove($following);
+        }
+        return $object;
     }
 
     /**
@@ -120,6 +101,8 @@ class FollowingHandler
         $following->setIsAssigning(false);
         $following->setFollower($follower);
         $following->setObject($object);
+
+        $this->entityManager->persist($following);
         return $following;
     }
 
@@ -199,7 +182,7 @@ class FollowingHandler
         $res = false;
         $following = $this->getFollowingByFollowerId($object, $follower->getId());
 
-        if($following !== null && $following->getIsAssigning() === true){
+        if($following !== null && $following->getIsFollowing() === true){
             $res = true;
         }
         return $res;

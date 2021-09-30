@@ -8,6 +8,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Doctrine\ORM\Mapping\InheritanceType;
+use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
@@ -96,6 +97,8 @@ class Activity implements PictorialObject
      */
     private $followers;
 
+    private bool $isFollowed = false;
+
     public function __construct()
     {
         $this->followers = new ArrayCollection();
@@ -109,7 +112,8 @@ class Activity implements PictorialObject
             "summary" => $this->summary,
             "postDate" => $this->postDate->format('Y-m-d'),
             "isPublic" => $this->isPublic,
-            "creator" => $this->creator->serialize("read_activity")
+            "creator" => $this->creator->serialize("read_activity"),
+            "isFollowed" => $this->isFollowed
         ];
 
         //Check some attributes to see if they are sets
@@ -287,7 +291,7 @@ class Activity implements PictorialObject
         return $this->followers;
     }
 
-    public function addFollower(User $follower): self
+    public function addFollower(UserInterface $follower): self
     {
         if (!$this->followers->contains($follower)) {
             $this->followers[] = $follower;
@@ -296,7 +300,7 @@ class Activity implements PictorialObject
         return $this;
     }
 
-    public function removeFollower(User $follower): self
+    public function removeFollower(UserInterface $follower): self
     {
         $this->followers->removeElement($follower);
 
@@ -312,6 +316,23 @@ class Activity implements PictorialObject
         }
         return $res;
     }
+
+    /**
+     * @return bool
+     */
+    public function isFollowed(): bool
+    {
+        return $this->isFollowed;
+    }
+
+    /**
+     * @param bool $isFollowed
+     */
+    public function setIsFollowed(bool $isFollowed): void
+    {
+        $this->isFollowed = $isFollowed;
+    }
+
 
     /**
      * return if User|Project|Organization have a private to this.Activity.

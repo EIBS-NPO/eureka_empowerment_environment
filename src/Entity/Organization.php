@@ -7,7 +7,6 @@ use App\Entity\Interfaces\PictorialObject;
 use App\Entity\Interfaces\TrackableObject;
 use App\Repository\OrganizationRepository;
 use Doctrine\Common\Collections\ArrayCollection;
-use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -78,8 +77,13 @@ class Organization implements PictorialObject, AddressableObject //TrackableObje
 
     /**
      * @ORM\OneToMany(targetEntity=Activity::class, mappedBy="organization")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\Activity")
+     *     }
+     * )
      */
-    private $activities = null;
+    private $activities;
 
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
@@ -121,12 +125,12 @@ class Organization implements PictorialObject, AddressableObject //TrackableObje
      */
     private $isPartner = false;
 
-    public function __construct()
+   /* public function __construct()
     {
-        $this->projects = new ArrayCollection();
-        $this->membership = new ArrayCollection();
-        $this->activities = new ArrayCollection();
-    }
+     //   $this->projects = new ArrayCollection();
+  //      $this->membership = new ArrayCollection();
+    //    $this->activities = new ArrayCollection();
+    }*/
 
     /**
      * Return an array containing object attributes
@@ -257,10 +261,8 @@ class Organization implements PictorialObject, AddressableObject //TrackableObje
         return $this;
     }
 
-    /**
-     * @return Collection|Project[]
-     */
-    public function getProjects(): Collection
+
+    public function getProjects()
     {
         return $this->projects;
     }
@@ -287,10 +289,8 @@ class Organization implements PictorialObject, AddressableObject //TrackableObje
         return $this;
     }
 
-    /**
-     * @return Collection|User[]
-     */
-    public function getMembership(): Collection
+
+    public function getMembership()
     {
         return $this->membership;
     }
@@ -320,29 +320,35 @@ class Organization implements PictorialObject, AddressableObject //TrackableObje
     }
 
 
+    /**
+     * @param mixed $activities
+     */
     public function setActivities($activities): void
     {
         $this->activities = $activities;
     }
 
-    public function addActivity(Activity $activity): self
-    {
+    public function addActivity($activity){
         if (!$this->activities->contains($activity)) {
-            $this->activities[] = $activity;
+            $this->activities->add($activity);
+         //   $this->activities[] = $activity;
             $activity->setOrganization($this);
         }
 
         return $this;
     }
 
-    public function removeActivity(Activity $activity): self
-    {
-        if ($this->activities->removeElement($activity)) {
+    public function removeActivity($activity){
+        if ($this->activities->contains($activity)) {
+            $this->activities->removeElement($activity);
+             $activity->setOrganization(null);
+        }
+        /*if ($this->activities->removeElement($activity)) {
             // set the owning side to null (unless already changed)
             if ($activity->getOrganization() === $this) {
                 $activity->setOrganization(null);
             }
-        }
+        }*/
 
         return $this;
     }

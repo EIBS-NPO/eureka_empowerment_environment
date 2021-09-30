@@ -10,7 +10,9 @@ use App\Exceptions\BadMediaFileException;
 use App\Exceptions\NoFoundException;
 use App\Exceptions\PartialContentException;
 use App\Exceptions\ViolationException;
+use App\Services\Entity\ActivityHandler;
 use App\Services\Entity\OrgHandler;
+use App\Services\Entity\ProjectHandler;
 use App\Services\Entity\UserHandler;
 use App\Services\FileHandler;
 use App\Services\LogService;
@@ -40,6 +42,8 @@ class OrgController extends AbstractController
     private LogService $logger;
     private OrgHandler $orgHandler;
     private UserHandler $userHandler;
+    private ProjectHandler $projectHandler;
+    private ActivityHandler $activityHandler;
 
     /**
      * OrgController constructor.
@@ -51,8 +55,10 @@ class OrgController extends AbstractController
      * @param LogService $logger
      * @param OrgHandler $orgHandler
      * @param UserHandler $userHandler
+     * @param ProjectHandler $projectHandler
+     * @param ActivityHandler $activityHandler
      */
-    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger, OrgHandler $orgHandler, UserHandler $userHandler)
+    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger, OrgHandler $orgHandler, UserHandler $userHandler, ProjectHandler $projectHandler, ActivityHandler $activityHandler)
     {
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
@@ -64,6 +70,8 @@ class OrgController extends AbstractController
         $this->logger = $logger;
 
         $this->orgHandler = $orgHandler;
+        $this->projectHandler = $projectHandler;
+        $this->activityHandler = $activityHandler;
     }
 
     /**
@@ -73,34 +81,30 @@ class OrgController extends AbstractController
      *      optionnals Request Data ["phone", 'description', "pictureFile"]
      * @return Response
      */
-    public function create(Request $request) :Response
+    public function create(Request $request): Response
     {
-        try{
+        try {
             // recover all data's request
             $this->parameters->setData($request);
             $this->parameters->addParam("referent", $this->getUser());
 
-            $newOrg = $this->orgHandler->createOrg( $this->parameters->getAllData());
+            $newOrg = $this->orgHandler->createOrg($this->getUser(), $this->parameters->getAllData());
 
             $newOrg = $this->orgHandler->withPictures([$newOrg]);
 
-        return $this->responseHandler->successResponse($newOrg, "read_org");
-        }
-        catch(PartialContentException $e){
+            return $this->responseHandler->successResponse($newOrg, "read_org");
+        } catch (PartialContentException $e) {
             $this->logger->logError($e, $this->getUser(), "error");
             return $this->responseHandler->partialResponse($e, "read_org");
-        }
-        catch(ViolationException $e) {
+        } catch (ViolationException $e) {
             $this->logger->logError($e, $this->getUser(), "error");
             return $this->responseHandler->BadRequestResponse($e->getMessage());
-        }
-        catch(UniqueConstraintViolationException $e){
-                $this->logger->logError($e, $this->getUser(), "error");
-                return $this->responseHandler->BadRequestResponse(json_encode(["name" => "Organization's name already exist"]));
-        }
-        catch(Exception $e){
-            $this->logger->logError($e,$this->getUser(),"error");
-            return $this->responseHandler->serverErrorResponse( "An error occured");
+        } catch (UniqueConstraintViolationException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse(json_encode(["name" => "Organization's name already exist"]));
+        } catch (Exception $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->serverErrorResponse("An error occured");
         }
     }
 
@@ -110,9 +114,9 @@ class OrgController extends AbstractController
      * @param Request $request
      * @return Response
      */
-    public function getPublic(Request $request) :Response
+    public function getPublic(Request $request): Response
     {
-        try{
+        try {
             // recover all data's request
             $this->parameters->setData($request);
             $this->parameters->addParam("access", "public");
@@ -121,10 +125,9 @@ class OrgController extends AbstractController
 
             $orgs = $this->orgHandler->withPictures($orgs);
 
-        return $this->responseHandler->successResponse($orgs, "read_org");
-        }
-        catch(Exception $e){
-            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->successResponse($orgs, "read_org");
+        } catch (Exception $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
             return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
 
@@ -137,16 +140,15 @@ class OrgController extends AbstractController
      */
     public function getPrivate(Request $request): Response
     {
-        try{
+        try {
             // recover all data's request
             $this->parameters->setData($request);
             $orgs = $this->orgHandler->getOrgs($this->getUser(), $this->parameters->getAllData());
 
             $orgs = $this->orgHandler->withPictures($orgs);
 
-        return $this->responseHandler->successResponse($orgs, "read_org");
-        }
-        catch (Exception $e) {//unexpected error
+            return $this->responseHandler->successResponse($orgs, "read_org");
+        } catch (Exception $e) {//unexpected error
             $this->logger->logError($e, $this->getUser(), "error");
             return $this->responseHandler->serverErrorResponse("An error occurred");
         }
@@ -157,196 +159,55 @@ class OrgController extends AbstractController
      * @param Request $request
      * @return Response
      */
-    public function updateOrganization(Request $request) :Response
+    public function updateOrganization(Request $request): Response
     {
-        try{
+        try {
             $this->parameters->setData($request);
             $this->parameters->hasData(["id"]);
 
             //get org by id with owned context and notFoundException
-            $org = $this->orgHandler->getOrgs(
-                $this->getUser(), [
-                "id" => $this->parameters->getData("id"),
-                "access" => "owned"],
-                true
-            )[0];
-            $org = $this->orgHandler->updateOrg($org, $this->parameters->getAllData());
+            $orgRepo = $this->entityManager->getRepository(Organization::class);
+            $org = $orgRepo->find($this->parameters->getData("id"));
+
+            //handle potential link with an org
+            $projectId = $this->parameters->getData("project");
+            if ($projectId !== false) {
+                $project = null;
+                if (is_numeric($projectId)) {
+                    $project = $this->projectHandler->getProjects(
+                        $this->getUser(),
+                        ["id" => $projectId],
+                        true
+                    )[0];
+                }
+                $this->parameters->putData("project", $project);
+            }
+
+            //handle potential link with an activity
+            $actId = $this->parameters->getData("activity");
+            if ($actId !== false) {
+                $activity = null;
+                if (is_numeric($actId)) {
+                    $activityRepo = $this->entityManager->getRepository(Activity::class);
+                    $activity = $activityRepo->findOneBy(["id" => $actId]);
+                }
+                $this->parameters->putData("activity", $activity);
+            }
+
+            $org = $this->orgHandler->updateOrg($this->getUser(), $org, $this->parameters->getAllData());
 
             $org = $this->orgHandler->withPictures([$org]);
 
-        return $this->responseHandler->successResponse($org, "read_org");
-        }
-        catch(ViolationException | NoFoundException $e) {
+            return $this->responseHandler->successResponse($org, "read_org");
+        } catch (ViolationException | NoFoundException $e) {
             $this->logger->logError($e, $this->getUser(), "error");
             return $this->responseHandler->BadRequestResponse($e->getMessage());
-        }
-        catch (Exception $e) {//unexpected error
+        } catch (Exception $e) {//unexpected error
             $this->logger->logError($e, $this->getUser(), "error");
             return $this->responseHandler->serverErrorResponse("An error occurred");
         }
     }
 
-    /*
-     * @param Request $request
-     * @return Response
-     * @Route("/picture", name="_picture_put", methods="post")
-     */
-   /* public function putPicture(Request $request ) :Response {
-       try{
-           // recover all data's request
-           $this->parameters->setData($request);
-           $this->parameters->hasData(["id", "pictureFile"]);
-
-           //get org by id with owned context and notFoundException
-           $org = $this->orgHandler->getOrgs(
-               $this->getUser(), [
-               "id" => $this->parameters->getData("id"),
-               "access" => "owned"],
-               true
-           )[0];
-
-           $org = $this->orgHandler->putPicture($org,$this->parameters->getAllData());
-
-           $org = $this->orgHandler->withPictures([$org]);
-
-       return $this->responseHandler->successResponse($org, "read_org");
-       }
-       catch(ViolationException | NoFoundException $e) {
-           $this->logger->logError($e, $this->getUser(), "error");
-           return $this->responseHandler->BadRequestResponse($e->getMessage());
-       }
-       catch (BadMediaFileException $e){
-           $this->logger->logError($e, $this->getUser(), "error");
-           return $this->responseHandler->BadMediaResponse($e->getMessage());
-       }
-       catch (Exception $e) {//unexpected error
-           $this->logger->logError($e, $this->getUser(), "error");
-           return $this->responseHandler->serverErrorResponse("An error occurred");
-       }
-    }*/
-
-    /**
-     * @param Request $request
-     * @return Response
-     * @Route("/manageActivity", name="_manage_Activity", methods="put")
-     */
-    public function manageActivity(Request $request){
-        // recover all data's request
-        $this->parameters->setData($request);
-
-        //check if required params exist
-        try{ $this->parameters->hasData(["activityId", "orgId"]); }
-        catch(ViolationException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
-        }
-
-
-//get Activity
-        $repository = $this->entityManager->getRepository(Activity::class);
-        $actData = $repository->findBy(["id" => $this->parameters->getData("activityId")]);
-        if(count($actData) === 0 ){
-            $this->logger->logInfo(" Activity with id : ". $this->parameters->getData("activityId") ." not found " );
-            return $this->responseHandler->notFoundResponse();
-        }
-        $actData = $actData[0];
-
-//get organization
-        $repository = $this->entityManager->getRepository(Organization::class);
-        $orgData = $repository->findBy(["id" => $this->parameters->getData("orgId")]);
-        if(count($orgData) === 0 ){
-            $this->logger->logInfo(" Organization with id : ". $this->parameters->getData("orgId") ." not found " );
-            return $this->responseHandler->notFoundResponse();
-        }
-        $orgData = $orgData[0];
-
-//check manage access manage only for project creator, org referent and admin
-        if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
-            if(//if no referrent and no member && if no creator of the project
-                $orgData->getReferent()->getId() !== $this->getUser()->getId()
-                && $actData->getCreator()->getId() !== $this->getUser()->getId()
-
-            ){
-                return $this->responseHandler->unauthorizedResponse("unauthorized");
-            }
-        }
-
-//if activity have the organization, remove it else add
-        if($actData->getOrganization() !== null && $actData->getOrganization()->getId() === $orgData->getId()){
-            $actData->setOrganization(null);
-        }
-        else { //add
-            $actData->setOrganization($orgData);
-        }
-
-        $this->entityManager->flush();
-
-        return $this->responseHandler->successResponse(["success"]);
-    }
-
-    /**
-     * @param Request $request
-     * @return Response
-     * @Route("/manageProject", name="_manage_Project", methods="put")
-     */
-    public function manageProject(Request $request){
-        // recover all data's request
-        $this->parameters->setData($request);
-
-        //check if required params exist
-        try{ $this->parameters->hasData(["projectId", "orgId"]); }
-        catch(ViolationException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
-        }
-
-        try {
-            //get Project
-            $repository = $this->entityManager->getRepository(Project::class);
-            $projData = $repository->findBy(["id" => $this->parameters->getData("projectId")]);
-            if (count($projData) === 0) {
-                $this->logger->logInfo(" Project with id : " . $this->parameters->getData("projectId") . " not found ");
-                return $this->responseHandler->notFoundResponse();
-            }
-            $projData = $projData[0];
-
-
-//get organization
-            $repository = $this->entityManager->getRepository(Organization::class);
-            $orgData = $repository->findBy(["id" => $this->parameters->getData("orgId")]);
-            if (count($orgData) === 0) {
-                $this->logger->logInfo(" Organization with id : " . $this->parameters->getData("orgId") . " not found ");
-                return $this->responseHandler->notFoundResponse();
-            }
-            $orgData = $orgData[0];
-
-//check manage access manage only for project creator, org referent and admin
-            if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
-                if(//if no referrent and no member && if no creator of the project
-                    $orgData->getreferent()->getId() !== $this->getUser()->getId()
-                    && $projData->getCreator()->getId() !== $this->getUser()->getId()
-
-                ){
-                    return $this->responseHandler->unauthorizedResponse("unauthorized");
-                }
-            }
-
-//if activity have the organization, remove it
-            if ($projData->getOrganization() !== null && $projData->getOrganization()->getId() === $orgData->getId()) {
-                $projData->setOrganization(null);
-            } else { //add
-                $projData->setOrganization($orgData);
-            }
-
-            $this->entityManager->flush();
-
-        }catch(Exception $e){
-            $this->logger->logError($e,$this->getUser(),"error" );
-            return $this->responseHandler->serverErrorResponse($e, "An error occured ");
-        }
-
-        return $this->responseHandler->successResponse(["success"]);
-    }
 
     /**
      * @param Request $request
@@ -355,13 +216,14 @@ class OrgController extends AbstractController
      * @return Response
      * @Route("/putMember", name="_putMember", methods="put")
      */
-    public function updateMembership(Request $request){
+    public function updateMembership(Request $request): Response
+    {
 
-        try{
+        try {
             // recover all data's request
             $this->parameters->setData($request);
 
-            $user = $this->userHandler->getUsers(null, ["access"=> $this->parameters->getData("userId")])[0];
+            $user = $this->userHandler->getUsers(null, ["access" => $this->parameters->getData("userId")])[0];
 
             $org = $this->orgHandler->getOrgs(
                 $this->getUser(),
@@ -371,36 +233,14 @@ class OrgController extends AbstractController
                 ]
             )[0];
 
-           $org = $this->orgHandler->putMember($org, $user);
-           $org = $this->orgHandler->withPictures([$org]);
+            $org = $this->orgHandler->putMember($org, $user);
+            $org = $this->orgHandler->withPictures([$org]);
 
-       return $this->responseHandler->successResponse($org, "read_org");
+            return $this->responseHandler->successResponse($org, "read_org");
 //todo other exception
-        }catch(Exception $e){
-            $this->logger->logError($e,$this->getUser(),"error");
-            return $this->responseHandler->serverErrorResponse( "An error occured");
+        } catch (Exception $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->serverErrorResponse("An error occured");
         }
     }
-    /*
-     * return membered orgs for a user.
-     * @param Request $request
-     * @return Response
-     * @Route("/membered", name="_membered", methods="get")
-     */
-    /*public function getOrgByUser (Request $request){
-        try{
-            $repository = $this->entityManager->getRepository(User::class);
-            $userData = $repository->findBy(["id" => $this->getUser()->getId()])[0];
-        }catch(Exception $e){
-             $this->logger->logError($e,$this->getUser(),"error" );
-            return $this->responseHandler->serverErrorResponse($e, "An error occured ");
-        }
-
-        //get refered and membered orgs,
-        $orgsData = $userData->getMemberOf()->toArray();
-        $orgsData = array_merge($orgsData, $userData->getOrganizations()->toArray());
-    //    $orgsData = array_unique($orgsData);
-
-        return $this->responseHandler->successResponse($orgsData);
-    }*/
 }

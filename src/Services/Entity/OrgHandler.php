@@ -4,6 +4,7 @@ namespace App\Services\Entity;
 
 use App\Entity\Interfaces\PictorialObject;
 use App\Entity\Organization;
+use App\Entity\User;
 use App\Exceptions\BadMediaFileException;
 use App\Exceptions\NoFoundException;
 use App\Exceptions\PartialContentException;
@@ -30,14 +31,16 @@ class OrgHandler {
     private FollowingHandler $followingHandler;
     private ParametersValidator $validator;
     private AddressHandler $addressHandler;
+    private ProjectHandler $projectHandler;
 
-    public function __construct(EntityManagerInterface $entityManager, FileHandler $fileHandler, AddressHandler $addressHandler, FollowingHandler $followingHandler, ParametersValidator $validator, OrganizationRepository $orgRepo)
+    public function __construct(EntityManagerInterface $entityManager, FileHandler $fileHandler, AddressHandler $addressHandler, FollowingHandler $followingHandler, ProjectHandler $projectHandler, ParametersValidator $validator, OrganizationRepository $orgRepo)
     {
         $this->entityManager = $entityManager;
         $this->orgRepo = $orgRepo;
         $this->fileHandler = $fileHandler;
         $this->addressHandler = $addressHandler;
         $this->followingHandler = $followingHandler;
+        $this->projectHandler = $projectHandler;
         $this->validator = $validator;
     }
 
@@ -92,7 +95,7 @@ class OrgHandler {
             case "admin" :
             case "public":
                 if(isset($id)){
-                    $dataResponse = $this->orgRepo->findBy($id);
+                    $dataResponse = $this->orgRepo->findBy(["id"=>$id]);
                 }else {
                     if(isset($params["partner"])){
                         $dataResponse = $this->orgRepo->findBy(["isPartner" => true]);
@@ -135,12 +138,13 @@ class OrgHandler {
     }
 
     /**
+     * @param UserInterface $user
      * @param $params
      * @return Organization
      * @throws PartialContentException
      * @throws ViolationException
      */
-    public function createOrg($params): Organization
+    public function createOrg(UserInterface $user, $params): Organization
     {
         //check params Validations
          $this->validator->isInvalid(
@@ -150,7 +154,7 @@ class OrgHandler {
 
         //create org object && set fields
         $org = new Organization();
-        $this->setOrg($org, $params);
+        $this->setOrg($user, $org, $params);
 
         //Optional image management without blocking the creation of the entity
         try{
@@ -179,36 +183,32 @@ class OrgHandler {
      *      ["name", "type", "email", "phone", 'description', "pictureFile"]
      *      all params are optionals
      * @return Organization of organization with pictures loaded
-     * @throws ViolationException
+     * @throws ViolationException|PartialContentException
      */
-    public function updateOrg(Organization $org, array $params): Organization
+    public function updateOrg(UserInterface $user, Organization $org, array $params): Organization
     {
+        try{
         //check params Validations
         $this->validator->isInvalid(
             [],
             ["name", "type", "email", "phone", 'description'],
             Organization::class);
 
-        $org = $this->setOrg($org, $params);
+    //    dd($params["project"]);
+        $org = $this->setOrg($user, $org, $params);
 
-        try{
-            //handle optionnal address
+
+            //handle optional address
             if(isset($params["address"])) $org = $this->addressHandler->putAddress($org, $params);
 
-            //handle optionnal picture
-            if(isset($params["pictureFile"])){ //can't be null for creating
-                $org= $this->fileHandler->uploadPicture($org,self::PICTURE_DIR, $params["pictureFile"]);
-            }
+            //handle optional picture
+            if(isset($params["pictureFile"])) $org = $this->putPicture($org, $params);
+
         }catch(FileException | BadMediaFileException $e){
             throw new PartialContentException([$org], $e->getMessage());
         } finally {
-            //persist
-            $this->entityManager->persist($org);
             $this->entityManager->flush();
         }
-
-
-     //   $this->entityManager->flush();
 
         return $org;
     }
@@ -222,31 +222,70 @@ class OrgHandler {
      */
     public function putPicture(Organization $org, $params): PictorialObject
     {
-        $org = $this->fileHandler->uploadPicture(
+        return $this->fileHandler->uploadPicture(
             $org,
             self::PICTURE_DIR,
             $params["pictureFile"] === "null" ? null : $params["pictureFile"]
         );
-
-        $this->entityManager->flush();
-
-        return $org;
     }
 
 
     /**
      * set for an Organisation object the attributes passed in $attributes array
+     * @param UserInterface $user
      * @param Organization $org
      * @param array $attributes
      * @return Organization with attributes passed
      */
-    private function setOrg(Organization $org, array $attributes): Organization {
-        foreach( ["name", "type", "email", "referent", "phone", 'description'] as $field ) {
+    private function setOrg(UserInterface $user, Organization $org, array $attributes): Organization {
+    //    dd($org->getActivities());
+        foreach( ["referent", "name", "type", "email", "phone", 'description', 'project', 'activity'] as $field ) {
             if (isset($attributes[$field])) {
+                $canSet = false;
                 $setter = 'set' . ucfirst($field);
-                $org->$setter($attributes[$field]);
+
+                if(($field === "project" || $field === "activity")){
+                 //   if(!is_null($org->getId()) && $org->getReferent()->getId() === $user->getId() ) {//only if org isn't a new Object and currentUser is owner
+                    if(!is_null($org->getId())){//only if org isn't a new Object
+
+                      if($org->isMember($user) ) {// and currentUser is member
+                          if($attributes[$field] === "null"){ $attributes[$field] = null;}
+
+                          if ($field === "project") {
+                              $project = $attributes[$field];
+                              if(!is_null($project)){
+                                  if ($project->getOrganization() === $org) {
+                                      $org->removeProject( $project );
+                                  } else {
+                                      $org->addProject( $project );
+                                  }
+                              }
+                          }
+
+                          if ($field === "activity") {
+                              $activity = $attributes[$field];
+                              //if org have the activity, remove it else add
+                              if(!is_null($activity)){
+                                  if (!is_null($activity->getOrganization()) && $activity->getOrganization() === $org) {
+                                      $org->removeActivity( $activity );
+                                  } else { //add
+                                      $org->addActivity( $activity );
+                                  }
+                              }
+
+                          }
+                      }
+                    }
+                }else if($org->getReferent()->getId() === $user->getId() ) { // only referent can update other org attributes
+                    $canSet = true;
+                }
+
+                if($canSet){
+                    $org->$setter($attributes[$field]);
+                }
             }
         }
+
         return $org;
     }
 
@@ -297,4 +336,34 @@ class OrgHandler {
         return $org;
     }
 
+    public function putActivity (Organization $org, $activity){
+        if($activity->getOrganization() !== null && $activity->getOrganization()->getId() === $org->getId()){
+            $activity->setOrganization(null);
+            $org->removeActivity($activity);
+        }
+        else { //add
+            $activity->setOrganization($org);
+            $org->addActivity($activity);
+        }
+
+        $this->entityManager->flush();
+
+        return $org;
+    }
+
+    public function putProject(Organization $org, $project){
+        if ($project->getOrganization() !== null && $project->getOrganization()->getId() === $org->getId()) {
+            $project->setOrganization(null);
+            $org->removeProject($project);
+        } else { //add
+            $project->setOrganization($org);
+            $org->addProject($project);
+        }
+
+        $this->entityManager->flush();
+    }
+
+    private function isOwner(){
+
+    }
 }

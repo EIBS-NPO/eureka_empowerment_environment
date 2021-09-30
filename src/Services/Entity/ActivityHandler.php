@@ -116,12 +116,19 @@ class ActivityHandler {
             throw new NoFoundException($msg);
         }
 
+        if(!is_null($user)){
+            foreach($dataResponse as $activity){
+                $activity->setIsFollowed($activity->isFollowByUserId($user->getId()));
+            }
+        }
+
         return $dataResponse;
     }
 
 
     /**
      * Persist Activity with optional file & picture
+     * @param UserInterface $user
      * @param array $params
      * @return Activity activity with no load picture
      * @throws PartialContentException
@@ -170,6 +177,7 @@ class ActivityHandler {
      */
     public function update(UserInterface $user, $activity, $params) :Activity
     {
+        try{
         //check params Validations
         $this->validator->isInvalid(
             [],
@@ -178,16 +186,19 @@ class ActivityHandler {
 
         $activity = $this->setActivity($user, $activity, $params);
 
-        try{
-            //handle optionnal picture
+
+            //handle optional picture
             if(isset($params["pictureFile"])){ //can't be null for creating
-                if($params["pictureFile"] === "null"){$params["pictureFile"] = null;}
-                $activity= $this->fileHandler->uploadPicture($activity,self::PICTURE_DIR, $params["pictureFile"]);
+                $activity = $this->putPicture($activity, $params);
             }
 
-            //handle optionnal File
+            //handle optional File
             if(isset($params["file"])){
                 $activity = $this->putFile($activity, $params);
+            }
+
+            if(isset($params["follow"])){
+                $this->putFollower($user, $activity);
             }
 
         }catch(FileException | BadMediaFileException $e){
@@ -314,18 +325,18 @@ class ActivityHandler {
 
 
                 if(($field === "organization" || $field === "project")){
-                    if(!is_null($activity->getId() && $activity->getCreator()->getId() === $user->getId()) ){//only if Activity isn't a new Object and currentUser is owner
+                    if(!is_null($activity->getId()) && $activity->getCreator()->getId() === $user->getId() ){//only if Activity isn't a new Object and currentUser is owner
 
                         if($attributes[$field] === "null"){ $attributes[$field] = null;}
 
-                        //handle org linking
+                        //handle org linking if user is member
                         if($field === "organization") {
                             if ((is_null($attributes[$field]) || $attributes[$field]->isMember($user))) {
                                 $canSet = true;
                             }
                         }
 
-                        //handle project linking
+                        //handle project linking is user is assign
                         else if ($field === "project"){
                             if((is_null($attributes[$field] ) || $this->followingHandler->isAssign($attributes[$field], $user))) {
                                 $canSet = true;
@@ -403,6 +414,16 @@ class ActivityHandler {
     private function isActivityFile($activity): bool
     {
         return get_class($activity) === ActivityFile::class;
+    }
+
+    private function putFollower(UserInterface $user, Activity $activity){
+        if($activity->isFollowByUserId($user->getId())){
+            $activity->removeFollower($user);
+            $activity->setIsFollowed(false);
+        }else{
+            $activity->addFollower($user);
+            $activity->setIsFollowed(true);
+        }
     }
 /*
     public function putOnOrganization(UserInterface $user, Organization $org, Activity $activity): Activity

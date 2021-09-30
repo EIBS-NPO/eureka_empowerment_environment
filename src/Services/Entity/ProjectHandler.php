@@ -118,15 +118,27 @@ class ProjectHandler
             }
         }
 
+        //todo perte du status followed si'j'afficher dans un ctx public meme si loged ....
+        //check sur la route public si on peut pass le getUser() et c'est bon!
+        //for loged user, add if the current user isAssgn and follower in object
+        if(!is_null($user)){
+            foreach($dataResponse as $project){
+                $project->setIsAssigned($this->followingHandler->isAssign($project, $user));
+                $project->setIsFollowed($this->followingHandler->isFollowed($project, $user));
+            }
+        }
+
     return $dataResponse;
     }
 
     /**
+     * @param UserInterface $user
      * @param array $params
      * @return Project
-     * @throws PartialContentException|ViolationException
+     * @throws PartialContentException
+     * @throws ViolationException
      */
-    public function create (array $params) :Project
+    public function create (UserInterface $user, array $params) :Project
     {
         //check params Validations
         $this->validator->isInvalid(
@@ -136,7 +148,7 @@ class ProjectHandler
 
         //create project object && set validated fields
         $project = new Project();
-        $project = $this->setProject($project, $params);
+        $project = $this->setProject($user, $project, $params);
 
         //Optional image management without blocking the creation of the entity
         try{
@@ -155,22 +167,43 @@ class ProjectHandler
     }
 
     /**
+     * @param UserInterface $user
      * @param Project $project
      * @param array $params
      * @return Project
+     * @throws PartialContentException
      * @throws ViolationException
      */
-    public function update(Project $project, array $params) :Project
+    public function update(UserInterface $user, Project $project, array $params) :Project
     {
-        //check params Validations
-        $this->validator->isInvalid(
-            [],
-            ["title", "description", "startDate", "endDate", "organization"],
-            Project::class);
+        try{
+            //check params Validations
+            $this->validator->isInvalid(
+                [],
+                ["title", "description", "startDate", "endDate"],
+                Project::class
+            );
 
-            $project = $this->setProject($project, $params);
+            $project = $this->setProject($user, $project, $params);
 
+            //handle optionnal picture
+            if(isset($params["pictureFile"])){ //can't be null for creating
+                $project = $this->putPicture($project, $params);
+            }
+
+            if(isset($params["follow"])){
+                $project = $this->followingHandler->putFollower($project, $user);
+            }
+            if(isset($params["assign"])){
+                $project = $this->followingHandler->putAssigned($project, $user);
+            }
+
+        }catch(FileException | BadMediaFileException $e){
+            throw new PartialContentException([$project], $e->getMessage());
+        }finally {
             $this->entityManager->flush();
+        }
+
     return $project;
     }
 
@@ -184,25 +217,55 @@ class ProjectHandler
      */
     public function putPicture(Project $project, $params): PictorialObject
     {
-        $project = $this->fileHandler->uploadPicture(
+        return $this->fileHandler->uploadPicture(
             $project,
             self::PICTURE_DIR,
             $params["pictureFile"] === "null" ? null : $params["pictureFile"]
         );
-
-        $this->entityManager->flush();
-
-        return $project;
     }
 
 
-    private function setProject(Project $project, array $attributes) :Project
+    private function setProject(UserInterface $user, Project $project, array $attributes) :Project
     {
-        foreach( ["creator", "title", "description", "startDate", "endDate", "organization"]
+       // dd($project->getActivities());
+        foreach( ["creator", "title", "description", "startDate", "endDate", "organization", "activity"]
                  as $field ) {
             if (isset($attributes[$field])) {
+                $canSet = false;
                 $setter = 'set' . ucfirst($field);
-                $project->$setter($attributes[$field]);
+
+                //todo check access creator and assign
+                if(($field === "organization" || $field === "activity")){
+                    if(!is_null($project->getId()) && $project->getCreator()->getId() === $user->getId() ) {//only if project isn't a new Object and currentUser is owner
+                        if($attributes[$field] === "null"){ $attributes[$field] = null;}
+
+                        if($field === "organization") {
+                            $org = $attributes[$field];
+                            if (is_null($org) || $org->isMember($user)) {
+                                $canSet = true;
+                            }
+                        }
+
+                        if($field === "activity") {
+                            $activity = $attributes[$field];
+
+                    //if activity have the project, remove it else add
+                            if(!is_null($activity)){
+                                 if($activity->getProject() === $project){
+                                     $project->removeActivity($activity);
+                                 }
+                                 else { //add
+                                     $project->addActivity($activity);
+                                 }
+                            }
+
+                        }
+                    }
+                }else{ $canSet = true; }
+
+                if( $canSet ){
+                    $project->$setter($attributes[$field]);
+                }
             }
         }
         return $project;

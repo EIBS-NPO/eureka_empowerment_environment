@@ -10,6 +10,8 @@ use App\Exceptions\BadMediaFileException;
 use App\Exceptions\NoFoundException;
 use App\Exceptions\PartialContentException;
 use App\Exceptions\ViolationException;
+use App\Services\Entity\ActivityHandler;
+use App\Services\Entity\OrgHandler;
 use App\Services\Entity\ProjectHandler;
 use App\Services\FileHandler;
 use App\Services\Entity\FollowingHandler;
@@ -44,6 +46,8 @@ class ProjectController extends AbstractController
     private FollowingHandler $followingHandler;
 
     private ProjectHandler $projectHandler;
+    private OrgHandler $orgHandler;
+    private ActivityHandler $activityHandler;
 
     /**
      * UserController constructor.
@@ -55,9 +59,11 @@ class ProjectController extends AbstractController
      * @param LogService $logger
      * @param FollowingHandler $followingHandler
      * @param ProjectHandler $projectHandler
+     * @param OrgHandler $orgHandler
+     * @param ActivityHandler $activityHandler
      */
     public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger, FollowingHandler $followingHandler,
-    ProjectHandler $projectHandler)
+    ProjectHandler $projectHandler, OrgHandler $orgHandler, ActivityHandler $activityHandler)
     {
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
@@ -68,6 +74,8 @@ class ProjectController extends AbstractController
         $this->followingHandler = $followingHandler;
 
         $this->projectHandler = $projectHandler;
+        $this->orgHandler = $orgHandler;
+        $this->activityHandler = $activityHandler;
     }
 
     /**
@@ -92,7 +100,7 @@ class ProjectController extends AbstractController
             }
 
             //create
-            $project = $this->projectHandler->create($this->parameters->getAllData());
+            $project = $this->projectHandler->create($this->getUser(), $this->parameters->getAllData());
 
             //loadPicture
             $project = $this->projectHandler->withPictures([$project]);
@@ -163,18 +171,19 @@ class ProjectController extends AbstractController
 
 
     /**
-     * @Route("", name="_put", methods="put")
+     * @Route("/update", name="_put", methods="post")
      * @param Request $request
      * @return Response
      * @throws Exception
      */
-    public function updateProject (Request $request) :Response
+    public function updateProject(Request $request) :Response
     {
         try{
-            // recover all data's request
+        // recover all data's request
             $this->parameters->setData($request);
             $this->parameters->hasData(["id"]);
 
+        //convert date
             if($this->parameters->getData('startDate') !== false){
                 $this->parameters->putData("startDate", new DateTime ($this->parameters->getData('startDate')));
             }
@@ -182,14 +191,41 @@ class ProjectController extends AbstractController
                 $this->parameters->putData("endDate", new DateTime ($this->parameters->getData('endDate')));
             }
 
+        //retrieve project targeted
             $project = $this->projectHandler->getProjects(
                 $this->getUser(), [
-                "id" => $this->parameters->getData("id"),
-                "access" => "owned"],
+                    "id" => $this->parameters->getData("id")
+                ],
                 true
             )[0];
 
-            $project = $this->projectHandler->update($project, $this->parameters->getAllData());
+        //handle potential link with an org
+            $orgId = $this->parameters->getData("organization");
+            if($orgId !== false){
+                $org = "null"; //by default for delete linking
+                if( $orgId !== "null"){
+                    $org = $this->orgHandler->getOrgs(
+                        $this->getUser(),
+                        ["id" => $orgId],
+                        true
+                    )[0];
+                }
+                $this->parameters->putData("organization", $org);
+            }
+
+        //handle potential link with an activity
+            $actId = $this->parameters->getData("activity");
+            if($actId !== false){
+                $activity = null;
+                if( is_numeric($actId) ) {
+                    $activityRepo = $this->entityManager->getRepository(Activity::class);
+                    $activity = $activityRepo->findOneBy(["id" => $actId]);
+
+                }
+                $this->parameters->putData("activity", $activity);
+            }
+
+            $project = $this->projectHandler->update($this->getuser(), $project, $this->parameters->getAllData());
 
             $project = $this->projectHandler->withPictures([$project]);
 
@@ -199,47 +235,6 @@ class ProjectController extends AbstractController
         catch(ViolationException | NoFoundException $e) {
             $this->logger->logError($e, $this->getUser(), "error");
             return $this->responseHandler->BadRequestResponse($e->getMessage());
-        }
-        catch (Exception $e) {//unexpected error
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->serverErrorResponse("An error occurred");
-        }
-    }
-
-
-
-    /**
-     * @param Request $request
-     * @return Response
-     * @Route("/picture", name="_picture_put", methods="post")
-     */
-    public function putPicture(Request $request ) :Response {
-        try{
-            // recover all data's request
-            $this->parameters->setData($request);
-            $this->parameters->hasData(["id", "pictureFile"]);
-
-            //get org by id with owned context and notFoundException
-            $project = $this->projectHandler->getProjects(
-                $this->getUser(), [
-                "id" => $this->parameters->getData("id"),
-                "access" => "owned"],
-                true
-            )[0];
-
-            $project = $this->projectHandler->putPicture($project,$this->parameters->getAllData());
-
-            $project = $this->projectHandler->withPictures([$project]);
-
-            return $this->responseHandler->successResponse($project, "read_org");
-        }
-        catch(ViolationException | NoFoundException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getMessage());
-        }
-        catch (BadMediaFileException $e){
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadMediaResponse($e->getMessage());
         }
         catch (Exception $e) {//unexpected error
             $this->logger->logError($e, $this->getUser(), "error");
@@ -288,151 +283,12 @@ class ProjectController extends AbstractController
         }
     }
 
-    /**
-     * @param Request $request
-     * @return Response
-     * @Route("/manageActivity", name="_add_activity", methods="put")
-     */
-    public function manageActivity(Request $request) {
-        // recover all data's request
-        $this->parameters->setData($request);
-
-        //check if required params exist
-        try{ $this->parameters->hasData(["activityId", "projectId"]); }
-        catch(ViolationException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
-        }
-
-        try{
-//get Activity
-            $repository = $this->entityManager->getRepository(Activity::class);
-            $actData = $repository->findBy(["id" => $this->parameters->getData("activityId")]);
-            if(count($actData) === 0 ){
-                $this->logger->logInfo(" Activity with id : ". $this->parameters->getData("activityId") ." not found " );
-                return $this->responseHandler->notFoundResponse();
-            }
-            $actData = $actData[0];
-
-            //get project
-            $repository = $this->entityManager->getRepository(Project::class);
-            $projectData = $repository->findBy(["id" => $this->parameters->getData("projectId")]);
-            if(count($projectData) === 0 ){
-                $this->logger->logInfo(" Project with id : ". $this->parameters->getData("projectId") ." not found " );
-                return $this->responseHandler->notFoundResponse();
-            }
-            $projectData = $projectData[0];
-
-            //check manage access manage only for project creator, org referent and admin
-            if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
-                if(//if no referrent and no member && if no creator of the project
-                    $projectData->getCreator()->getId() !== $this->getUser()->getId()
-                    && $actData->getCreator()->getId() !== $this->getUser()->getId()
-
-                ){
-                    return $this->responseHandler->unauthorizedResponse("unauthorized");
-                }
-            }
-
-            //if activity have the organization, remove it else add
-            if($actData->getProject() !== null && $actData->getProject()->getId() === $projectData->getId()){
-                $actData->setProject(null);
-            }
-            else { //add
-                $actData->setProject($projectData);
-            }
-
-            $this->entityManager->flush();
-
-            return $this->responseHandler->successResponse(["success"]);
-
-        }catch(Exception $e){
-            $this->logger->logError($e,$this->getUser(),"error" );
-            return $this->responseHandler->serverErrorResponse($e, "An error occured");
-        }
-    }
-
-    /**
-     * @param Request $request
-     * @return Response
-     * @Route("/manageOrg", name="_manage_org", methods="put")
-     */
-    public function manageOrg(Request $request){
-        // recover all data's request
-        $this->parameters->setData($request);
-
-        //check if required params exist
-        try{ $this->parameters->hasData(["orgId", "projectId"]); }
-        catch(ViolationException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
-        }
-
-        try{
-            //get Activity
-            $repository = $this->entityManager->getRepository(Organization::class);
-            $orgData = $repository->findBy(["id" => $this->parameters->getData("orgId")]);
-            if(count($orgData) === 0 ){
-                $this->logger->logInfo(" Organization with id : ". $this->parameters->getData("orgId") ." not found " );
-                return $this->responseHandler->notFoundResponse();
-            }
-            $orgData = $orgData[0];
-
-            //get project
-            $repository = $this->entityManager->getRepository(Project::class);
-            $projectData = $repository->findBy(["id" => $this->parameters->getData("projectId")]);
-            if(count($projectData) === 0 ){
-                $this->logger->logInfo(" Organization with id : ". $this->parameters->getData("projectId") ." not found " );
-                return $this->responseHandler->notFoundResponse();
-            }
-            $projectData = $projectData[0];
-
-            //check manage access manage only for project creator, org referent and admin
-            if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
-                if(//if no referrent and no member && if no creator of the project
-                    $projectData->getCreator()->getId() !== $this->getUser()->getId()
-                 //   !$projectData->isAssign($this->getUser())
-                    && $orgData->getReferent()->getId() !== $this->getUser()->getId()
-
-                ){
-                    return $this->responseHandler->unauthorizedResponse("unauthorized");
-                }
-            }
-
-            //if activity have the organization, remove it else add
-            if($projectData->getOrganization() !== null && $projectData->getOrganization()->getId() === $orgData->getId()){
-                $projectData->setOrganization(null);
-
-//retirer le referent de l'org de l'assignation du projet
-                //non laisser faire manuellement
-                /*$referentProjectFollowing = $this->followingHandler->getFollowingByFollowerId($projectData, $orgData->getReferent());
-                $this->followingHandler->rmvAssigned($referentProjectFollowing);*/
-            }
-            else { //add
-                $projectData->setOrganization($orgData);
-
-                //add orgReferent into assignedTeam of the project
-                $this->followingHandler->addAssigned($projectData, $orgData->getReferent());
-
-            }
-
-            $this->entityManager->flush();
-
-            return $this->responseHandler->successResponse(["success"]);
-
-        }catch(Exception $e){
-            $this->logger->logError($e,$this->getUser(),"error" );
-            return $this->responseHandler->serverErrorResponse($e, "An error occured");
-        }
-    }
-
-
-    /**
+    /*
      * @param Request $request
      * @return Response
      * @Route("", name="_delete", methods="delete")
      */
-    public function deleteProject(Request $request){
+    /*public function deleteProject(Request $request){
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -470,5 +326,5 @@ class ProjectController extends AbstractController
             $this->logger->logError($e,$this->getUser(),"error" );
             return $this->responseHandler->serverErrorResponse($e, "An error occured");
         }
-    }
+    }*/
 }

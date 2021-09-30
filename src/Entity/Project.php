@@ -64,14 +64,13 @@ class Project implements TrackableObject, PictorialObject
 
     /**
      * @ORM\OneToMany(targetEntity=Activity::class, mappedBy="project")
-     * @ORM\JoinColumn(nullable=true)
      * @Assert\Collection(
      *     fields={
      *         @Assert\Type(type="App\Entity\Activity")
      *     }
      * )
      */
-    private $activities = [];
+    private $activities;
 
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
@@ -98,6 +97,9 @@ class Project implements TrackableObject, PictorialObject
      */
     private $followings;
 
+    private bool $isAssigned = false;
+    private bool $isFollowed = false;
+
     public function __construct()
     {
         $this->followings = new ArrayCollection();
@@ -116,8 +118,11 @@ class Project implements TrackableObject, PictorialObject
             "title" => $this->title,
             "description" => $this->description,
             "startDate" => $this->startDate->format('Y-m-d'),
-            "creator" => $this->creator->serialize()
+            "creator" => $this->creator->serialize(),
+            "isAssigned" => $this->isAssigned,
+            "isFollowed" => $this->isFollowed
         ];
+
 
         //Check some attributes to see if they are sets
         if($this->endDate){
@@ -349,6 +354,40 @@ class Project implements TrackableObject, PictorialObject
 
         return $this;
     }
+
+    /**
+     * @return bool
+     */
+    public function isAssigned(): bool
+    {
+        return $this->isAssigned;
+    }
+
+    /**
+     * @param bool $isAssigned
+     */
+    public function setIsAssigned(bool $isAssigned): void
+    {
+        $this->isAssigned = $isAssigned;
+    }
+
+    /**
+     * @return bool
+     */
+    public function isFollowed(): bool
+    {
+        return $this->isFollowed;
+    }
+
+    /**
+     * @param bool $isFollowed
+     */
+    public function setIsFollowed(bool $isFollowed): void
+    {
+        $this->isFollowed = $isFollowed;
+    }
+
+
 
 //    public function getAssignedTeam(){
 //        $team = [];

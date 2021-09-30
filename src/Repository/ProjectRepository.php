@@ -5,7 +5,6 @@ namespace App\Repository;
 use App\Entity\Project;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
-use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
  * @method Project|null find($id, $lockMode = null, $lockVersion = null)

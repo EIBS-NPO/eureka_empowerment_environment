@@ -114,9 +114,6 @@ class ActivityController extends AbstractController
     }
 
 
-
-
-
     /**
      * @Route("/update", name="_put", methods="post")
      * @param Request $request
@@ -140,6 +137,7 @@ class ActivityController extends AbstractController
                 $this->parameters->putData("isPublic", true);
             }
 
+    //retrieve activity targeted
             $activity = $this->activityHandler->getActivities(
                 $this->getUser(),
                 [
@@ -167,7 +165,7 @@ class ActivityController extends AbstractController
              $projectId = $this->parameters->getData("project");
              if($projectId !== false){
                  $project = "null"; // by default for delete linking
-                 if( $projectId !== "null"){
+                 if( is_numeric($projectId)){
                      $project = $this->projectHandler->getProjects(
                          $this->getUser(),
                          ["id" => $projectId],
@@ -197,88 +195,6 @@ class ActivityController extends AbstractController
         }
     }
 
-
-
-
-    /*
-     * @param Request $request
-     * @return Response
-     * @Route("/picture", name="_picture_put", methods="post")
-     */
-   /* public function putPicture(Request $request ) :Response {
-        try{
-            // recover all data's request
-            $this->parameters->setData($request);
-            $this->parameters->hasData(["id", "pictureFile"]);
-
-            //get activity by id with owned context and notFoundException
-            $activity = $this->activityHandler->getActivities(
-                $this->getUser(), [
-                    "id" => $this->parameters->getData("id"),
-                    "access" => "owned"],
-                true
-            )[0];
-
-            $activity = $this->activityHandler->putPicture($activity,$this->parameters->getAllData());
-
-            $activity = $this->activityHandler->withPictures([$activity]);
-
-            return $this->responseHandler->successResponse($activity, "read_activity");
-        }
-        catch(ViolationException | NoFoundException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getMessage());
-        }
-        catch (BadMediaFileException $e){
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadMediaResponse($e->getMessage());
-        }
-        catch (Exception $e) {//unexpected error
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->serverErrorResponse("An error occurred");
-        }
-    }*/
-
-    /**
-     * @Route("/file", name="file_put", methods="post")
-     * @param Request $request
-     * @return Response|null
-     */
-    public function updateFile (Request $request): ?Response
-    {
-    try{
-        // recover all data's request
-        $this->parameters->setData($request);
-        $this->parameters->hasData(["id", "file"]);
-
-        //get activity by id with owned context and notFoundException
-        $activity = $this->activityHandler->getActivities(
-            $this->getUser(),
-            [
-                "id" => $this->parameters->getData("id"),
-                "access" => "owned"
-            ],
-            true
-        )[0];
-
-        $activity = $this->activityHandler->putFile($activity, $this->parameters->getAllData());
-
-        $activity = $this->activityHandler->withPictures([$activity]);
-    return $this->responseHandler->successResponse($activity, "read_activity");
-    }
-    catch(ViolationException | NoFoundException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getMessage());
-        }
-    catch (BadMediaFileException $e){
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadMediaResponse($e->getMessage());
-        }
-    catch (Exception $e) {//unexpected error
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->serverErrorResponse("An error occurred");
-        }
-    }
 
     /**
      * @param Request $request
