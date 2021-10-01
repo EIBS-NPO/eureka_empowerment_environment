@@ -165,21 +165,16 @@ class OrgController extends AbstractController
             $this->parameters->setData($request);
             $this->parameters->hasData(["id"]);
 
-            //get org by id with owned context and notFoundException
+            //retrieve org object
             $orgRepo = $this->entityManager->getRepository(Organization::class);
             $org = $orgRepo->find($this->parameters->getData("id"));
+            if(is_null($org))throw new NoFoundException("organization id : ".$this->parameters->getData("id"));
 
             //handle potential link with an org
             $projectId = $this->parameters->getData("project");
             if ($projectId !== false) {
-                $project = null;
-                if (is_numeric($projectId)) {
-                    $project = $this->projectHandler->getProjects(
-                        $this->getUser(),
-                        ["id" => $projectId],
-                        true
-                    )[0];
-                }
+                $projectRepo = $this->entityManager->getRepository(Project::class);
+                $project = $projectRepo->findOneBy(["id" => $this->parameters->getData("id")]);
                 $this->parameters->putData("project", $project);
             }
 
@@ -192,6 +187,16 @@ class OrgController extends AbstractController
                     $activity = $activityRepo->findOneBy(["id" => $actId]);
                 }
                 $this->parameters->putData("activity", $activity);
+            }
+
+            $memberId = $this->parameters->getData("member");
+            if($memberId !== false){
+                $member = null;
+                if(is_numeric($memberId)){
+                    $userRepo = $this->entityManager->getRepository(User::class);
+                    $member = $userRepo->find($memberId);
+                }
+                $this->parameters->putData("member", $member);
             }
 
             $org = $this->orgHandler->updateOrg($this->getUser(), $org, $this->parameters->getAllData());

@@ -421,7 +421,8 @@ class Organization implements PictorialObject, AddressableObject //TrackableObje
         return $this;
     }
 
-    public function isMember($user){
+    public function isMember($user): bool
+    {
         $res = false;
         if($this->referent->getId() === $user->getId()){
             $res = true;
@@ -431,7 +432,8 @@ class Organization implements PictorialObject, AddressableObject //TrackableObje
         return $res;
     }
 
-    public function getOnlyPublicActivities(){
+    public function getOnlyPublicActivities(): array
+    {
         $res = [];
         foreach($this->activities as $activity ){
             if($activity->getIsPublic()){

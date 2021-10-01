@@ -2,7 +2,9 @@
 
 namespace App\Services\Entity;
 
+use App\Entity\Activity;
 use App\Entity\Interfaces\PictorialObject;
+use App\Entity\Organization;
 use App\Entity\Project;
 use App\Entity\User;
 use App\Exceptions\BadMediaFileException;
@@ -60,31 +62,35 @@ class ProjectHandler
             $params["access"] = null;
         }
 
+        if(isset($params['id']) && is_numeric($params["id"])){
+            $id = $params["id"];
+        }
+
         switch($params["access"]){
             case "assigned":
-                if(isset($params['id'])){
-                    $dataResponse = $this->projectRepo->findAssignedById($user->getId(), $params['id']);
+                if(isset($id)){
+                    $dataResponse = $this->projectRepo->findAssignedById($user->getId(), $id);
                 } else{
                     $dataResponse = $this->projectRepo->findAssigned($user->getId());
                 }
                 break;
             case "followed":
-                if(isset($params['id'])){
-                    $dataResponse = $this->projectRepo->findFollowedById($user->getId(), $params['id']);
+                if(isset($id)){
+                    $dataResponse = $this->projectRepo->findFollowedById($user->getId(), $id);
                 } else{
                     $dataResponse = $this->projectRepo->findFollowed($user->getId());
                 }
                 break;
             case "owned":
-                if(isset($params['id'])){
-                    $dataResponse = $this->projectRepo->findBy(['creator'=>$user, "id"=>$params["id"]]);
+                if(isset($id)){
+                    $dataResponse = $this->projectRepo->findBy(['creator'=>$user, "id"=> $id ]);
                 } else{
                     $dataResponse = $this->projectRepo->findBy(["creator"=>$user]);
                 }
                 break;
             default : //admin or no access param
-                if(isset($params['id'])){
-                    $dataResponse = $this->projectRepo->findBy(["id"=>$params['id']]);
+                if(isset($id)){
+                    $dataResponse = $this->projectRepo->findBy(["id"=> $id ]);
                 }else {
                     $dataResponse = $this->projectRepo->findAll();
                 }
@@ -92,12 +98,9 @@ class ProjectHandler
 
         if($withNotFound && count($dataResponse) === 0){
             if(isset($id)){
-                $msg = "[project id : ".$id . "]";
+                $msg = "project id : $id ";
             }else {
-                $msg ="no project found";
-            }
-            if($user !== null){
-                $msg .= " for [user : ".$user->getId() . "]";
+                $msg ="no projects found";
             }
             throw new NoFoundException($msg);
         }
@@ -186,16 +189,8 @@ class ProjectHandler
 
             $project = $this->setProject($user, $project, $params);
 
-            //handle optionnal picture
-            if(isset($params["pictureFile"])){ //can't be null for creating
-                $project = $this->putPicture($project, $params);
-            }
-
             if(isset($params["follow"])){
                 $project = $this->followingHandler->putFollower($project, $user);
-            }
-            if(isset($params["assign"])){
-                $project = $this->followingHandler->putAssigned($project, $user);
             }
 
         }catch(FileException | BadMediaFileException $e){
@@ -215,51 +210,71 @@ class ProjectHandler
      * @return PictorialObject
      * @throws BadMediaFileException
      */
-    public function putPicture(Project $project, $params): PictorialObject
+    public function putPicture(Project $project, $pictureFile): PictorialObject
     {
         return $this->fileHandler->uploadPicture(
             $project,
             self::PICTURE_DIR,
-            $params["pictureFile"] === "null" ? null : $params["pictureFile"]
+            $pictureFile === "null" ? null : $pictureFile
         );
     }
 
 
+    /**
+     * @throws BadMediaFileException
+     */
     private function setProject(UserInterface $user, Project $project, array $attributes) :Project
     {
        // dd($project->getActivities());
-        foreach( ["creator", "title", "description", "startDate", "endDate", "organization", "activity"]
+      //  $isUserAssigned = $this->followingHandler->isAssign($project, $user);
+
+        foreach( ["creator", "title", "description", "startDate", "endDate", "organization", "activity", "member", "pictureFile"]
                  as $field ) {
             if (isset($attributes[$field])) {
                 $canSet = false;
                 $setter = 'set' . ucfirst($field);
 
                 //todo check access creator and assign
-                if(($field === "organization" || $field === "activity")){
-                    if(!is_null($project->getId()) && $project->getCreator()->getId() === $user->getId() ) {//only if project isn't a new Object and currentUser is owner
+                if(($field === "organization" || $field === "activity" || $field === "member" || "pictureFile")){
+                    if(!is_null($project->getId()) && $this->followingHandler->isAssign($project, $user)) {// project isn't new and user is assigned ? (owner or member)
+
+                        //force true null type
                         if($attributes[$field] === "null"){ $attributes[$field] = null;}
 
+                        //put orgHandle
                         if($field === "organization") {
                             $org = $attributes[$field];
-                            if (is_null($org) || $org->isMember($user)) {
-                                $canSet = true;
-                            }
+                            $canSet = $org->getReferent() === $user; //only the org's creator can set it in project
+                           //$canSet allowed basic setter for simple relation
                         }
 
+                        //put activity handle
                         if($field === "activity") {
                             $activity = $attributes[$field];
-
-                    //if activity have the project, remove it else add
                             if(!is_null($activity)){
-                                 if($activity->getProject() === $project){
-                                     $project->removeActivity($activity);
-                                 }
-                                 else { //add
-                                     $project->addActivity($activity);
-                                 }
+                                 $this->putActivity($user, $project, $activity);
+                            }
+                        }
+
+                        //handle only for project's creator
+                        if($project->getCreator() === $user){
+
+                            //handler put member
+                            if($field === "member") {
+                                $member = $attributes[$field];
+                                if(!is_null($member) && $member !== $project->getCreator()){
+                                    $this->followingHandler->putAssigned($project, $member);
+                                }
                             }
 
+                            //handle put picture
+                            if($field === "pictureFile"){
+                                $pictureFile = $attributes[$field];
+                                $project = $this->putPicture($project, $pictureFile);
+                            }
                         }
+
+
                     }
                 }else{ $canSet = true; }
 
@@ -292,5 +307,19 @@ class ProjectHandler
     public function getTeam(Project $project){
         //get collection of assigned user
         return $this->followingHandler->getAssignedTeam($project);
+    }
+
+    private function putActivity (UserInterface $user, Project $project, Activity $activity){
+        if($activity->getProject() === $project){
+            if ($activity->getCreator() === $user || $project->getCreator() === $user )
+            { //if activity's creator or project's creator
+                $project->removeActivity($activity);
+            }
+        }
+        else { //add only for activity's creator
+            if($activity->getCreator() === $user){
+                $project->addActivity($activity);
+            }
+        }
     }
 }
