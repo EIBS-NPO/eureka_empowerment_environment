@@ -100,33 +100,6 @@ class UserController extends AbstractController
     }
 
     /**
-     * @Route("/sendActivation", name="_ask_activation", methods="post")
-     * @throws TransportExceptionInterface
-     */
-    public function sendAskActivation(Request $request): Response
-    {
-        try {
-            // recover all data's request
-            $this->parameters->setData($request);
-            $this->parameters->hasData(["email","urlActivation"]);
-            $this->userHandler->sendAskActivation(
-                $this->parameters->getData("urlActivation"),
-                $this->parameters->getData("email")
-            );
-
-            return $this->responseHandler->successResponse([]);
-        }
-        catch(ViolationException | NoFoundException $e) {
-            $this->logger->logError($e, null, "error");
-            return $this->responseHandler->BadRequestResponse($e->getMessage());
-        }
-        catch(TransportExceptionInterface | Exception $e){
-            $this->logger->logError($e, null, "error");
-            return $this->responseHandler->serverErrorResponse("An error occured");
-        }
-    }
-
-    /**
      * @param Request $request
      * @return Response
      * @Route("/activation", name="_activation", methods="post")
@@ -153,7 +126,7 @@ class UserController extends AbstractController
 
     /**
      * need "id" for one user, else all returned
-     * @Route("", name="_get", methods="get")
+     * @Route("/public", name="_get", methods="get")
      * @param Request $request
      * @return Response
      */
@@ -161,7 +134,6 @@ class UserController extends AbstractController
     {
         try{
             $this->parameters->setData($request);
-
             $users = $this->userHandler->getUsers($this->getUser(), $this->parameters->getAllData());
 
             $users = $this->userHandler->withPictures($users);
@@ -172,7 +144,6 @@ class UserController extends AbstractController
             $this->logger->logError($e, null, "error");
             return $this->responseHandler->BadRequestResponse($e->getMessage());
         }
-
     }
 
     /**

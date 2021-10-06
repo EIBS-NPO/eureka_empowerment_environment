@@ -65,17 +65,19 @@ class UserHandler {
         ) {
             $params["access"] = 'self';
         }*/
-
         if(isset($params["access"])){
             if(is_int($params["access"])){//if access have an id
-                $dataResponse = $this->userRepo->findBy(["id" => $params["access"]]);
+                $dataResponse[] = $this->userRepo->findBy(["id" => $params["access"]]);
             }
             else{ //other access possibility
                 switch($params["access"]){
                     case "owned":
                         if($user !== null){
-                            $dataResponse[] = $this->userRepo->findOneBy(["email" => $user->getUsername()]);
+                            $dataResponse[] = $this->userRepo->findBy(["email" => $user->getUsername()]);
                         }
+                        break;
+                    case "email":
+                        $dataResponse[] = $this->userRepo->findOneBy(["email" => $params["email"]]);
                         break;
                     case "byProject":
                         break;

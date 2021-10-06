@@ -215,12 +215,12 @@ class OrgHandler {
      * @return Organization
      * @throws BadMediaFileException
      */
-    public function putPicture(Organization $org, $params): PictorialObject
+    public function putPicture(Organization $org, $pictureFile): PictorialObject
     {
         return $this->fileHandler->uploadPicture(
             $org,
             self::PICTURE_DIR,
-            $params["pictureFile"] === "null" ? null : $params["pictureFile"]
+            $pictureFile === "null" ? null : $pictureFile
         );
     }
 

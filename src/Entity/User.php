@@ -219,6 +219,10 @@ class User implements UserInterface, PictorialObject, AddressableObject
             $data["mobile"] = $this->mobile;
         }
 
+        if($this->activationToken !== null){
+            $data["activation_token"] = $this->activationToken;
+        }
+
         if($this->pictureFile){
             $data["picture"] = $this->pictureFile;
         }
