@@ -72,19 +72,12 @@ class UserController extends AbstractController
      */
     public function register(Request $request): Response
     {
-        try{
+        try {
             // recover all data's request
             $this->parameters->setData($request);
             $newUser = $this->userHandler->create($this->parameters->getAllData());
             return $this->responseHandler->successResponse([$newUser]);
-
-            //todo sendmail confirm by listener termiate?
-        //    $this->mailHandler->sendConfirmEmail($newUser);
-        }/*
-        catch (PartialContentException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->partialResponse( $e, "read_user");
-        }*/
+        }
         catch (ViolationException $e) {
             $this->logger->logError($e, $this->getUser(), "error");
             return $this->responseHandler->BadRequestResponse($e->getMessage());
@@ -125,6 +118,37 @@ class UserController extends AbstractController
     }
 
     /**
+     * @Route("/forgotPassword", name="_forgotPassword", methods="put")
+     * @param Request $request
+     * @return Response
+     */
+    public function askForgotPasswordToken(Request $request): Response
+    {
+        try {
+            // recover all data's request
+            $this->parameters->setData($request);
+            $this->parameters->hasData(["email"]);
+
+            $user = $this->userHandler->getUsers(null, ["access" => "email", "email" => $this->parameters->getData("email")]);
+
+            if(!isset($user[0])){
+                throw new NoFoundException("User not found");
+            }
+
+            $user = $this->userHandler->add_GPA_resetPassword($user[0]);
+
+            return $this->responseHandler->successResponse([$user]);
+
+        }catch(ViolationException | NoFoundException $e) {
+                $this->logger->logError($e, null, "error");
+                return $this->responseHandler->BadRequestResponse($e->getMessage());
+        }catch(Exception $e){
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->serverErrorResponse("An error occured");
+        }
+    }
+
+    /**
      * need "id" for one user, else all returned
      * @Route("/public", name="_get", methods="get")
      * @param Request $request
@@ -134,7 +158,7 @@ class UserController extends AbstractController
     {
         try{
             $this->parameters->setData($request);
-            $users = $this->userHandler->getUsers($this->getUser(), $this->parameters->getAllData());
+            $users = $this->userHandler->getUsers($this->getUser(), $this->parameters->getAllData(), true);
 
             $users = $this->userHandler->withPictures($users);
         //final response
@@ -144,12 +168,16 @@ class UserController extends AbstractController
             $this->logger->logError($e, null, "error");
             return $this->responseHandler->BadRequestResponse($e->getMessage());
         }
+        catch (Exception $e) {//unexpected error
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->serverErrorResponse("An error occurred");
+        }
     }
 
     /**
      * update user data for the currentUser
      * optionnal param are ("firstname", "lastname", "phone", "mobile", picture)
-     * @Route("", name="_update", methods="put")
+     * @Route("/update", name="_update", methods="post")
      * @param Request $request
      * @param JWTTokenManagerInterface $JWTManager
      * @return Response
@@ -160,9 +188,14 @@ class UserController extends AbstractController
             // recover all data's request
             $this->parameters->setData($request);
 
-            $user = $this->userHandler->getUsers(["id" => $this->getUser()->getId()])[0];
+            $user = $this->userHandler->getUsers(
+                $this->getUser(),
+                ["id" => $this->getUser()->getId()]
+            )[0];
 
             $user = $this->userHandler->updateUser($user, $this->parameters->getAllData());
+
+
 
             //make newToken with updatedUser and newInfos
             $userData = [$this->userHandler->withPictures([$user])[0],
@@ -189,139 +222,37 @@ class UserController extends AbstractController
     /**
      * @param Request $request
      * @return Response
-     * @Route("/picture", name="_picture_put", methods="post")
+     * @Route("/resetPassword", name="_password", methods="post")
      */
-    public function putPicture(Request $request ) :Response {
+    public function resetPassword(Request $request): Response
+    {
         try{
             // recover all data's request
             $this->parameters->setData($request);
-            $this->parameters->hasData(["pictureFile"]);
 
-            //force id width current user
-            $this->parameters->addParam("id", $this->getUser()->getId());
+            $this->parameters->hasData(["resetPasswordToken", "resetCode", "newPassword", "confirmPassword"]);
+            $this->validator->isInvalid([], ["password"], User::class);
 
-            //get org by id with owned context and notFoundException
-            $user = $this->userHandler->getUsers($this->parameters->getAllData())[0];
+            $this->userHandler->resetPassword($this->parameters->getAllData());
 
-            $user = $this->userHandler->putPicture($user, $this->parameters->getAllData());
-
-            $user = $this->userHandler->withPictures([$user]);
-
-        return $this->responseHandler->successResponse($user);
-        }
-        catch(ViolationException | NoFoundException $e) {
+        return $this->responseHandler->successResponse();
+        } catch(ViolationException | NoFoundException $e) {
             $this->logger->logError($e, $this->getUser(), "error");
             return $this->responseHandler->BadRequestResponse($e->getMessage());
-        }
-        catch (BadMediaFileException $e){
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadMediaResponse($e->getMessage());
-        }
-        catch (Exception $e) {//unexpected error
+        } catch (Exception $e) {//unexpected error
             $this->logger->logError($e, $this->getUser(), "error");
             return $this->responseHandler->serverErrorResponse("An error occurred");
         }
     }
 
-    /**
-     * @param Request $request
-     * @param UserPasswordEncoderInterface $encoder
-     * @param JWTTokenManagerInterface $JWTManager
-     * @return Response
-     * @Route("/password", name="_password", methods="post")
-     */
-    public function resetPassword(Request $request, UserPasswordEncoderInterface $encoder, JWTTokenManagerInterface $JWTManager)
-    {
-        // recover all data's request
-        $this->parameters->setData($request);
 
-        //check access and set $criterias
-        if($this->parameters->getData('id') !== false) {
-            if ($this->getUser()->getRoles()[0] !== "ROLE_ADMIN") {
-                return $this->responseHandler->unauthorizedResponse("unauthorized access");
-            }else {
-                $criterias["id"] = $this->parameters->getData("id");
-            }
-        }else {
-            $criterias["id"] = $this->getUser()->getId();
-        }
-
-        //check if required params exist
-        try{ $this->parameters->hasData(["password", "newPassword", "confirmNewPassword"]); }
-        catch(ViolationException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
-        }
-
-        //check match newPassword and confirmPassword
-        if($this->parameters->getData('newPassword') !== $this->parameters->getData('confirmNewPassword')) {
-            return $this->responseHandler->BadRequestResponse(["newPassword"=>"not match", "confirmNewPassword"=>"not match"]);
-        }
-
-        $repository = $this->entityManager->getRepository(User::class);
-        try{
-            $userData = $repository->findBy($criterias);
-            if(!empty($userData)) {
-                $user = $userData[0];
-
-                if($this->getUser()->getRoles()[0] !== "ROLE_ADMIN"){
-                    //check valid original password, only if current user isn't admin
-                    $hash = $encoder->encodePassword($this->getUser(), $this->parameters->getData('password'));
-                    if($user->getPassword() !== $hash) {
-                        return $this->responseHandler->BadRequestResponse(["password"=> "not match"]);
-                    }
-                }
-
-                //check params Validations
-                $this->parameters->putData("password", $this->parameters->getData("newPassword"));
-                try{
-                    $this->validator->isInvalid(
-                        [],
-                        ["password"],
-                        User::class);
-                } catch(ViolationException $e){
-                    $this->logger->logError($e, $this->getUser(), "error");
-                    return $this->responseHandler->BadRequestResponse($e->getViolationsList());
-                }
-
-                $hash = $encoder->encodePassword($this->getUser(), $this->parameters->getData('password'));
-                $user->setPassword($hash);
-
-                //persist the user with new password
-                $this->entityManager->flush();
-                $user = $this->fileHandler->loadPicture($user);
-
-                //if password was change for currentUser, need refresh Token
-                if($criterias["id"] === $this->getUser()->getId()){
-                    $dataResponse = [
-                        $user,
-                        'token' => $JWTManager->create($user),
-                    ];
-                }else {
-                    $dataResponse = [$user];
-                }
-
-            }else {
-                $this->logger->logInfo("user with id : ". $criterias["id"] ." not found" );
-                return $this->responseHandler->notFoundResponse();
-            }
-        }catch(Exception $e){
-            $this->logger->logError($e,$this->getUser(),"error" );
-            return $this->responseHandler->serverErrorResponse($e, "An error occured");
-        }
-
-        //final response
-        return $this->responseHandler->successResponse($dataResponse);
-    }
-
-
-    /**
+    /*
      * @Route("/email", name="_reset_email", methods="post")
      * @param Request $request
      * @param JWTTokenManagerInterface $JWTManager
      * @return Response
      */
-    public function changeEmail(Request  $request, JWTTokenManagerInterface $JWTManager): Response
+  /*  public function changeEmail(Request  $request, JWTTokenManagerInterface $JWTManager): Response
     {
         // recover all data's request
         $this->parameters->setData($request);
@@ -378,5 +309,5 @@ class UserController extends AbstractController
         }
 
         return $this->responseHandler->successResponse($dataResponse);
-    }
+    }*/
 }

@@ -19,6 +19,40 @@ class UserRepository extends ServiceEntityRepository
         parent::__construct($registry, User::class);
     }
 
+    public function findByActivationToken($token){
+        return $this->createQueryBuilder('u')
+            ->join('u.globalPropertyAttributes', 'g' )
+            ->andWhere('g.propertyKey = :key')
+            ->andWhere('g.propertyValue = :token')
+            ->setParameter(':key', "user.token.activation")
+            ->setParameter(':token', "[\"".$token."\"]")
+            ->getQuery()
+            ->getResult()
+            ;
+    }
+
+    public function findAllUnconfirmed(){
+        return $this->createQueryBuilder('u')
+            ->join('u.globalPropertyAttributes', 'g' )
+            ->andWhere('g.propertyKey = :key')
+            ->setParameter(':key', "user.token.activation")
+            ->getQuery()
+            ->getResult()
+            ;
+    }
+
+    public function findByResetPasswordToken($token){
+        return $this->createQueryBuilder('u')
+            ->join('u.globalPropertyAttributes', 'g' )
+            ->andWhere('g.propertyKey = :key')
+            ->andWhere('g.propertyValue = :token')
+            ->setParameter(':key', "user.token.resetPassword")
+            ->setParameter(':token', "[\"".$token."\"]")
+            ->getQuery()
+            ->getResult()
+            ;
+    }
+
     // /**
     //  * @return User[] Returns an array of User objects
     //  */

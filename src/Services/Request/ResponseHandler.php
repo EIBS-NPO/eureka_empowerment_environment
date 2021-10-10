@@ -49,9 +49,12 @@ class ResponseHandler
      * @param String|null $context
      * @return Response
      */
-    public function successResponse(array $data, String $context = null) : Response {
+    public function successResponse(array $data = null, String $context = null) : Response {
+        if(!is_null($data)){
+            $serializedData = json_encode( $this->serialize($data, $context) );
+        }else $serializedData = null;
         return $this->response =  new Response(
-            json_encode( $this->serialize($data, $context) ),
+            $serializedData,
             Response::HTTP_OK,
             ["content-type" => "application/json"]
         );

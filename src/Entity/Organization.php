@@ -24,7 +24,7 @@ class Organization implements PictorialObject, AddressableObject //TrackableObje
      * @ORM\Column(type="integer")
      * @Assert\Type(type="numeric", message="The id is not valid")
      */
-    private ?int $id;
+    private ?int $id = null;
 
     /**
      * @ORM\Column(type="string", length=50)
@@ -62,18 +62,18 @@ class Organization implements PictorialObject, AddressableObject //TrackableObje
      * @ORM\ManyToOne(targetEntity=User::class, inversedBy="organizations")
      * @ORM\JoinColumn(nullable=false)
      */
-    private ?User $referent;
+    private ?User $referent = null;
 
     /**
      * @ORM\OneToMany(targetEntity=Project::class, mappedBy="organization")
      * @ORM\JoinColumn(nullable=true)
      */
-    private $projects = null;
+    private $projects = [];
 
     /**
      * @ORM\ManyToMany(targetEntity=User::class, mappedBy="memberOf")
      */
-    private $membership = null;
+    private $membership = [];
 
     /**
      * @ORM\OneToMany(targetEntity=Activity::class, mappedBy="organization")
@@ -83,7 +83,7 @@ class Organization implements PictorialObject, AddressableObject //TrackableObje
      *     }
      * )
      */
-    private $activities;
+    private $activities = [];
 
     /**
      * @ORM\Column(type="string", length=255, nullable=true)

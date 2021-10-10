@@ -25,7 +25,7 @@ class User implements UserInterface, PictorialObject, AddressableObject
      * @ORM\Column(type="integer")
      * @Assert\Type(type="numeric", message=" id is not valid")
      */
-    private ?int $id;
+    private ?int $id = null;
 
     /**
      * @ORM\Column(type="json")
@@ -82,8 +82,8 @@ class User implements UserInterface, PictorialObject, AddressableObject
      *     minMessage="the password must be between 6 and 20 characters",
      *     maxMessage="the password must be between 6 and 20 characters"
      * )
-     * @Assert\Regex(pattern="/^(?=.*[a-z])(?=.*\d).{6,}$/i",
-     *     message="the password must be at least 6 characters long and include at least one letter and one number"
+     * @Assert\Regex(pattern="/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,20}$/",
+     *     message="Length between 6 and 20 with 1 upper case, 1 lower case and 1 digit."
      * )
      */
     private ?string $password;
@@ -219,6 +219,7 @@ class User implements UserInterface, PictorialObject, AddressableObject
             $data["mobile"] = $this->mobile;
         }
 
+        //todo deprecated, pass by gpa
         if($this->activationToken !== null){
             $data["activation_token"] = $this->activationToken;
         }
@@ -229,6 +230,13 @@ class User implements UserInterface, PictorialObject, AddressableObject
 
         if($this->address){
             $data["address"] = $this->address->serialize();
+        }
+
+        if(!$this->getGPA()->isEmpty()){
+            $data["gpAttributes"] = [];
+                foreach($this->getGpa() as $gpa){
+                    $data["gpAttributes"][$gpa->getPropertyKey()] = $gpa->serialize();
+                }
         }
 
 
@@ -375,9 +383,17 @@ class User implements UserInterface, PictorialObject, AddressableObject
     /**
      * @return Collection|GlobalPropertyAttribute[]
      */
-    public function getGPA(): Collection
+    public function getGPA(string $key = null): Collection
     {
-        return $this->globalPropertyAttributes;
+       if(is_null($key)) {
+           return $this->globalPropertyAttributes;
+       }else{
+           $rsl = new ArrayCollection();
+           foreach($this->globalPropertyAttributes as $gpa){
+               if($gpa->getPropertyKey() === $key) $rsl->add($gpa);
+           }
+           return $rsl;
+       }
     }
 
     public function addGlobalPropertyAttribute(GlobalPropertyAttribute $globalPropertyAttribute): self

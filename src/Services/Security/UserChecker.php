@@ -15,7 +15,7 @@ class UserChecker implements UserCheckerInterface
             return;
         }
 
-        if($user->getActivationToken() !== null){
+        if(!$user->getGPA("user.token.activation")->isEmpty()){
             throw new CustomUserMessageAccountStatusException("Your account has not been activated");
         }
         /*if ($user->isDeleted()) {

@@ -21,7 +21,7 @@ class Project implements TrackableObject, PictorialObject
      * @ORM\Column(type="integer")
      * @Assert\Type(type="numeric", message=" id is not valid")
      */
-    private ?int $id;
+    private ?int $id = null;
 
     /**
      * @ORM\Column(type="string", length=50)
@@ -34,8 +34,7 @@ class Project implements TrackableObject, PictorialObject
 
     //todo add timezone
     /**
-     * @ORM\Column(type="date")
-     * @Assert\NotBlank(message="the startDate is required")
+     * @ORM\Column(type="date", nullable=true)
      * @Assert\Type(type={"DateTime", "Y-m-d"}, message= "the date must be in the format Y-m-d")
      * @Assert\LessThanOrEqual(propertyPath="endDate", message="start date must be less or equal than end date")
      */
@@ -70,7 +69,7 @@ class Project implements TrackableObject, PictorialObject
      *     }
      * )
      */
-    private $activities;
+    private $activities = [];
 
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
@@ -117,7 +116,6 @@ class Project implements TrackableObject, PictorialObject
             "id" => $this->id,
             "title" => $this->title,
             "description" => $this->description,
-            "startDate" => $this->startDate->format('Y-m-d'),
             "creator" => $this->creator->serialize(),
             "isAssigned" => $this->isAssigned,
             "isFollowed" => $this->isFollowed
@@ -125,6 +123,9 @@ class Project implements TrackableObject, PictorialObject
 
 
         //Check some attributes to see if they are sets
+        if($this->endDate){
+            $data["startDate"] = $this->startDate->format('Y-m-d');
+        }
         if($this->endDate){
             $data["endDate"] = $this->endDate->format('Y-m-d');
         }

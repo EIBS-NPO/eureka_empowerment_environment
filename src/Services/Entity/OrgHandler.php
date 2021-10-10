@@ -153,6 +153,7 @@ class OrgHandler {
 
         //create org object && set fields
         $org = new Organization();
+        $org->setReferent($user);
         $this->setOrg($user, $org, $params);
 
         //Optional image management without blocking the creation of the entity
@@ -234,21 +235,24 @@ class OrgHandler {
      * @throws BadMediaFileException
      */
     private function setOrg(UserInterface $user, Organization $org, array $attributes): Organization {
-    //    dd($org->getActivities());
-        foreach( ["referent", "name", "type", "email", "phone", 'description', 'project', 'activity', "pictureFile", "member"] as $field ) {
+
+        foreach( ["name", "type", "email", "phone", 'description', 'project', 'activity', "pictureFile", "member"] as $field ) {
             if (isset($attributes[$field])) {
                 $canSet = false;
-                $setter = 'set' . ucfirst($field);
+                //todo case of new ORg
+             //   if(($field === "project" || $field === "activity" || $field === "pictureFile" || $field === "member"))
+                if(preg_match('(^project$|^activity$|^pictureFile$|^member$)', $field))
+                {
 
-                if(($field === "project" || $field === "activity" || $field === "pictureFile" || $field === "member")){
                     if(!is_null($org->getId()) && $org->isMember($user)){//only if org isn't a new Object and currentUser is member (referent or member)
 
                       if($attributes[$field] === "null"){ $attributes[$field] = null;}
 
                       //handle put project
-                      if ($field === "project") {
+                      if($field === "project") {
                           $project = $attributes[$field];
                           //if org have the project, remove it else add
+
                           if(!is_null($project)){
                               $this->putProject($user, $org, $project);
                           }
@@ -282,11 +286,15 @@ class OrgHandler {
                       }
 
                     }
+                    /*else {
+                        //todo else it's newOrg
+                    }*/
                 }else if($org->getReferent()->getId() === $user->getId() ) { // only referent can update other org attributes
                     $canSet = true;
                 }
 
                 if($canSet){
+                    $setter = 'set' . ucfirst($field);
                     $org->$setter($attributes[$field]);
                 }
             }
@@ -307,13 +315,13 @@ class OrgHandler {
         foreach($orgs as $key => $org){
             $org= $this->fileHandler->loadPicture($org);
             foreach($org->getActivities() as $activity){
-                $activity = $this->fileHandler->loadPicture($activity);
+                $this->fileHandler->loadPicture($activity);
             }
             foreach($org->getProjects() as $project){
-                $project = $this->fileHandler->loadPicture($project);
+                $this->fileHandler->loadPicture($project);
             }
             foreach($org->getMembership() as $member){
-                $member = $this->fileHandler->loadPicture($member);
+                $this->fileHandler->loadPicture($member);
             }
             $dataResponse[$key] = $org;
         }
@@ -380,5 +388,4 @@ class OrgHandler {
 
         return $org;
     }
-
 }

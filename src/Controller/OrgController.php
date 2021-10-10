@@ -174,7 +174,7 @@ class OrgController extends AbstractController
             $projectId = $this->parameters->getData("project");
             if ($projectId !== false) {
                 $projectRepo = $this->entityManager->getRepository(Project::class);
-                $project = $projectRepo->findOneBy(["id" => $this->parameters->getData("id")]);
+                $project = $projectRepo->findOneBy(["id" => $projectId]);
                 $this->parameters->putData("project", $project);
             }
 

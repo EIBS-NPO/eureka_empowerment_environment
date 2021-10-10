@@ -2,6 +2,7 @@
 
 namespace App\Services\Entity;
 
+use App\Entity\GlobalPropertyAttribute;
 use App\Entity\Interfaces\PictorialObject;
 use App\Entity\User;
 use App\Exceptions\BadMediaFileException;
@@ -16,7 +17,11 @@ use App\Services\Security\SecurityHandler;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
+use RandomLib\Factory;
+use SecurityLib\Strength;
+use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 use Symfony\Component\HttpFoundation\File\Exception\FileException;
+use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Security\Core\Encoder\UserPasswordEncoderInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -53,7 +58,10 @@ class UserHandler {
         $this->mailer = $mailer;
     }
 
-    public function getUsers(?UserInterface $user, $params): array
+    /**
+     * @throws NoFoundException
+     */
+    public function getUsers(?UserInterface $user, $params, bool $withNotFound=false): array
     {
 
         //check access
@@ -65,32 +73,35 @@ class UserHandler {
         ) {
             $params["access"] = 'self';
         }*/
+        $dataResponse =[];
         if(isset($params["access"])){
-            if(is_int($params["access"])){//if access have an id
-                $dataResponse[] = $this->userRepo->findBy(["id" => $params["access"]]);
-            }
-            else{ //other access possibility
-                switch($params["access"]){
-                    case "owned":
-                        if($user !== null){
-                            $dataResponse[] = $this->userRepo->findBy(["email" => $user->getUsername()]);
-                        }
-                        break;
-                    case "email":
-                        $dataResponse[] = $this->userRepo->findOneBy(["email" => $params["email"]]);
-                        break;
-                    case "byProject":
-                        break;
-                    case "byOrg":
-                        break;
-                    case "all":
-                            $dataResponse = $this->userRepo->findAll();
-                        break;
-                    default:
+            switch($params["access"]){
+                case "id":
+                    $dataResponse[] = $this->userRepo->findOneBy(["id" => $params["id"]]);
+                    break;
+                case "owned":
+                    if($user !== null){
+                        $dataResponse[] = $this->userRepo->findOneBy(["email" => $user->getUsername()]);
+                    }
+                    break;
+                case "email":
+                    $dataResponse[] = $this->userRepo->findOneBy(["email" => $params["email"]]);
+                    break;
+                case "byProject":
+                    break;
+                case "byOrg":
+                    break;
+                case "all":
                         $dataResponse = $this->userRepo->findAll();
+                    break;
+                default:
+                    $dataResponse = $this->userRepo->findAll();
 
-                }
             }
+        }
+
+        if($withNotFound && isset($params["id"]) && !isset($dataResponse[0])){
+            throw new NoFoundException("user not found");
         }
 
         return $dataResponse;
@@ -115,7 +126,8 @@ class UserHandler {
         $user->setPassword($this->securityHandler->hashPassword($user));
         //initiate role USER
         $user->setRoles(["ROLE_USER"]);
-        $user->setActivationToken(md5(uniqid()));
+
+        $user = $this->add_GPA_activationToken($user);
 
         $this->entityManager->persist($user);
         $this->entityManager->flush();
@@ -128,7 +140,7 @@ class UserHandler {
     /**
      * @param User $user
      * @param $params
-     * @return array
+     * @return User
      * @throws ViolationException
      */
     public function updateUser(User $user, $params): User
@@ -141,6 +153,10 @@ class UserHandler {
             User::class);
 
         $user = $this->setUser($user, $params);
+
+       /* if(isset($params["askForgotPasswordToken"])){
+            $user = $this->add_GPA_resetPassword($user);
+        }*/
 
         $this->entityManager->flush();
 
@@ -168,52 +184,52 @@ class UserHandler {
     }
 
     /**
-     * @throws NoFoundException|TransportExceptionInterface
-     */
-    public function sendAskActivation($clientDns, $email) :void{
-        if(!$email){
-            throw new NoFoundException("User not found");
-        }
-        $user = $this->userRepo->findOneBy(['email' => $email]);
-
-        $this->mailer->sendConfirmEmail($clientDns, $user);
-    }
-
-    /**
      * set a user account as active
      * @throws NoFoundException
      */
     public function activation($activationToken):void {
+//dd($activationToken);
+       // $user = $this->userRepo->findOneBy(['activationToken' => $activationToken]);
+        $user = $this->userRepo->findByActivationToken($activationToken);
 
-        $user = $this->userRepo->findOneBy(['activationToken' => $activationToken]);
-
-        if(!$user){
+        if(!isset($user[0])){
             throw new NoFoundException("User not found");
         }
+        $user = $user[0];
 
         //delete activation_token
-        $user->setActivationToken(null);
-        $this->entityManager->persist($user);
+        $gpa = $user->getGpa("user.token.activation")[0];
+        $user->removeGlobalPropertyAttribute($gpa);
+        $this->entityManager->remove($gpa);
         $this->entityManager->flush();
     }
-/*
-    public function updateUser(User $user, $params) {
 
-            $this->validator->isInvalid(
-                [],
-                ["firstname", "lastname", "phone", "mobile"],
-                User::class);
-                $user = $this->setUser($user, $params);
+    /**
+     * @param array $params
+     * @throws NoFoundException | UnauthorizedHttpException
+     */
+    public function resetPassword(array $params){
 
+        //check match newPassword and confirmPassword
+        if($params['newPassword'] !== $params['confirmPassword']) {
+            throw new BadRequestException("new password not confirmed");
+        }
+        $userId = explode("U", $params["resetCode"]);
 
-                $this->entityManager->flush();
+        $user = $this->getUsers(null, ["access"=>"id", "id"=>$userId], true)[0];
 
-        //    }
+        $gpa = $user->getGPA("user.token.resetPassword")[0];
+        if($gpa->getPropertyValue()[0] !== $params["resetPasswordToken"] || $gpa->getPropertyValue()[1] !== $params["resetCode"]){
+            throw new UnauthorizedHttpException("bad credentials");
+        }
 
-        return [$this->withPictures([$user]),
-            'token' => $this->securityHandler->createToken($user)
-        ];
-    }*/
+        $user->setPassword($params["newPassword"]);
+        $user->setPassword($this->securityHandler->hashPassword($user));
+        $this->entityManager->flush();
+
+        $this->entityManager->remove($gpa);
+        $this->entityManager->flush();
+    }
 
     /**
      * set for an Organisation object the attributes passed in $attributes array
@@ -239,4 +255,51 @@ class UserHandler {
         return $users;
     }
 
+    private function add_GPA_activationToken(User $user): User
+    {
+        $gpa = new GlobalPropertyAttribute();
+        $gpa->setPropertyKey("user.token.activation")
+            ->setDescription("a unique token to send by email to confirm the registration")
+            ->setScope("GLOBAL")
+            ->setPropertyValue([md5(uniqid())]);
+        $gpa->setUser($user);
+        $user->addGlobalPropertyAttribute($gpa);
+
+        $this->entityManager->persist($gpa);
+        return $user;
+    }
+
+    public function add_GPA_resetPassword(User $user): User
+    {
+        //todo générer un password qui sera envoyé dans l'email. de cet manière seule la personne qui recevra l'email pourra changer le mot de passe du compte.
+        //mod de passe : idUser + U + uniquId
+        //ainsi on récupère aussi l'id de l'utilisateur
+
+        $userGPA = $user->getGPA("user.token.resetPassword");
+        if($userGPA->isEmpty()){
+            $gpa = new GlobalPropertyAttribute();
+            $gpa->setPropertyKey("user.token.resetPassword")
+                ->setDescription("to renew the password: the first value is a unique token to secure the link send by email, the second value is a secure password. it must be send in the body of the email for secure the transaction with the mail receiver structure is userId+U+password")
+                ->setScope("GLOBAL")
+                ->setPropertyValue([$this->generateUniquePassword(32),$user->getId()."U".$this->generateUniquePassword(8)]);
+            $gpa->setUser($user);
+            $user->addGlobalPropertyAttribute($gpa);
+
+            $this->entityManager->persist($gpa);
+            $this->entityManager->flush();
+        }
+
+        return $user;
+    }
+
+    /**
+     * @return string
+     * generate a unique String of 8bytes, the "U" char is exclude of the result.
+     */
+    private function generateUniquePassword($length){
+        $factory = new Factory();
+        $generator = $factory->getLowStrengthGenerator();
+        $bytes = $generator->generateString($length, "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTVWXYZ");
+        return $bytes;
+    }
 }

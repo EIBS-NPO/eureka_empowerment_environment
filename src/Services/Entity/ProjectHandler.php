@@ -138,8 +138,7 @@ class ProjectHandler
      * @param UserInterface $user
      * @param array $params
      * @return Project
-     * @throws PartialContentException
-     * @throws ViolationException
+     * @throws PartialContentException | ViolationException | FileException | BadMediaFileException
      */
     public function create (UserInterface $user, array $params) :Project
     {
@@ -162,6 +161,7 @@ class ProjectHandler
             throw new PartialContentException([$project], $e->getMessage());
         } finally {
             //persist
+         //   dd($project);
             $this->entityManager->persist($project);
             $this->entityManager->flush();
         }
@@ -206,7 +206,7 @@ class ProjectHandler
     /**
      * if PictureFile is null, delete the oldPicture, else save the new.
      * @param Project $project
-     * @param $params
+     * @param $pictureFile
      * @return PictorialObject
      * @throws BadMediaFileException
      */
@@ -225,23 +225,23 @@ class ProjectHandler
      */
     private function setProject(UserInterface $user, Project $project, array $attributes) :Project
     {
-       // dd($project->getActivities());
-      //  $isUserAssigned = $this->followingHandler->isAssign($project, $user);
-
         foreach( ["creator", "title", "description", "startDate", "endDate", "organization", "activity", "member", "pictureFile"]
                  as $field ) {
             if (isset($attributes[$field])) {
-                $canSet = false;
-                $setter = 'set' . ucfirst($field);
-
+                //$canSet = false;
+                //todo case of new Project
                 //todo check access creator and assign
-                if(($field === "organization" || $field === "activity" || $field === "member" || "pictureFile")){
+                if(preg_match('(^organization$|^activity$|^member$|^pictureFile$)', $field))
+             //   if($field === "organization" || $field === "activity" || $field === "member" || "pictureFile")
+                {
+                    if($field === "title")dd($attributes[$field]);
                     if(!is_null($project->getId()) && $this->followingHandler->isAssign($project, $user)) {// project isn't new and user is assigned ? (owner or member)
 
                         //force true null type
                         if($attributes[$field] === "null"){ $attributes[$field] = null;}
 
                         //put orgHandle
+                        //todo $canset n'est plus géré
                         if($field === "organization") {
                             $org = $attributes[$field];
                             $canSet = $org->getReferent() === $user; //only the org's creator can set it in project
@@ -267,6 +267,8 @@ class ProjectHandler
                                 }
                             }
 
+
+                            //todo permettre l'ajout pour les nouveaux projets
                             //handle put picture
                             if($field === "pictureFile"){
                                 $pictureFile = $attributes[$field];
@@ -276,9 +278,8 @@ class ProjectHandler
 
 
                     }
-                }else{ $canSet = true; }
-
-                if( $canSet ){
+                }else {
+                    $setter = 'set' . ucfirst($field);
                     $project->$setter($attributes[$field]);
                 }
             }
@@ -293,6 +294,7 @@ class ProjectHandler
     public function withPictures(array $projects): array
     {
         foreach ($projects as $key => $project) {
+
             foreach ($project->getActivities() as $activity) {
                 $activity = $this->fileHandler->loadPicture($activity);
             }

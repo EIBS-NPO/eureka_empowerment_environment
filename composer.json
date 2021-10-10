@@ -12,6 +12,7 @@
         "doctrine/doctrine-migrations-bundle": "^3.0",
         "doctrine/orm": "^2.9",
         "gesdinet/jwt-refresh-token-bundle": "^0.12.0",
+        "ircmaxell/random-lib": "^1.2",
         "lexik/jwt-authentication-bundle": "^2.10",
         "phpdocumentor/reflection-docblock": "^5.2",
         "symfony/apache-pack": "^1.0",

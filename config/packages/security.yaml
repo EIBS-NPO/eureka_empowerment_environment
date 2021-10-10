@@ -37,7 +37,7 @@ security:
                 security: false
 
         public:
-                pattern: ^/file/allowed|/user|/user/(sendActivation|activation)|(org|project|activity|activity/download|member|file/download|followActivity|project/team)/public|/activation
+                pattern: ^/file/allowed|/user|/user/(activation|forgotPassword|resetPassword)|(org|project|activity|activity/download|member|file/download|followActivity|project/team)/public|/activation
                 anonymous : true
 
         main:
@@ -62,7 +62,7 @@ security:
         - { path: ^/token/refresh, roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/user/register, roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/activation, roles: IS_AUTHENTICATED_ANONYMOUSLY }
-        - { path: ^/user/(sendActivation|activation), roles: IS_AUTHENTICATED_ANONYMOUSLY }
+        - { path: ^/user/(activation|forgotPassword|resetPassword), roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/file/allowed, roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/(user|org|project|activity|activity/download|member|file/download|followActivity|project/team)/public, roles: IS_AUTHENTICATED_ANONYMOUSLY }
         - { path: ^/admin, roles: ROLE_ADMIN }
