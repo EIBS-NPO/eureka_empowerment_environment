@@ -228,11 +228,7 @@ class ProjectHandler
         foreach( ["creator", "title", "description", "startDate", "endDate", "organization", "activity", "member", "pictureFile"]
                  as $field ) {
             if (isset($attributes[$field])) {
-                //$canSet = false;
-                //todo case of new Project
-                //todo check access creator and assign
                 if(preg_match('(^organization$|^activity$|^member$|^pictureFile$)', $field))
-             //   if($field === "organization" || $field === "activity" || $field === "member" || "pictureFile")
                 {
                     if($field === "title")dd($attributes[$field]);
                     if(!is_null($project->getId()) && $this->followingHandler->isAssign($project, $user)) {// project isn't new and user is assigned ? (owner or member)
@@ -241,11 +237,11 @@ class ProjectHandler
                         if($attributes[$field] === "null"){ $attributes[$field] = null;}
 
                         //put orgHandle
-                        //todo $canset n'est plus géré
                         if($field === "organization") {
                             $org = $attributes[$field];
-                            $canSet = $org->getReferent() === $user; //only the org's creator can set it in project
-                           //$canSet allowed basic setter for simple relation
+                            if(!is_null($org)){
+                                $this->putOrganization($user, $project, $org);
+                            }
                         }
 
                         //put activity handle
@@ -267,8 +263,6 @@ class ProjectHandler
                                 }
                             }
 
-
-                            //todo permettre l'ajout pour les nouveaux projets
                             //handle put picture
                             if($field === "pictureFile"){
                                 $pictureFile = $attributes[$field];
@@ -321,6 +315,17 @@ class ProjectHandler
         else { //add only for activity's creator
             if($activity->getCreator() === $user){
                 $project->addActivity($activity);
+            }
+        }
+    }
+
+    private function putOrganization(UserInterface $user, Project $project, Organization $org)
+    {
+        if($project->getCreator() === $user || $org->getReferent() === $user) {
+            if ($project->getOrganization() === $org) {
+                $project->setOrganization(null);
+            } else { // add only for org's referent
+                $project->setOrganization($org);
             }
         }
     }
