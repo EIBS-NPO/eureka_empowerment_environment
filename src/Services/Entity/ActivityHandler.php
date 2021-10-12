@@ -83,7 +83,9 @@ class ActivityHandler {
         }
 
         //check if connected user in followed context have access to activities required
-        if($params["access"] === "followed"){
+    //    if($params["access"] === "followed"){
+
+    //checks whether the user has access to the resources
             $tab=[];
             foreach ($dataResponse as $activity) {
                 if ($this->hasAccess($activity, $user)) {
@@ -91,10 +93,10 @@ class ActivityHandler {
                 }
             }
             $dataResponse = $tab;
-        }
+    //    }
 
         //only return public resources for public access
-        if($params["access"] === null ){
+    /*    if($params["access"] === null ){
             $tab=[];
             foreach($dataResponse as $activity) {
                 if($activity->getIsPublic()){
@@ -102,7 +104,7 @@ class ActivityHandler {
                 }
             }
             $dataResponse = $tab;
-        }
+        }*/
 
         if($withNotFound && count($dataResponse) === 0){
             if(isset($id)){
@@ -266,7 +268,6 @@ class ActivityHandler {
             $this->entityManager->remove($activityOld);
         }
 
-    //    $this->entityManager->flush();
    return $activity;
     }
 
@@ -336,6 +337,7 @@ class ActivityHandler {
                             }
                         }
 
+                        //todo donc si null, n'importe qui peu retirer la relation?
                         //handle project linking is user is assign
                         else if ($field === "project"){
                             if((is_null($attributes[$field] ) || $this->followingHandler->isAssign($attributes[$field], $user))) {
@@ -391,18 +393,18 @@ class ActivityHandler {
     private function hasAccess(Activity $activity, ?UserInterface $user): bool
     {
         $res = false;
-        if(!$activity->getIsPublic() && $user !== null){
-            if($activity->getCreator()->getId() === $user->getId()){
+        if(!$activity->getIsPublic() && $user !== null){ //if isn't public resource
+            if($activity->getCreator()->getId() === $user->getId()){ //if user is creator
                 $res = true;
             }
-            else if($activity->getProject() !== null){
+            else if($activity->getProject() !== null){ //if assign into project
                 foreach($activity->getProject()->getFollowings() as $following){
                     if($following->getFollower()->getId() === $user->getId() && $following->getIsAssigning()){
                         $res = true;
                     }
                 }
             }
-            else if($activity->getOrganization() !== null && $activity->getOrganization()->isMember($user)){
+            else if($activity->getOrganization() !== null && $activity->getOrganization()->isMember($user)){ // if assign into org
                 $res = true;
             }
         }else if(!$activity->getIsPublic() && $user === null){

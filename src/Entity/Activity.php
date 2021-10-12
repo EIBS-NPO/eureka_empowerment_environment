@@ -334,12 +334,12 @@ class Activity implements PictorialObject
     }
 
 
-    /**
+    /*
      * return if User|Project|Organization have a private to this.Activity.
      * @param $user
      * @return bool
      */
-    public function hasAccess($user): bool
+    /*public function hasAccess($user): bool
     {
         $res = false;
         if($this->creator->getId() === $user->getId()){
@@ -353,5 +353,5 @@ class Activity implements PictorialObject
         }
 
         return $res;
-    }
+    }*/
 }

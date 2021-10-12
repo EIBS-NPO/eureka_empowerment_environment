@@ -133,6 +133,12 @@ class OrgHandler {
             }
         }
 
+        if(!is_null($user)){
+            foreach($dataResponse as $org){
+                $org->setIsAssigned($org->isMember($user));
+            }
+        }
+
         return $dataResponse;
     }
 

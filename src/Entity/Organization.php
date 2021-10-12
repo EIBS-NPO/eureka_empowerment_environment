@@ -125,6 +125,8 @@ class Organization implements PictorialObject, AddressableObject //TrackableObje
      */
     private $isPartner = false;
 
+    private bool $isAssigned = false;
+
    /* public function __construct()
     {
      //   $this->projects = new ArrayCollection();
@@ -145,7 +147,8 @@ class Organization implements PictorialObject, AddressableObject //TrackableObje
             "type" => $this->type,
             "name" => $this->name,
             "email" => $this->email,
-            "referent" => $this->referent->serialize()
+            "referent" => $this->referent->serialize(),
+            "isAssigned" => $this->isAssigned
         ];
 
         if($this->isPartner){
@@ -430,6 +433,14 @@ class Organization implements PictorialObject, AddressableObject //TrackableObje
             $res = true;
         }
         return $res;
+    }
+
+    /**
+     * @param bool $isAssigned
+     */
+    public function setIsAssigned(bool $isAssigned): void
+    {
+        $this->isAssigned = $isAssigned;
     }
 
     public function getOnlyPublicActivities(): array
