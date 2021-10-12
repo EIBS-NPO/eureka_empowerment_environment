@@ -332,16 +332,17 @@ class ActivityHandler {
 
                         //handle org linking if user is member
                         if($field === "organization") {
-                            if ((is_null($attributes[$field]) || $attributes[$field]->isMember($user))) {
-                                $canSet = true;
+                            $org = $attributes[$field];
+                            if(!is_null($org)){
+                                $this->putOrganization($user, $activity, $org);
                             }
                         }
 
-                        //todo donc si null, n'importe qui peu retirer la relation?
                         //handle project linking is user is assign
-                        else if ($field === "project"){
-                            if((is_null($attributes[$field] ) || $this->followingHandler->isAssign($attributes[$field], $user))) {
-                                $canSet = true;
+                        if ($field === "project"){
+                            $project = $attributes[$field];
+                            if(!is_null($project)){
+                                $this->putProject($user, $activity, $project);
                             }
                         }
 
@@ -427,26 +428,35 @@ class ActivityHandler {
             $activity->setIsFollowed(true);
         }
     }
-/*
-    public function putOnOrganization(UserInterface $user, Organization $org, Activity $activity): Activity
+
+    public function putOrganization(UserInterface $user, Activity $activity, Organization $org): Activity
     {
-        if($activity->getCreator()->getId() === $user->getId()){
-            $activity->setOrganization($org);
-        }else {
-            throw new UnauthorizedHttpException();
+        if($activity->getOrganization() === $org){
+            //remove only for activity's creator or ref's org
+            if($activity->getCreator() === $user || $org->getReferent() === $user){
+                $activity->setOrganization(null);
+            }
+        }else{
+            //add only for activity's creator and member's org
+            if($activity->getCreator() === $user && $org->isMember($user)){
+                $activity->setOrganization($org);
+            }
         }
-        $this->entityManager->flush();
         return $activity;
     }
 
-    public function putOnProject(UserInterface $user,Project $project, Activity $activity): Activity
+    public function putProject(UserInterface $user, Activity $activity, Project $project): Activity
     {
-        if($activity->getCreator()->getId() === $user->getId()){
-            $activity->setProject($project);
-        }else {
-            throw new UnauthorizedHttpException();
+        if($activity->getProject() === $project){
+            //remove only for activity's creator and project's creator
+            if($activity->getCreator() === $user || $project->getCreator() === $user){
+                $activity->setProject(null);
+            }
+        } else { //add only for activity's creator and member's project
+            if($activity->getCreator() === $user && $project->isAssigned()){
+                $activity->setProject($project);
+            }
         }
-        $this->entityManager->flush();
         return $activity;
-    }*/
+    }
 }
