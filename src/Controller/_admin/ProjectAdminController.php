@@ -1,7 +1,7 @@
 <?php
 
 
-namespace App\Controller\admin;
+namespace App\Controller\_admin;
 
 
 use \Exception;

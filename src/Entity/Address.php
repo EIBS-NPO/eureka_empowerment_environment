@@ -110,11 +110,14 @@ class Address
         $data = [
             "id" => $this->id,
             "address" => $this->address,
-            "complement" => $this->complement,
             "country" => $this->country,
             "city" => $this->city,
             "zipCode" => $this->zipCode,
         ];
+
+        if($this->address !== null){
+            $data["complement"] = $this->complement;
+        }
 
         //Check some attributes to see if they are sets
         if($this->userOwner !== null && $context === "read_address"){
@@ -217,6 +220,22 @@ class Address
         return $this;
     }
 
+    /**
+     * @return User|null
+     */
+    public function getUserOwner(): ?User
+    {
+        return $this->userOwner;
+    }
+
+    /**
+     * @param User|null $userOwner
+     */
+    public function setUserOwner(?User $userOwner): void
+    {
+        $this->userOwner = $userOwner;
+    }
+
 
    /* public function getUserOwner(): ?User
     {
@@ -245,7 +264,7 @@ class Address
         return $this->orgOwner;
     }
 
-    public function setOwner($object): self
+   /* public function setOwner($object): self
     {
         $classname = get_class($object);
         if($classname === User::class){
@@ -256,7 +275,7 @@ class Address
         $this->ownerType = $classname;
 
         return $this;
-    }
+    }*/
 
    /* public function setOrgOwner(?Organization $orgOwner): self
     {

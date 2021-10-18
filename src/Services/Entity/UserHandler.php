@@ -37,6 +37,8 @@ class UserHandler {
     private ParametersValidator $validator;
     private SecurityHandler $securityHandler;
     private MailHandler $mailer;
+    private UserRepository $userRepo;
+    private AddressHandler $addressHandler;
 
     /**
      * @param EntityManagerInterface $entityManager
@@ -44,16 +46,18 @@ class UserHandler {
      * @param FollowingHandler $followingHandler
      * @param ParametersValidator $validator
      * @param UserRepository $userRepo
+     * @param AddressHandler $addressHandler
      * @param SecurityHandler $securityHandler
      * @param MailHandler $mailer
      */
-    public function __construct(EntityManagerInterface $entityManager, FileHandler $fileHandler, FollowingHandler $followingHandler, ParametersValidator $validator, UserRepository $userRepo, SecurityHandler $securityHandler, MailHandler $mailer)
+    public function __construct(EntityManagerInterface $entityManager, FileHandler $fileHandler, FollowingHandler $followingHandler, ParametersValidator $validator, UserRepository $userRepo, AddressHandler $addressHandler, SecurityHandler $securityHandler, MailHandler $mailer)
     {
         $this->entityManager = $entityManager;
         $this->userRepo = $userRepo;
         $this->fileHandler = $fileHandler;
         $this->followingHandler = $followingHandler;
         $this->validator = $validator;
+        $this->addressHandler = $addressHandler;
         $this->securityHandler = $securityHandler;
         $this->mailer = $mailer;
     }
@@ -108,7 +112,7 @@ class UserHandler {
     }
 
     /**
-     * @throws ViolationException|UniqueConstraintViolationException
+     * @throws ViolationException|BadMediaFileException
      */
     public function create($params): User
     {
@@ -142,23 +146,27 @@ class UserHandler {
      * @param $params
      * @return User
      * @throws ViolationException
+     * @throws PartialContentException
      */
     public function updateUser(User $user, $params): User
     {
+        try{
+            //check params Validations
+            $this->validator->isInvalid(
+                [],
+                ["firstname", "lastname", "phone", "mobile"],
+                User::class);
 
-        //check params Validations
-        $this->validator->isInvalid(
-            [],
-            ["firstname", "lastname", "phone", "mobile"],
-            User::class);
+            $user = $this->setUser($user, $params);
 
-        $user = $this->setUser($user, $params);
+            //handle optional address
+            if(isset($params["address"]) ) $user = $this->addressHandler->putAddress($user, $params);
 
-       /* if(isset($params["askForgotPasswordToken"])){
-            $user = $this->add_GPA_resetPassword($user);
-        }*/
-
-        $this->entityManager->flush();
+        }catch(FileException | BadMediaFileException $e){
+            throw new PartialContentException([$user], $e->getMessage());
+        } finally {
+            $this->entityManager->flush();
+        }
 
     return $user;
     }
@@ -166,21 +174,17 @@ class UserHandler {
     /**
      * if PictureFile is null, delete the oldPicture, else save the new.
      * @param User $user
-     * @param $params
+     * @param $pictureFile
      * @return PictorialObject
      * @throws BadMediaFileException
      */
-    public function putPicture(User $user, $params): PictorialObject
+    public function putPicture(User $user, $pictureFile): PictorialObject
     {
-        $user = $this->fileHandler->uploadPicture(
+        return $this->fileHandler->uploadPicture(
             $user,
             self::PICTURE_DIR,
-            $params["pictureFile"] === "null" ? null : $params["pictureFile"]
+            $pictureFile === "null" ? null : $pictureFile
         );
-
-        $this->entityManager->flush();
-
-        return $user;
     }
 
     /**
@@ -188,8 +192,7 @@ class UserHandler {
      * @throws NoFoundException
      */
     public function activation($activationToken):void {
-//dd($activationToken);
-       // $user = $this->userRepo->findOneBy(['activationToken' => $activationToken]);
+
         $user = $this->userRepo->findByActivationToken($activationToken);
 
         if(!isset($user[0])){
@@ -236,12 +239,24 @@ class UserHandler {
      * @param User $user
      * @param array $attributes
      * @return User with attributes passed
+     * @throws BadMediaFileException
      */
     private function setUser(User $user, array $attributes): User {
-        foreach( ["email", "firstname", "lastname", "password", "phone", "mobile"] as $field ) {
+        foreach( ["email", "firstname", "lastname", "password", "phone", "mobile", "pictureFile"] as $field ) {
+
             if (isset($attributes[$field])) {
-                $setter = 'set' . ucfirst($field);
-                $user->$setter($attributes[$field]);
+                if(preg_match('(^pictureFile$)', $field))
+                {
+                    //handle optional picture
+                    if($field === "pictureFile"){
+                        $pictureFile = $attributes[$field];
+                        $this->putPicture($user, $pictureFile);
+                    }
+                }else{
+                    if($attributes[$field] === "null")$attributes[$field] = null;
+                    $setter = 'set' . ucfirst($field);
+                    $user->$setter($attributes[$field]);
+                }
             }
         }
         return $user;
@@ -271,9 +286,6 @@ class UserHandler {
 
     public function add_GPA_resetPassword(User $user): User
     {
-        //todo générer un password qui sera envoyé dans l'email. de cet manière seule la personne qui recevra l'email pourra changer le mot de passe du compte.
-        //mod de passe : idUser + U + uniquId
-        //ainsi on récupère aussi l'id de l'utilisateur
 
         $userGPA = $user->getGPA("user.token.resetPassword");
         if($userGPA->isEmpty()){
@@ -296,10 +308,10 @@ class UserHandler {
      * @return string
      * generate a unique String of 8bytes, the "U" char is exclude of the result.
      */
-    private function generateUniquePassword($length){
+    private function generateUniquePassword($length): string
+    {
         $factory = new Factory();
         $generator = $factory->getLowStrengthGenerator();
-        $bytes = $generator->generateString($length, "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTVWXYZ");
-        return $bytes;
+        return $generator->generateString($length, "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTVWXYZ");
     }
 }

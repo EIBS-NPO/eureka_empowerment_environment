@@ -39,6 +39,7 @@ class AddressHandler {
 
         //put attribute for Address
         $address = $this->setAddress($address, $params);
+        $address->setOwnerType($this->getClassName($object));
         $object->setAddress($address);
 
         return $object;

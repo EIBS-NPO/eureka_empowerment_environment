@@ -74,7 +74,6 @@ class User implements UserInterface, PictorialObject, AddressableObject
      */
     private ?string $mobile = null;
 
-    //todo regex check password safety
     /**
      * @ORM\Column(type="string", length=255)
      * @Assert\Type(type="string", message=" password is not valid string")
@@ -149,7 +148,7 @@ class User implements UserInterface, PictorialObject, AddressableObject
     private $pictureFile = null;
 
     /**
-     * @ORM\OneToOne(targetEntity=Address::class, inversedBy="owner", cascade={"persist", "remove"})
+     * @ORM\OneToOne(targetEntity=Address::class, inversedBy="userOwner", cascade={"persist", "remove"})
      */
     private $address;
 
@@ -173,10 +172,10 @@ class User implements UserInterface, PictorialObject, AddressableObject
      */
     private $followingProjects;
 
-    /**
+    /*
      * @ORM\Column(type="string", length=255, nullable=true)
      */
-    private ?String $activationToken = null;
+   // private ?String $activationToken = null;
 
     /*
      * @ORM\OneToOne(targetEntity=JwtRefreshToken::class, mappedBy="user")
@@ -217,11 +216,6 @@ class User implements UserInterface, PictorialObject, AddressableObject
 
         if($this->mobile){
             $data["mobile"] = $this->mobile;
-        }
-
-        //todo deprecated, pass by gpa
-        if($this->activationToken !== null){
-            $data["activation_token"] = $this->activationToken;
         }
 
         if($this->pictureFile){
@@ -312,21 +306,21 @@ class User implements UserInterface, PictorialObject, AddressableObject
         return $this;
     }
 
-    /**
+    /*
      * @return String|null
      */
-    public function getActivationToken(): ?string
+    /*public function getActivationToken(): ?string
     {
         return $this->activationToken;
-    }
+    }*/
 
-    /**
+    /*
      * @param String|null $activation_token
      */
-    public function setActivationToken($activation_token): void
+    /*public function setActivationToken($activation_token): void
     {
         $this->activationToken = $activation_token;
-    }
+    }*/
 
     public function getPhone(): ?string
     {

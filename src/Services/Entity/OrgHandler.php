@@ -218,7 +218,7 @@ class OrgHandler {
     /**
      * if PictureFile is null, delete the oldPicture, else save the new.
      * @param Organization $org
-     * @param $params
+     * @param $pictureFile
      * @return Organization
      * @throws BadMediaFileException
      */

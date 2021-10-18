@@ -14,6 +14,7 @@ use App\Services\Mailer\MailHandler;
 use App\Services\Request\ParametersValidator;
 use App\Services\Request\RequestParameters;
 use App\Services\Request\ResponseHandler;
+use DateTime;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
@@ -75,6 +76,7 @@ class UserController extends AbstractController
         try {
             // recover all data's request
             $this->parameters->setData($request);
+
             $newUser = $this->userHandler->create($this->parameters->getAllData());
             return $this->responseHandler->successResponse([$newUser]);
         }
@@ -190,7 +192,8 @@ class UserController extends AbstractController
 
             $user = $this->userHandler->getUsers(
                 $this->getUser(),
-                ["id" => $this->getUser()->getId()]
+                ["access" => "owned"],
+                true
             )[0];
 
             $user = $this->userHandler->updateUser($user, $this->parameters->getAllData());
