@@ -172,6 +172,8 @@ class User implements UserInterface, PictorialObject, AddressableObject
      */
     private $followingProjects;
 
+
+    private bool $isConfirmed;
     /*
      * @ORM\Column(type="string", length=255, nullable=true)
      */
@@ -206,7 +208,8 @@ class User implements UserInterface, PictorialObject, AddressableObject
             "firstname" => $this->firstname,
             "lastname" => $this->lastname,
             "email" => $this->email,
-            "roles" => $this->roles[0]
+            "roles" => $this->roles[0],
+            "isConfirmed" => $this->isConfirmed()
         ];
 
         //Check some attributes to see if they are sets
@@ -228,10 +231,12 @@ class User implements UserInterface, PictorialObject, AddressableObject
 
         if(!$this->getGPA()->isEmpty()){
             $data["gpAttributes"] = [];
-                foreach($this->getGpa() as $gpa){
-                    $data["gpAttributes"][$gpa->getPropertyKey()] = $gpa->serialize();
-                }
+            foreach($this->getGpa() as $gpa){
+                $data["gpAttributes"][$gpa->getPropertyKey()] = $gpa->serialize();
+            }
         }
+
+        //todo envoyer isConfirmed et isActived a plaer dans les attributs by getters
 
 
        /* if(!$this->followingActivities->isEmpty() && $context !== "read_activity"){
@@ -389,6 +394,16 @@ class User implements UserInterface, PictorialObject, AddressableObject
            return $rsl;
        }
     }
+
+    /**
+     * @param ArrayCollection $globalPropertyAttributes
+     */
+    public function setGlobalPropertyAttributes(ArrayCollection $globalPropertyAttributes): void
+    {
+        $this->globalPropertyAttributes = $globalPropertyAttributes;
+    }
+
+
 
     public function addGlobalPropertyAttribute(GlobalPropertyAttribute $globalPropertyAttribute): self
     {
@@ -704,6 +719,22 @@ class User implements UserInterface, PictorialObject, AddressableObject
             }
         }
         return $res;
+    }
+
+    /**
+     * @return bool
+     */
+    public function isConfirmed(): bool
+    {
+        return $this->isConfirmed;
+    }
+
+    /**
+     * @param bool $isConfirmed
+     */
+    public function setIsConfirmed(bool $isConfirmed): void
+    {
+        $this->isConfirmed = $isConfirmed;
     }
 
 

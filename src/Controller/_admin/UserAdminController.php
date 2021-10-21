@@ -206,7 +206,7 @@ class UserAdminController extends AbstractController
         try{ $this->parameters->hasData(["id"]); }
         catch(ViolationException $e) {
             $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
+            return $this->responseHandler->BadRequestResponse($e->getMessage());
         }
 
         $repository = $this->entityManager->getRepository(User::class);

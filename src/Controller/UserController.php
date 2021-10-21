@@ -160,6 +160,12 @@ class UserController extends AbstractController
     {
         try{
             $this->parameters->setData($request);
+
+            //check if admin access required
+            if($this->parameters->getData("admin")!== false){
+                $this->denyAccessUnlessGranted('ROLE_ADMIN');
+            }
+
             $users = $this->userHandler->getUsers($this->getUser(), $this->parameters->getAllData(), true);
 
             $users = $this->userHandler->withPictures($users);
@@ -190,20 +196,33 @@ class UserController extends AbstractController
             // recover all data's request
             $this->parameters->setData($request);
 
+            //by default force owned access
+            $accessTable["access"] = "owned";
+            $needNewToken = true; //if userOwned
+            //check if admin access required
+            if($this->parameters->getData("admin")!== false){
+                $this->denyAccessUnlessGranted('ROLE_ADMIN');
+                //change accessTable for access by id
+                $accessTable["access"] = "id";
+                $accessTable["id"] = $this->parameters->getData("id");
+                $needNewToken = false; //don't need new token
+            }
+
             $user = $this->userHandler->getUsers(
                 $this->getUser(),
-                ["access" => "owned"],
+                $accessTable,
                 true
             )[0];
 
-            $user = $this->userHandler->updateUser($user, $this->parameters->getAllData());
+            $user = $this->userHandler->updateUser($this->getUser(), $user, $this->parameters->getAllData());
 
 
+            $userData = [$this->userHandler->withPictures([$user])[0]];
 
             //make newToken with updatedUser and newInfos
-            $userData = [$this->userHandler->withPictures([$user])[0],
-                'token' => $JWTManager->create($user)
-            ];
+            if($needNewToken){
+                $userData['token'] = $JWTManager->create($user);
+            }
 
         return $this->responseHandler->successResponse($userData);
         }

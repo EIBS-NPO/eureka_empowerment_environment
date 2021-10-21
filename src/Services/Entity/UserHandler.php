@@ -14,6 +14,7 @@ use App\Services\FileHandler;
 use App\Services\Mailer\MailHandler;
 use App\Services\Request\ParametersValidator;
 use App\Services\Security\SecurityHandler;
+use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
@@ -67,7 +68,9 @@ class UserHandler {
      */
     public function getUsers(?UserInterface $user, $params, bool $withNotFound=false): array
     {
-
+        /*if(isset($params["admin"])){
+            $this->denyAccessUnlessGranted('ROLE_ADMIN');
+        })*/
         //check access
     /*    if (!isset($params["access"]) ||
             ($user === null
@@ -91,6 +94,16 @@ class UserHandler {
                 case "email":
                     $dataResponse[] = $this->userRepo->findOneBy(["email" => $params["email"]]);
                     break;
+                case "unConfirmed":
+                    if(isset($params["admin"])){
+                        $dataResponse = $this->userRepo->findAllUnconfirmed();
+                    }
+                    break;
+                case "disabled"://todo marche passssss
+                    if(isset($params["admin"])){
+                        $dataResponse = $this->userRepo->findAllDisabled();
+                    }
+                    break;
                 case "byProject":
                     break;
                 case "byOrg":
@@ -106,6 +119,14 @@ class UserHandler {
 
         if($withNotFound && isset($params["id"]) && !isset($dataResponse[0])){
             throw new NoFoundException("user not found");
+        }
+
+        foreach($dataResponse as $userData){
+            $userData->setIsConfirmed($this->isConfirmed($userData));
+
+            if(is_null($user) || ($params["access"] !== "owned")){
+                $userData->setGlobalPropertyAttributes(new ArrayCollection());
+            }
         }
 
         return $dataResponse;
@@ -125,7 +146,7 @@ class UserHandler {
 
         //create user object && set validated fields
         $user = new User();
-        $this->setUser($user, $params);
+        $this->setUser(null, $user, $params);
         //hash password
         $user->setPassword($this->securityHandler->hashPassword($user));
         //initiate role USER
@@ -148,7 +169,7 @@ class UserHandler {
      * @throws ViolationException
      * @throws PartialContentException
      */
-    public function updateUser(User $user, $params): User
+    public function updateUser(?UserInterface $currentUer, User $user, $params): User
     {
         try{
             //check params Validations
@@ -157,7 +178,7 @@ class UserHandler {
                 ["firstname", "lastname", "phone", "mobile"],
                 User::class);
 
-            $user = $this->setUser($user, $params);
+            $user = $this->setUser($currentUer, $user, $params);
 
             //handle optional address
             if(isset($params["address"]) ) $user = $this->addressHandler->putAddress($user, $params);
@@ -236,17 +257,25 @@ class UserHandler {
 
     /**
      * set for an Organisation object the attributes passed in $attributes array
+     * @param UserInterface $currentUser
      * @param User $user
      * @param array $attributes
      * @return User with attributes passed
      * @throws BadMediaFileException
      */
-    private function setUser(User $user, array $attributes): User {
-        foreach( ["email", "firstname", "lastname", "password", "phone", "mobile", "pictureFile"] as $field ) {
+    private function setUser(UserInterface $currentUser, User $user, array $attributes): User {
+        foreach( ["email", "firstname", "lastname", "password", "phone", "mobile", "pictureFile", "roles"] as $field ) {
 
             if (isset($attributes[$field])) {
-                if(preg_match('(^pictureFile$)', $field))
+                if(preg_match('(^pictureFile$|^roles$)', $field))
                 {
+                    if($field === "roles"){
+                        if($currentUser->getRoles()[0] === "ROLE_ADMIN"){
+                            if($attributes[$field] === "null")$attributes[$field] = "";
+                            $user->setRoles([$attributes[$field]]);
+                        }
+                    }
+
                     //handle optional picture
                     if($field === "pictureFile"){
                         $pictureFile = $attributes[$field];
@@ -313,5 +342,18 @@ class UserHandler {
         $factory = new Factory();
         $generator = $factory->getLowStrengthGenerator();
         return $generator->generateString($length, "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTVWXYZ");
+    }
+
+    /**
+     * @param User $user
+     * @return bool
+     */
+    private function IsConfirmed(User $user): bool
+    {
+        $res = true;
+        if(!($user->getGPA("user.token.activation"))->isEmpty()){
+            $res = false;
+        }
+        return $res;
     }
 }

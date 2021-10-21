@@ -41,6 +41,15 @@ class UserRepository extends ServiceEntityRepository
             ;
     }
 
+    public function findAllDisabled(){
+        return $this->createQueryBuilder('u')
+            ->andWhere('u.roles = :roles')
+            ->setParameter(':roles', "[\"\"]")
+            ->getQuery()
+            ->getResult()
+            ;
+    }
+
     public function findByResetPasswordToken($token){
         return $this->createQueryBuilder('u')
             ->join('u.globalPropertyAttributes', 'g' )
