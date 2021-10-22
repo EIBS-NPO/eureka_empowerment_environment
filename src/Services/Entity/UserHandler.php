@@ -83,34 +83,24 @@ class UserHandler {
         $dataResponse =[];
         if(isset($params["access"])){
             switch($params["access"]){
-                case "id":
-                    $dataResponse[] = $this->userRepo->findOneBy(["id" => $params["id"]]);
-                    break;
                 case "owned":
-                    if($user !== null){
-                        $dataResponse[] = $this->userRepo->findOneBy(["email" => $user->getUsername()]);
-                    }
-                    break;
-                case "email":
-                    $dataResponse[] = $this->userRepo->findOneBy(["email" => $params["email"]]);
+                    if($user !== null){$dataResponse[] = $this->userRepo->findOneBy(["email" => $user->getUsername()]);}
                     break;
                 case "unConfirmed":
-                    if(isset($params["admin"])){
-                        $dataResponse = $this->userRepo->findAllUnconfirmed();
-                    }
+                    if(isset($params["admin"])){$dataResponse = $this->userRepo->findAllUnconfirmed();}
                     break;
-                case "disabled"://todo marche passssss
-                    if(isset($params["admin"])){
-                        $dataResponse = $this->userRepo->findAllDisabled();
-                    }
+                case "disabled":
+                    if(isset($params["admin"])){$dataResponse = $this->userRepo->findAllDisabled();}
                     break;
-                case "byProject":
+                case "search":
+                    $criterias = $this->getSearchCriterias($params);
+                    $dataResponse = $this->userRepo->search($criterias);
+                    break;
+               /* case "byProject":
                     break;
                 case "byOrg":
-                    break;
+                    break;*/
                 case "all":
-                        $dataResponse = $this->userRepo->findAll();
-                    break;
                 default:
                     $dataResponse = $this->userRepo->findAll();
 
@@ -355,5 +345,15 @@ class UserHandler {
             $res = false;
         }
         return $res;
+    }
+
+    private function getSearchCriterias(Array $params){
+        $criterias = [];
+        foreach( ["id", "email", "firstname", "lastname", "phone", "mobile"] as $field ) {
+            if(isset($params[$field])){
+                $criterias[$field] = $params[$field];
+            }
+        }
+        return $criterias;
     }
 }
