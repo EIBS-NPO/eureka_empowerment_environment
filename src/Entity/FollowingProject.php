@@ -50,6 +50,8 @@ class FollowingProject
         $data["followerId"] = $this->follower->getId();
         $data["isFollowing"] = $this->isFollowing;
         $data["isAssigning"] = $this->isAssigning;
+
+        return $data;
     }
 
     public function getId(): ?int

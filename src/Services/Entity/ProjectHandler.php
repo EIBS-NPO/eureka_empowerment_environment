@@ -3,6 +3,7 @@
 namespace App\Services\Entity;
 
 use App\Entity\Activity;
+use App\Entity\ActivityFile;
 use App\Entity\Interfaces\PictorialObject;
 use App\Entity\Organization;
 use App\Entity\Project;
@@ -56,8 +57,8 @@ class ProjectHandler
         //check access
         if ($user === null || //if not connected user
             !isset($params["access"]) // or if no access param defined
-            || !preg_match('(^assigned$|^followed$|^owned$|^admin$)', $params["access"]) // or if bad access param
-            || ($params["access"] === "admin" && $user->getRoles()[0] !== "ROLE_ADMIN") // or it's an access param admin with a no admin user
+            || !preg_match('(^assigned$|^followed$|^owned$|^search$|^all$)', $params["access"]) // or if bad access param
+            || (isset($params["admin"]) && $user->getRoles()[0] !== "ROLE_ADMIN") // or it's an access param admin with a no admin user
         ) {
             $params["access"] = null;
         }
@@ -87,6 +88,12 @@ class ProjectHandler
                 } else{
                     $dataResponse = $this->projectRepo->findBy(["creator"=>$user]);
                 }
+                break;
+            case "search":
+                $dataResponse = $this->projectRepo->search( $this->getSearchCriterias($params) );
+                break;
+            case "all":
+                $dataResponse = $this->projectRepo->findAll();
                 break;
             default : //admin or no access param
                 if(isset($id)){
@@ -138,19 +145,24 @@ class ProjectHandler
      * @param UserInterface $user
      * @param array $params
      * @return Project
-     * @throws PartialContentException | ViolationException | FileException | BadMediaFileException
+     * @throws PartialContentException | ViolationException | FileException
      */
     public function create (UserInterface $user, array $params) :Project
     {
         //check params Validations
         $this->validator->isInvalid(
             ["creator", "title", "description"],
-            ["startDate", "endDate"],
+            [],
             Project::class);
 
         //create project object && set validated fields
         $project = new Project();
-        $project = $this->setProject($user, $project, $params);
+        $project->setCreator($user);
+        $project->setTitle($params["title"]);
+        $project->setDescription($params["description"]);
+
+        if(isset($params["startDate"])) $this->putDate($project, "startDate", $params["startDate"] !== "null" ? $params["startDate"] : null);
+        if(isset($params["endDate"])) $this->putDate($project, "endDate", $params["endDate"] !== "null" ? $params["endDate"] : null);
 
         //Optional image management without blocking the creation of the entity
         try{
@@ -183,7 +195,7 @@ class ProjectHandler
             //check params Validations
             $this->validator->isInvalid(
                 [],
-                ["title", "description", "startDate", "endDate"],
+                ["title", "description"],
                 Project::class
             );
 
@@ -222,61 +234,71 @@ class ProjectHandler
 
     /**
      * @throws BadMediaFileException
+     * @throws ViolationException
      */
     private function setProject(UserInterface $user, Project $project, array $attributes) :Project
     {
-        foreach( ["creator", "title", "description", "startDate", "endDate", "organization", "activity", "member", "pictureFile"]
-                 as $field ) {
-            if (isset($attributes[$field])) {
-                if(preg_match('(^organization$|^activity$|^member$|^pictureFile$)', $field))
-                {
-                    if($field === "title")dd($attributes[$field]);
-                    if(!is_null($project->getId()) && $this->followingHandler->isAssign($project, $user)) {// project isn't new and user is assigned ? (owner or member)
+        if ($this->followingHandler->isAssign($project, $user) || isset($attributes["admin"])) {
+            // project isn't new and user is assigned ? (owner or member) //exclude admin
 
+            foreach (["creator", "title", "description", "startDate", "endDate", "organization", "activity", "member", "pictureFile"]
+                     as $field) {
+                if (isset($attributes[$field])) {
+
+                    //handle particular attributes
+                    if (preg_match('(^organization$|^activity$|^member$|^pictureFile$|^startDate$|^endDate$)', $field)) {
                         //force true null type
-                        if($attributes[$field] === "null"){ $attributes[$field] = null;}
+                        if ($attributes[$field] === "null") $attributes[$field] = null;
 
-                        //put orgHandle
-                        if($field === "organization") {
-                            $org = $attributes[$field];
-                            if(!is_null($org)){
-                                $this->putOrganization($user, $project, $org);
+                            //put orgHandle
+                            if ($field === "organization") {
+                                $org = $attributes[$field];
+                                $className = $this->entityManager->getMetadataFactory()->getMetadataFor(get_class($org))->getName();
+                                if (!is_string($org) && $className === Organization::class) {
+                                    $this->putOrganization($user, $project, $org);
+                                } else throw new ViolationException("invalid " . $field . " parameter");
                             }
-                        }
 
-                        //put activity handle
-                        if($field === "activity") {
-                            $activity = $attributes[$field];
-                            if(!is_null($activity)){
-                                 $this->putActivity($user, $project, $activity);
+                            //put activity handle
+                            if ($field === "activity") {
+                                $activity = $attributes[$field];
+                                $className = $this->entityManager->getMetadataFactory()->getMetadataFor(get_class($activity))->getName();
+                                if (!is_string($activity)
+                                    && ( get_class($activity) === Activity::class || $className === ActivityFile::class) ) {
+                                    $this->putActivity($user, $project, $activity);
+                                } else throw new ViolationException("invalid " . $field . " parameter");
                             }
-                        }
 
-                        //handle only for project's creator
-                        if($project->getCreator() === $user){
+                            //handle only for project's creator
+                            if ($project->getCreator() === $user || isset($attributes["admin"])) {
 
-                            //handler put member
-                            if($field === "member") {
-                                $member = $attributes[$field];
-                                if(!is_null($member) && $member !== $project->getCreator()){
-                                    $this->followingHandler->putAssigned($project, $member);
+                                //handler put member
+                                if ($field === "member") {
+                                    $member = $attributes[$field];
+                                    $className = $this->entityManager->getMetadataFactory()->getMetadataFor(get_class($member))->getName();
+                                    if ($className === User::class && $member !== $project->getCreator()) {
+                                        $this->followingHandler->putAssigned($project, $member);
+                                    }
+                                }
+
+                                //handle put picture
+                                if ($field === "pictureFile") {
+                                    $pictureFile = $attributes[$field];
+                                    $project = $this->putPicture($project, $pictureFile);
                                 }
                             }
 
-                            //handle put picture
-                            if($field === "pictureFile"){
-                                $pictureFile = $attributes[$field];
-                                $project = $this->putPicture($project, $pictureFile);
+                            //dating
+                            if ($field === "startDate" || $field === "endDate") {
+                                $project = $this->putDate($project, $field, $attributes[$field]);
                             }
-                        }
-
-
+                    } else {
+                        $setter = 'set' . ucfirst($field);
+                        $project->$setter($attributes[$field]);
                     }
-                }else {
-                    $setter = 'set' . ucfirst($field);
-                    $project->$setter($attributes[$field]);
                 }
             }
+
         }
         return $project;
     }
@@ -307,13 +329,13 @@ class ProjectHandler
 
     private function putActivity (UserInterface $user, Project $project, Activity $activity){
         if($activity->getProject() === $project){
-            if ($activity->getCreator() === $user || $project->getCreator() === $user )
+            if ($activity->getCreator() === $user || $project->getCreator() === $user || $user->getRoles()[0] === "ROLE_ADMIN")
             { //if activity's creator or project's creator
                 $project->removeActivity($activity);
             }
         }
         else { //add only for activity's creator
-            if($activity->getCreator() === $user){
+            if($activity->getCreator() === $user || $user->getRoles()[0] === "ROLE_ADMIN"){
                 $project->addActivity($activity);
             }
         }
@@ -321,12 +343,46 @@ class ProjectHandler
 
     private function putOrganization(UserInterface $user, Project $project, Organization $org)
     {
-        if($project->getCreator() === $user || $org->getReferent() === $user) {
+        if($project->getCreator() === $user || $org->getReferent() === $user || $user->getRoles()[0] === "ROLE_ADMIN") {
             if ($project->getOrganization() === $org) {
                 $project->setOrganization(null);
             } else { // add only for org's referent
-                $project->setOrganization($org);
+                if($org->getReferent() === $user || $user->getRoles()[0] === "ROLE_ADMIN"){
+                    $project->setOrganization($org);
+                }
             }
         }
+    }
+
+    /**
+     * @throws ViolationException
+     */
+    private function putDate(Project $project, String $dateName, ?\DateTimeInterface $date ): Project
+    {
+        if(is_null($date)){
+            $strMethode = "remove".ucfirst($dateName);
+            $project->$strMethode();
+        }else {
+            $this->validator->isInvalid(
+                [$dateName],
+                [],
+                Project::class);
+            $strMethode = "set".ucfirst($dateName);
+            $project->$strMethode($date);
+        }
+
+        return $project;
+    }
+
+    //todo ajout assigned_id pour récup les projects assigné par user_id
+    private function getSearchCriterias(Array $params): array
+    {
+        $criterias = [];
+        foreach( ["id", "title", "type", "email", "phone", "creator_id", "creator_firstname", "creator_lastname", "creator_email", "organization_id", "organization_name", "organization_email", "followings_isAssigning", "follower_id"] as $field ) {
+            if(isset($params[$field])){
+                $criterias[$field] = $params[$field];
+            }
+        }
+        return $criterias;
     }
 }

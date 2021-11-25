@@ -56,7 +56,7 @@ class User implements UserInterface, PictorialObject, AddressableObject
      * @ORM\Column(type="string", length=50, unique=true)
      * @Assert\NotBlank(message="the email is required")
      * @Assert\Type(type="string", message=" email is not valid string")
-     * @Assert\Email(message="invalid email")
+     * @Assert\Email(message = "The email '{{ value }}' is not a valid email.")
      */
     private ?string $email;
 
@@ -173,7 +173,7 @@ class User implements UserInterface, PictorialObject, AddressableObject
     private $followingProjects;
 
 
-    private bool $isConfirmed;
+    private bool $isConfirmed = true;
     /*
      * @ORM\Column(type="string", length=255, nullable=true)
      */
@@ -237,7 +237,6 @@ class User implements UserInterface, PictorialObject, AddressableObject
         }
 
         //todo envoyer isConfirmed et isActived a plaer dans les attributs by getters
-
 
        /* if(!$this->followingActivities->isEmpty() && $context !== "read_activity"){
             //$data["followingActivities"] = $this->followingActivities->toArray();
@@ -310,22 +309,6 @@ class User implements UserInterface, PictorialObject, AddressableObject
 
         return $this;
     }
-
-    /*
-     * @return String|null
-     */
-    /*public function getActivationToken(): ?string
-    {
-        return $this->activationToken;
-    }*/
-
-    /*
-     * @param String|null $activation_token
-     */
-    /*public function setActivationToken($activation_token): void
-    {
-        $this->activationToken = $activation_token;
-    }*/
 
     public function getPhone(): ?string
     {
@@ -693,8 +676,9 @@ class User implements UserInterface, PictorialObject, AddressableObject
         return $res;
     }
 
-    public function getFollowedProjects(){
-        $res = [];
+    public function getFollowedProjects(): ArrayCollection
+    {
+        $res = new ArrayCollection();
         foreach($this->followingProjects as $following){
             if($following->getIsFollowing() === true ){
                 $res[] = $following->getObject();
@@ -736,6 +720,4 @@ class User implements UserInterface, PictorialObject, AddressableObject
     {
         $this->isConfirmed = $isConfirmed;
     }
-
-
 }

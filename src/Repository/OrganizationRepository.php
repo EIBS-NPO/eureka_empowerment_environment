@@ -63,6 +63,30 @@ class OrganizationRepository extends ServiceEntityRepository
             ->getResult()
             ;
     }
+
+    public function search($criterias){
+        $qb = $this->createQueryBuilder('o');
+        if(isset($criterias["referent_id"])
+            || isset($criterias["referent_firstname"])
+            || isset($criterias["referent_lastname"])
+            || isset($criterias["referent_email"])
+        )$qb ->join('o.referent', 'r');
+
+        foreach($criterias as $key => $value){
+            if(preg_match('(^referent_id$|^referent_firstname$|^referent_lastname$|^referent_email$)', $key)) {
+                $prefix = "r.";
+                $keylike = explode("_", $key)[1];
+            }else {
+                $prefix = "o.";
+                $keylike = $key;
+            }
+
+            $qb->orWhere($prefix.$keylike.' LIKE :'.$keylike)
+                ->setParameter($keylike, '%'.$value.'%');
+        }
+        return $qb->getQuery()->getResult();
+    }
+
     // /**
     //  * @return Organization[] Returns an array of Organization objects
     //  */

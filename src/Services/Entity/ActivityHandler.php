@@ -53,7 +53,7 @@ class ActivityHandler {
         //check access
         if ($user === null || //if not connected user
             !isset($params["access"]) // or if no access param defined
-            || !preg_match('(|^followed$|^owned$|^admin$)', $params["access"]) // or if bad access param
+            || !preg_match('(|^followed$|^owned$|^search$|^all$)', $params["access"]) // or if bad access param
             || ($params["access"] === "admin" && $user->getRoles()[0] !== "ROLE_ADMIN") // or it's an access param admin with a no admin user
         ) {
             $params["access"] = null;
@@ -74,7 +74,13 @@ class ActivityHandler {
                     $dataResponse = $this->activityRepo->findBy(["creator"=>$user]);
                 }
                 break;
-            default : //admin or no access param
+            case "all":
+                $dataResponse = $this->activityRepo->findAll();
+                break;
+            case "search":
+                $dataResponse = $this->activityRepo->search($this->getSearchCriterias($params));
+                break;
+            default : //admin or no access param //todo useless
                 if(isset($params['id'])){
                     $dataResponse = $this->activityRepo->findBy(["id"=>$params['id']]);
                 }else {
@@ -86,6 +92,7 @@ class ActivityHandler {
     //    if($params["access"] === "followed"){
 
     //checks whether the user has access to the resources
+        if(!isset($params["admin"])){ //exclude admin
             $tab=[];
             foreach ($dataResponse as $activity) {
                 if ($this->hasAccess($activity, $user)) {
@@ -93,6 +100,8 @@ class ActivityHandler {
                 }
             }
             $dataResponse = $tab;
+        }
+
     //    }
 
         //only return public resources for public access
@@ -118,6 +127,7 @@ class ActivityHandler {
             throw new NoFoundException($msg);
         }
 
+        //add isFollowed attribute in dataResponse
         if(!is_null($user)){
             foreach($dataResponse as $activity){
                 $activity->setIsFollowed($activity->isFollowByUserId($user->getId()));
@@ -273,13 +283,13 @@ class ActivityHandler {
 
     /**
      * @param ActivityFile $activityFile
+     * @param String $access
      * @param UserInterface|null $user
      * @return string
-     * @throws NoFileException | UnauthorizedHttpException
      */
-    public function loadFile(ActivityFile $activityFile, UserInterface $user = null): string
+    public function loadFile(ActivityFile $activityFile, String $access, UserInterface $user = null): string
     {
-        if (!$this->hasAccess($activityFile, $user)) {
+        if (!$this->hasAccess($activityFile, $user) && $access !=="admin") {
             throw new UnauthorizedHttpException("unauthorized file access");
         }
 
@@ -326,14 +336,15 @@ class ActivityHandler {
 
 
                 if(($field === "organization" || $field === "project")){
-                    if(!is_null($activity->getId()) && $activity->getCreator()->getId() === $user->getId() ){//only if Activity isn't a new Object and currentUser is owner
+                    if(!is_null($activity->getId()) && ($activity->getCreator()->getId() === $user->getId() || isset($attributes["admin"]) )){//only if Activity isn't a new Object and currentUser is owner //exclude admin
 
                         if($attributes[$field] === "null"){ $attributes[$field] = null;}
 
                         //handle org linking if user is member
                         if($field === "organization") {
                             $org = $attributes[$field];
-                            if(!is_null($org)){
+                            $className = $this->entityManager->getMetadataFactory()->getMetadataFor(get_class($org))->getName();
+                            if($className === Organization::class){
                                 $this->putOrganization($user, $activity, $org);
                             }
                         }
@@ -341,7 +352,8 @@ class ActivityHandler {
                         //handle project linking is user is assign
                         if ($field === "project"){
                             $project = $attributes[$field];
-                            if(!is_null($project)){
+                            $className = $this->entityManager->getMetadataFactory()->getMetadataFor(get_class($project))->getName();
+                            if( $className === Project::class ){
                                 $this->putProject($user, $activity, $project);
                             }
                         }
@@ -378,6 +390,8 @@ class ActivityHandler {
         //make new checksum
         $activityFile->setChecksum($this->fileHandler->getChecksum( $completName));
 
+
+
         return $activityFile;
     }
 
@@ -395,12 +409,12 @@ class ActivityHandler {
     {
         $res = false;
         if(!$activity->getIsPublic() && $user !== null){ //if isn't public resource
-            if($activity->getCreator()->getId() === $user->getId()){ //if user is creator
+            if($activity->getCreator() === $user){ //if user is creator
                 $res = true;
             }
             else if($activity->getProject() !== null){ //if assign into project
                 foreach($activity->getProject()->getFollowings() as $following){
-                    if($following->getFollower()->getId() === $user->getId() && $following->getIsAssigning()){
+                    if($following->getFollower() === $user && $following->getIsAssigning()){
                         $res = true;
                     }
                 }
@@ -408,7 +422,7 @@ class ActivityHandler {
             else if($activity->getOrganization() !== null && $activity->getOrganization()->isMember($user)){ // if assign into org
                 $res = true;
             }
-        }else if(!$activity->getIsPublic() && $user === null){
+        }else if(!$activity->getIsPublic() && $user === null){ //if no public and no connected user
             $res = false;
         }else { $res = true;}
     return $res;
@@ -433,12 +447,12 @@ class ActivityHandler {
     {
         if($activity->getOrganization() === $org){
             //remove only for activity's creator or ref's org
-            if($activity->getCreator() === $user || $org->getReferent() === $user){
+            if($activity->getCreator() === $user || $org->getReferent() === $user || $user->getRoles()[0] === "ROLE_ADMIN"){
                 $activity->setOrganization(null);
             }
         }else{
             //add only for activity's creator and member's org
-            if($activity->getCreator() === $user && $org->isMember($user)){
+            if($activity->getCreator() === $user && $org->isMember($user) || $user->getRoles()[0] === "ROLE_ADMIN"){
                 $activity->setOrganization($org);
             }
         }
@@ -449,14 +463,31 @@ class ActivityHandler {
     {
         if($activity->getProject() === $project){
             //remove only for activity's creator and project's creator
-            if($activity->getCreator() === $user || $project->getCreator() === $user){
+            if($activity->getCreator() === $user || $project->getCreator() === $user || $user->getRoles()[0] === "ROLE_ADMIN"){
                 $activity->setProject(null);
             }
         } else { //add only for activity's creator and member's project
-            if($activity->getCreator() === $user && $project->isAssigned()){
+            if($activity->getCreator() === $user && $project->isAssigned() || $user->getRoles()[0] === "ROLE_ADMIN"){
                 $activity->setProject($project);
             }
         }
         return $activity;
+    }
+
+    private function getSearchCriterias(Array $params): array
+    {
+        $criterias = [];
+        foreach(
+            ["id", "title", "isPublic", "dType",
+                "creator_id", "creator_firstname", "creator_lastname", "creator_email",
+                "project_id", "project_title",
+                "organization_id", "organization_name", "organization_email"
+            ] as $field )
+        {
+            if(isset($params[$field])){
+                $criterias[$field] = $params[$field];
+            }
+        }
+        return $criterias;
     }
 }

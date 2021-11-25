@@ -10,6 +10,7 @@ use App\Exceptions\BadMediaFileException;
 use App\Exceptions\NoFoundException;
 use App\Exceptions\PartialContentException;
 use App\Exceptions\ViolationException;
+use App\Services\Configuration\ConfigurationHandler;
 use App\Services\Entity\ActivityHandler;
 use App\Services\Entity\OrgHandler;
 use App\Services\Entity\ProjectHandler;
@@ -38,7 +39,6 @@ class ActivityController extends AbstractController
 {
     private RequestParameters $parameters;
     private ResponseHandler $responseHandler;
-    private ParametersValidator $validator;
     protected EntityManagerInterface $entityManager;
     protected FileHandler $fileHandler;
     private LogService $logger;
@@ -50,7 +50,6 @@ class ActivityController extends AbstractController
      * UserController constructor.
      * @param RequestParameters $requestParameters
      * @param ResponseHandler $responseHandler
-     * @param ParametersValidator $validator
      * @param EntityManagerInterface $entityManager
      * @param FileHandler $fileHandler
      * @param ActivityHandler $activityHandler
@@ -58,11 +57,10 @@ class ActivityController extends AbstractController
      * @param ProjectHandler $projectHandler
      * @param LogService $logger
      */
-    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, ActivityHandler $activityHandler, OrgHandler $orgHandler, ProjectHandler $projectHandler, LogService $logger)
+    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, EntityManagerInterface $entityManager, FileHandler $fileHandler, ActivityHandler $activityHandler, OrgHandler $orgHandler, ProjectHandler $projectHandler, LogService $logger)
     {
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
-        $this->validator = $validator;
         $this->entityManager = $entityManager;
         $this->fileHandler = $fileHandler;
         $this->orgHandler = $orgHandler;
@@ -124,30 +122,41 @@ class ActivityController extends AbstractController
      try   {// recover all data's request
             $this->parameters->setData($request);
 
+         $getParams = [];
+         $getParams["access"] = "owned"; //force owned access
+     //check if admin access required
+         if($this->parameters->getData("admin")!== false){
+             $this->denyAccessUnlessGranted('ROLE_ADMIN');
+             $getParams["admin"] = true;
+             $getParams["access"] = "search"; //for allowed admin to access
+         }
+
     //check if required params exist
             $this->parameters->hasData(["id"]);
+            $getParams["id"] = $this->parameters->getData("id");
 
     //convert Date
             $this->parameters->addParam("postDate", New \DateTime("now"));
 
     //force boolean type
-            if ($this->parameters->getData('isPublic') === "false") {
-                $this->parameters->putData("isPublic", false);
-            } else {
-                $this->parameters->putData("isPublic", true);
+         $publicParam = $this->parameters->getData('isPublic');
+            if ($publicParam !== false) {
+                if($publicParam === "false"){
+                    $this->parameters->putData("isPublic", false);
+                }
+                else {
+                    $this->parameters->putData("isPublic", true);
+                }
             }
 
     //retrieve activity targeted
             $activity = $this->activityHandler->getActivities(
                 $this->getUser(),
-                [
-                    "id" => $this->parameters->getData("id"),
-                    "access" => "owned"
-                ],
+                $getParams,
                 true
             )[0];
 
-    //handle potential link with an org
+    //retrieve org for potential relation handled
             $orgId = $this->parameters->getData("organization");
             if($orgId !== false){
                 $org = "null"; //by default for delete linking
@@ -161,7 +170,7 @@ class ActivityController extends AbstractController
                 $this->parameters->putData("organization", $org);
             }
 
-     //handle potential link with a project
+     //retrieve project for potential relation handled
              $projectId = $this->parameters->getData("project");
              if($projectId !== false){
                  $project = "null"; // by default for delete linking
@@ -199,7 +208,7 @@ class ActivityController extends AbstractController
     /**
      * @param Request $request
      * @return BinaryFileResponse|Response
-     * @Route("/download/public", name="_download", methods="get")
+     * @Route("/download", name="_download", methods="get")
      */
     public function downloadFile(Request $request)
     {
@@ -209,13 +218,22 @@ class ActivityController extends AbstractController
             //check if required params exist
             $this->parameters->hasData(["id", "access"]);
 
+            //check if admin access required
+            if($this->parameters->getData("access") === "admin"){
+                $this->denyAccessUnlessGranted('ROLE_ADMIN');
+            }
+
             $activityFile = $this->activityHandler->getActivities(
                 $this->getUser(),
                 $this->parameters->getAllData(),
                 true
             )[0];
 
-            $file = $this->activityHandler->loadFile($activityFile, $this->getUser());
+            $file = $this->activityHandler->loadFile(
+                $activityFile,
+                $this->parameters->getData("access"),
+                $this->getUser()
+            );
 
             $response = new BinaryFileResponse($file);
             $response->headers->set('Content-Type',$activityFile->getFileType());
@@ -240,6 +258,53 @@ class ActivityController extends AbstractController
         }
     }
 
+    /**
+     * @param Request $request
+     * @return BinaryFileResponse|Response
+     * @Route("/download/public", name="_download", methods="get")
+     */
+    public function downloadPublic(Request $request)
+    {
+        try{
+            // recover all data's request
+            $this->parameters->setData($request);
+            //check if required params exist
+            $this->parameters->hasData(["id"]);
+
+            $activityFile = $this->activityHandler->getActivities(
+                null,
+                $this->parameters->getAllData(),
+                true
+            )[0];
+
+            $file = $this->activityHandler->loadFile(
+                $activityFile,
+                $this->parameters->getData("access"),
+                $this->getUser()
+            );
+
+            $response = new BinaryFileResponse($file);
+            $response->headers->set('Content-Type',$activityFile->getFileType());
+
+            $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT, $activityFile->getFilename());
+
+            return $response;
+        }
+        catch(NoFoundException $e){
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->notFoundResponse();
+        }
+        catch(ViolationException | NoFileException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getMessage());
+        }catch(UnauthorizedHttpException $e){
+            return $this->responseHandler->unauthorizedResponse($e->getMessage());
+        }
+        catch(Exception $e){
+            $this->logger->logError($e,$this->getUser(),"error" );
+            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+        }
+    }
 
     /**
      * returns all public activities
@@ -281,6 +346,11 @@ class ActivityController extends AbstractController
             $this->parameters->setData($request);
          //   $this->parameters->hasData(["access"]);
 
+        //check if admin access required
+        if($this->parameters->getData("admin") !== false){
+            $this->denyAccessUnlessGranted('ROLE_ADMIN');
+        }
+
             $activities = $this->activityHandler->getActivities($this->getUser(), $this->parameters->getAllData());
 
             $activities = $this->activityHandler->withPictures($activities);
@@ -289,66 +359,26 @@ class ActivityController extends AbstractController
         }
     catch (Exception $e) {
             $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->serverErrorResponse($e, "An error occured");
+            return $this->responseHandler->serverErrorResponse("An error occured");
         }
     }
 
-    /*
+    /**
      * @param Request $request
+     * @param ConfigurationHandler $configHandler
      * @return Response
-     * @Route("", name="_delete", methods="delete")
+     * @Route("/allowed/public", name="_allowed", methods="get")
      */
- //   public function remove(Request $request) : Response {
-        // recover all data's request
-        /*$this->parameters->setData($request);
-
-        //check if required params exist
-        try{ $this->parameters->hasData(["id"]); }
-        catch(ViolationException $e) {
-            $this->logger->logError($e, $this->getUser(), "error");
-            return $this->responseHandler->BadRequestResponse($e->getViolationsList());
-        }
+    public function getAllowedFileFormat(Request $request, ConfigurationHandler $configHandler) :Response{
 
         try {
-            //for no admin get org by user
-            if ($this->getUser()->getRoles()[0] !== "ROLE_ADMIN") {
-                $repository = $this->entityManager->getRepository(User::class);
-                $userData = $repository->findBy(["id" => $this->getUser()->getId()]);
-                $user = $userData[0];
-
-                $activityData = $user->getActivity($this->parameters->getData("id"));
-            } else {//for admin
-                $repository = $this->entityManager->getRepository(Activity::class);
-                $activityData = $repository->findBy(["id" => $this->parameters->getData("id")]);
-                if (count($activityData) === 0) {
-                    $this->logger->logInfo(" Activity with id : " . $this->parameters->getData("id") . " not found ");
-                    return $this->responseHandler->notFoundResponse();
-                }
-                $activityData = $activityData[0];
-            }
-
-            $this->entityManager->remove($activityData);
-            $this->entityManager->flush();
-
-            return $this->responseHandler->successResponse(["success"]);
-
-        }catch(Exception $e){
-            $this->logger->logError($e,$this->getUser(),"error" );
-            return $this->responseHandler->serverErrorResponse($e, "An error occured");
-        }*/
-  //  }
-
-    /*public function getPics($activities){
-        //download picture
-        foreach($activities as $key => $activity){
-            $activities[$key] = $this->loadPicture($activity);
-            if($activity->getProject() !== null){
-                $activity->setProject($this->loadPicture($activity->getProject()));
-            }
-            if($activity->getOrganization() !== null){
-                $activity->setOrganization($this->loadPicture($activity->getOrganization()));
-            }
+            $allowedMime = $configHandler->getValue("mime.type.allowed");
+            return $this->responseHandler->successResponse($allowedMime);
         }
-        return $activities;
-    }*/
+        catch (Exception $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->serverErrorResponse("An error occured");
+        }
+    }
+
 }

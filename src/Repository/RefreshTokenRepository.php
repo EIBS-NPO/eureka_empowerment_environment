@@ -18,4 +18,25 @@ class RefreshTokenRepository extends ServiceEntityRepository
     {
         parent::__construct($registry, JwtRefreshToken::class);
     }
+
+    public function deletePreviousRefreshToken($username){
+
+        return $this->createQueryBuilder('r')
+            ->delete()
+            ->andWhere('r.username = :email')
+            ->setParameter(':email', $username)
+            ->getQuery()
+            ->getResult()
+            ;
+
+        /*return $this->createQueryBuilder('r')
+            ->delete()
+            ->andWhere('r.username = :email')
+            ->andWhere('r.valid < :now')
+            ->setParameter(':email', $username)
+            ->setParameter(':now', new \DateTime('now'))
+            ->getQuery()
+            ->getResult()
+            ;*/
+    }
 }

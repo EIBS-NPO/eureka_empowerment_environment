@@ -43,7 +43,7 @@ class FollowingHandler
         }
 
         //put with reverse of init bool state
-        $newFollow = !$this->isFollowed($object,$follower);
+        $newFollow = !$this->isFollowed($object, $follower);
         $following->setIsFollowing($newFollow);
         $object->setIsFollowed($newFollow);
 

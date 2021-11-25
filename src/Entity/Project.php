@@ -8,6 +8,7 @@ use App\Repository\ProjectRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
@@ -40,6 +41,7 @@ class Project implements TrackableObject, PictorialObject
      */
     private ?\DateTimeInterface $startDate = null;
 
+    //@Assert\Type(type={"DateTime", "Y-m-d"}, message= "the date must be a DateTime Object")
     /**
      * @ORM\Column(type="date", nullable=true)
      * @Assert\Type(type={"DateTime", "Y-m-d"}, message= "the date must be a DateTime Object")
@@ -123,10 +125,10 @@ class Project implements TrackableObject, PictorialObject
 
 
         //Check some attributes to see if they are sets
-        if($this->endDate){
+        if(!is_null($this->startDate)){
             $data["startDate"] = $this->startDate->format('Y-m-d');
         }
-        if($this->endDate){
+        if(!is_null($this->endDate)){
             $data["endDate"] = $this->endDate->format('Y-m-d');
         }
 
@@ -205,24 +207,37 @@ class Project implements TrackableObject, PictorialObject
         return $this;
     }
 
+    public function removeStartDate(): self
+    {
+        $this->startDate = null;
+        return $this;
+    }
+
     public function getEndDate(): ?\DateTimeInterface
     {
         return $this->endDate;
     }
 
-    public function setEndDate(?\DateTimeInterface $endDate): self
+    public function setEndDate(\DateTimeInterface $endDate): self
     {
         $this->endDate = $endDate;
 
         return $this;
     }
 
-    public function getCreator(): ?User
+    public function removeEndDate(): self
+    {
+        $this->endDate = null;
+        return $this;
+    }
+
+    //todo change user to userInterface
+    public function getCreator(): ?UserInterface
     {
         return $this->creator;
     }
 
-    public function setCreator(?User $creator): self
+    public function setCreator(?UserInterface $creator): self
     {
         $this->creator = $creator;
 
@@ -354,6 +369,17 @@ class Project implements TrackableObject, PictorialObject
         }
 
         return $this;
+    }
+
+    public function getFollowingByUser(User $user) {
+        $res = null;
+
+        foreach($this->followings as $following){
+            if($following->getFollower() === $user){
+                $res = $following;
+            }
+        }
+        return $res;
     }
 
     /**

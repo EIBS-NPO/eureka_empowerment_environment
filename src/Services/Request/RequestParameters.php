@@ -30,6 +30,10 @@ class RequestParameters
         $this->data[$key] = $value;
     }
 
+    public function removeData(String $key){
+        unset($this->data[$key]);
+    }
+
     /**
      * @param Request $request
      */

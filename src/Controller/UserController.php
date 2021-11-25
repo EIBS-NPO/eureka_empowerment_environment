@@ -2,6 +2,10 @@
 
 namespace App\Controller;
 
+use App\Entity\Activity;
+use App\Entity\JwtRefreshToken;
+use App\Entity\Organization;
+use App\Entity\Project;
 use App\Entity\User;
 use App\Exceptions\BadMediaFileException;
 use App\Exceptions\NoFoundException;
@@ -40,7 +44,6 @@ class UserController extends AbstractController
     protected FileHandler $fileHandler;
     private LogService $logger;
     private UserHandler $userHandler;
-    private MailHandler $mailHandler;
 
     /**
      * UserController constructor.
@@ -51,9 +54,8 @@ class UserController extends AbstractController
      * @param UserHandler $userHandler
      * @param FileHandler $fileHandler
      * @param LogService $logger
-     * @param MailHandler $mailHandler
      */
-    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, UserHandler $userHandler, FileHandler $fileHandler, LogService $logger, MailHandler $mailHandler)
+    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, UserHandler $userHandler, FileHandler $fileHandler, LogService $logger)
     {
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
@@ -62,7 +64,6 @@ class UserController extends AbstractController
         $this->userHandler = $userHandler;
         $this->fileHandler = $fileHandler;
         $this->logger = $logger;
-        $this->mailHandler = $mailHandler;
     }
 
 
@@ -97,7 +98,29 @@ class UserController extends AbstractController
     /**
      * @param Request $request
      * @return Response
-     * @Route("/activation", name="_activation", methods="post")
+     * @Route("/public/activation", name="_get_activation", methods="get")
+     */
+    public function askActivation(Request $request) : Response {
+        try{
+            // recover all data's request
+            $this->parameters->setData($request);
+            $this->parameters->hasData(["email"]);
+
+            $user = $this->entityManager->getRepository(User::class)->findOneBy(["email" => $this->parameters->getData("email")]);
+            if(is_null($user)) Throw new NoFoundException("user not found");
+         //   $this->userHandler->activation($this->parameters->getData("token"));
+
+            return $this->responseHandler->successResponse([$user]);
+        }catch(Exception $e){
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->serverErrorResponse("An error occured");
+        }
+    }
+
+    /**
+     * @param Request $request
+     * @return Response
+     * @Route("/public/activation", name="_post_activation", methods="post")
      */
     public function activation(Request $request) :Response {
             try{
@@ -120,7 +143,7 @@ class UserController extends AbstractController
     }
 
     /**
-     * @Route("/forgotPassword", name="_forgotPassword", methods="put")
+     * @Route("/public/forgotPassword", name="_forgotPassword", methods="put")
      * @param Request $request
      * @return Response
      */
@@ -131,13 +154,12 @@ class UserController extends AbstractController
             $this->parameters->setData($request);
             $this->parameters->hasData(["email"]);
 
-            $user = $this->userHandler->getUsers(null, ["access" => "email", "email" => $this->parameters->getData("email")]);
+        //    $user = $this->userHandler->getUsers(null, ["access" => "search", "email" => $this->parameters->getData("email")]);
 
-            if(!isset($user[0])){
-                throw new NoFoundException("User not found");
-            }
+            $user = $this->entityManager->getRepository(User::class)->findOneBy(["email" => $this->parameters->getData("email")]);
+            if(is_null($user)) throw new NoFoundException("User not found");
 
-            $user = $this->userHandler->add_GPA_resetPassword($user[0]);
+            $user = $this->userHandler->add_GPA_resetPassword($user);
 
             return $this->responseHandler->successResponse([$user]);
 
@@ -151,8 +173,7 @@ class UserController extends AbstractController
     }
 
     /**
-     * need "id" for one user, else all returned
-     * @Route("/public", name="_get", methods="get")
+     * @Route("", name="_get", methods="get")
      * @param Request $request
      * @return Response
      */
@@ -164,6 +185,7 @@ class UserController extends AbstractController
             //check if admin access required
             if($this->parameters->getData("admin")!== false){
                 $this->denyAccessUnlessGranted('ROLE_ADMIN');
+                $this->parameters->putData("admin", true);
             }
 
             $users = $this->userHandler->getUsers($this->getUser(), $this->parameters->getAllData(), true);
@@ -171,6 +193,32 @@ class UserController extends AbstractController
             $users = $this->userHandler->withPictures($users);
         //final response
         return $this->responseHandler->successResponse($users);
+        }
+        catch(ViolationException | NoFoundException $e) {
+            $this->logger->logError($e, null, "error");
+            return $this->responseHandler->BadRequestResponse($e->getMessage());
+        }
+        catch (Exception $e) {//unexpected error
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->serverErrorResponse("An error occurred");
+        }
+    }
+
+    /**
+     * @Route("/public", name="_getPublic", methods="get")
+     * @param Request $request
+     * @return Response
+     */
+    public function getUsersPublic(Request $request): Response
+    {
+        try{
+            $this->parameters->setData($request);
+
+            $users = $this->userHandler->getUsers(null , $this->parameters->getAllData(), true);
+
+            $users = $this->userHandler->withPictures($users);
+            //final response
+            return $this->responseHandler->successResponse($users);
         }
         catch(ViolationException | NoFoundException $e) {
             $this->logger->logError($e, null, "error");
@@ -203,8 +251,9 @@ class UserController extends AbstractController
             if($this->parameters->getData("admin")!== false){
                 $this->denyAccessUnlessGranted('ROLE_ADMIN');
                 //change accessTable for access by id
-                $accessTable["access"] = "id";
+                $accessTable["access"] = "search";
                 $accessTable["id"] = $this->parameters->getData("id");
+                $accessTable["admin"] = true;
                 $needNewToken = false; //don't need new token
             }
 
@@ -214,8 +263,44 @@ class UserController extends AbstractController
                 true
             )[0];
 
-            $user = $this->userHandler->updateUser($this->getUser(), $user, $this->parameters->getAllData());
 
+            //retrieve activity for following relation
+            $followActivity = $this->parameters->getData("followActivity");
+            if($followActivity !== false && is_numeric($followActivity)){
+                $activity = $this->entityManager->getRepository(Activity::class)->find($followActivity);
+                if(!is_null($activity)){
+                    $this->parameters->putData("followActivity", $activity);
+                } else Throw new NoFoundException();
+            }
+
+            //retrieve project for following project
+            $followProject = $this->parameters->getData("followProject");
+            if($followProject !== false && is_numeric($followProject)){
+                $project = $this->entityManager->getRepository((Project::class))->find($followProject);
+                if(!is_null($project)){
+                    $this->parameters->putData('followProject', $project);
+                } else Throw new NoFoundException();
+            }
+
+            //retrieve project for assigning project
+            $assigningProject = $this->parameters->getData("assigningProject");
+            if($assigningProject !== false && is_numeric($assigningProject)){
+                $project = $this->entityManager->getRepository((Project::class))->find($assigningProject);
+                if(!is_null($project)){
+                    $this->parameters->putData('assigningProject', $project);
+                } else Throw new NoFoundException();
+            }
+
+            //retrieve org for membership update
+            $memberOf = $this->parameters->getData("memberOf");
+            if($memberOf !== false && is_numeric($memberOf)){
+                $org = $this->entityManager->getRepository(Organization::class)->find($memberOf);
+                if(!is_null($org)){
+                    $this->parameters->putData('memberOf', $org);
+                }else Throw new NoFoundException();
+            }
+
+            $user = $this->userHandler->updateUser($this->getUser(), $user, $this->parameters->getAllData());
 
             $userData = [$this->userHandler->withPictures([$user])[0]];
 
@@ -244,7 +329,7 @@ class UserController extends AbstractController
     /**
      * @param Request $request
      * @return Response
-     * @Route("/resetPassword", name="_password", methods="post")
+     * @Route("/public/resetPassword", name="_password", methods="post")
      */
     public function resetPassword(Request $request): Response
     {
@@ -253,6 +338,8 @@ class UserController extends AbstractController
             $this->parameters->setData($request);
 
             $this->parameters->hasData(["resetPasswordToken", "resetCode", "newPassword", "confirmPassword"]);
+
+            //todo validator not really usse
             $this->validator->isInvalid([], ["password"], User::class);
 
             $this->userHandler->resetPassword($this->parameters->getAllData());
@@ -267,7 +354,23 @@ class UserController extends AbstractController
         }
     }
 
+    /*public function changeEmail(Request $request): Response
+    {
+        try{
+            // recover all data's request
+            $this->parameters->setData($request);
 
+
+            //todo return user with newToken
+            return $this->responseHandler->successResponse();
+        } catch(ViolationException | NoFoundException $e) {
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->BadRequestResponse($e->getMessage());
+        } catch (Exception $e) {//unexpected error
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->serverErrorResponse("An error occurred");
+        }
+    }*/
     /*
      * @Route("/email", name="_reset_email", methods="post")
      * @param Request $request
@@ -332,4 +435,23 @@ class UserController extends AbstractController
 
         return $this->responseHandler->successResponse($dataResponse);
     }*/
+
+    /**
+     * @return Response
+     * @Route("/logout", name="_loggout", methods="delete")
+     */
+    public function logout() :Response {
+        try{
+            $tokenRefreshRepo = $this->entityManager->getRepository(JwtRefreshToken::class);
+            $tokenRefresh = $tokenRefreshRepo->findOneBy(["username"=>$this->getUser()->getUsername()]);
+            if(!is_null($tokenRefresh)){
+                $this->entityManager->remove($tokenRefresh);
+                $this->entityManager->flush();
+            }
+            return $this->responseHandler->successResponse([]);
+        } catch(Exception $e){
+            $this->logger->logError($e, $this->getUser(), "error");
+            return $this->responseHandler->serverErrorResponse("An error occured");
+        }
+    }
 }

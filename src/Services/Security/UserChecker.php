@@ -18,6 +18,11 @@ class UserChecker implements UserCheckerInterface
         if(!$user->getGPA("user.token.activation")->isEmpty()){
             throw new CustomUserMessageAccountStatusException("Your account has not been activated");
         }
+
+        /*if(!$user->getGPA("user.email.change")->isEmpty()){
+            $this->userHandler->add_GPA_activationToken($user);
+            throw new CustomUserMessageAccountStatusException("Your account has not been activated");
+        }*/
         /*if ($user->isDeleted()) {
             // the message passed to this exception is meant to be displayed to the user
             throw new CustomUserMessageAccountStatusException('Your user account no longer exists.');
@@ -29,6 +34,8 @@ class UserChecker implements UserCheckerInterface
         if (!$user instanceof AppUser) {
             return;
         }
+
+
 
         // user account is expired, the user may be notified
        /* if ($user->isExpired()) {

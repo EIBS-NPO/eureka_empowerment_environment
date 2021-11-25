@@ -3,6 +3,7 @@
 namespace App\Services\Entity;
 
 use App\Entity\Activity;
+use App\Entity\ActivityFile;
 use App\Entity\Interfaces\PictorialObject;
 use App\Entity\Organization;
 use App\Entity\Project;
@@ -53,17 +54,18 @@ class OrgHandler {
      */
     public function getOrgs(?UserInterface $user, $params, bool $withNotFound=false): array
     {
-
+//todo admin passed in param "admin"
         //check access
         if (!isset($params["access"]) ||
             ($user === null
-                && !preg_match('(^assigned$|^followed$|^owned$|^admin$)', $params["access"])
+                && !preg_match('(^search$|^assigned$|^followed$|^owned$|^all$|)', $params["access"])
             )// or if bad access param
-            || ($params["access"] === "admin" && $user->getRoles()[0] !== "ROLE_ADMIN") // or it's an access param admin with a no admin user
+            || (isset($params["admin"]) && $user->getRoles()[0] !== "ROLE_ADMIN") // or it's an access param admin with a no admin user
         ) {
             $params["access"] = 'public';
         }
 
+        //todo test just if numeric
         if(isset($params['id'])){
             $this->validator->isInvalid(
                 ["id"],
@@ -94,7 +96,11 @@ class OrgHandler {
                     $dataResponse = $this->orgRepo->findBy(["referent"=>$user]);
                 }
                 break;
-            case "admin" :
+            case "search":
+                $dataResponse = $this->orgRepo->search($this->getSearchCriterias($params));
+                break;
+            case "all" : $dataResponse = $this->orgRepo->findAll();
+                break;
             case "public":
                 if(isset($id)){
                     $dataResponse = $this->orgRepo->findBy(["id"=>$id]);
@@ -117,8 +123,8 @@ class OrgHandler {
             throw new NoFoundException($msg);
         }
 
-        //if current user isn't assigned or creator, filter private activities in each project result
-        if($params["access"] === "followed") {
+        //if current user isn't assigned or creator, filter private activities in each project result, exclude admin
+        if($params["access"] === "followed" && !isset($param["admin"])) {
             foreach ($dataResponse as $org) {
                 if (!$org->isMember($user)) {
                     $org->setActivities($org->getOnlyPublicActivities());
@@ -126,10 +132,11 @@ class OrgHandler {
             }
         }
 
-        //only with public resources for public access
-        if($params["access"] === "public" ){
-            foreach($dataResponse as $project) {
-                $project->setActivities($project->getOnlyPublicActivities());
+
+        //only with public resources for public access (exclude admin)
+        if($params["access"] === "public" && !isset($params["admin"])){
+            foreach($dataResponse as $org) {
+                $org->setActivities($org->getOnlyPublicActivities());
             }
         }
 
@@ -203,8 +210,8 @@ class OrgHandler {
             $org = $this->setOrg($user, $org, $params);
 
 
-            //handle optional address
-            if(isset($params["address"]) && $org->getReferent() === $user) $org = $this->addressHandler->putAddress($org, $params);
+            //handle optional address //todo add admin
+            if(isset($params["address"]) && ($org->getReferent() === $user || isset($params["admin"]))) $org = $this->addressHandler->putAddress($org, $params);
 
         }catch(FileException | BadMediaFileException $e){
             throw new PartialContentException([$org], $e->getMessage());
@@ -242,60 +249,64 @@ class OrgHandler {
      */
     private function setOrg(UserInterface $user, Organization $org, array $attributes): Organization {
 
-        foreach( ["name", "type", "email", "phone", 'description', 'project', 'activity', "pictureFile", "member"] as $field ) {
+        foreach( ["name", "type", "email", "phone", 'description', 'project', 'activity', "pictureFile", "member", "partner"] as $field ) {
             if (isset($attributes[$field])) {
                 $canSet = false;
-                //todo case of new ORg
-             //   if(($field === "project" || $field === "activity" || $field === "pictureFile" || $field === "member"))
-                if(preg_match('(^project$|^activity$|^pictureFile$|^member$)', $field))
+                if($attributes[$field] === "null"){ $attributes[$field] = null;}
+
+                if(preg_match('(^project$|^activity$|^pictureFile$|^member$|^partner$)', $field))
                 {
 
-                    if(!is_null($org->getId()) && $org->isMember($user)){//only if org isn't a new Object and currentUser is member (referent or member)
+                    if(!is_null($org->getId()) && ($org->isMember($user) || isset($attributes["admin"]) ) ){
+                        //only if org isn't a new Object and currentUser is member (referent or member) //include admin
 
-                      if($attributes[$field] === "null"){ $attributes[$field] = null;}
-
-                      //handle put project
-                      if($field === "project") {
-                          $project = $attributes[$field];
-                          //if org have the project, remove it else add
-
-                          if(!is_null($project)){
+                        //handle put project
+                        if($field === "project") {
+                            $project = $attributes[$field];
+                            $className = $this->entityManager->getMetadataFactory()->getMetadataFor(get_class($project))->getName();
+                            //if org have the project, remove it else add
+                            if( $className === Project::class ){
                               $this->putProject($user, $org, $project);
-                          }
-                      }
+                            }
+                        }
 
-                      //handle put activity
-                      if ($field === "activity") {
-                          $activity = $attributes[$field];
-                          //if org have the activity, remove it else add
-                          if(!is_null($activity)){
+                        //handle put activity
+                        if ($field === "activity") {
+                            $activity = $attributes[$field];
+                            $className = $this->entityManager->getMetadataFactory()->getMetadataFor(get_class($activity))->getName();
+                            //if org have the activity, remove it else add
+                            if( $className === Activity::class || $className === ActivityFile::class ){
                               $this->putActivity($user, $org, $activity);
-                          }
+                            }
 
-                      }
+                        }
 
-                      //handle only for org's referent
-                      if($org->getReferent() === $user){
-                          //handle memberShip
-                          if($field === "member"){
-                              $member = $attributes[$field];
-                              if($member !== $org->getReferent()){
-                                  $this->putMember($org, $member);
-                              }
-                          }
+                        //handle only for org's referent //exclude admin
+                        if($org->getReferent() === $user || isset($attributes["admin"])){
+                            //handle memberShip
+                            if($field === "member"){
+                                $member = $attributes[$field];
+                                $className = $this->entityManager->getMetadataFactory()->getMetadataFor(get_class($member))->getName();
+                                if($className === User::class && $member !== $org->getReferent()){
+                                    $this->putMember($org, $member);
+                                }
+                            }
 
-                          //handle optional picture
-                          if($field === "pictureFile"){
+                            //handle optional picture
+                            if($field === "pictureFile"){
                               $pictureFile = $attributes[$field];
                               $this->putPicture($org, $pictureFile);
-                          }
-                      }
+                            }
+                        }
+
+                        //only for admin
+                        if($field === "partner" && isset($attributes["admin"])){
+                            $org->setIsPartner(!$org->getIsPartner());
+                        }
 
                     }
-                    /*else {
-                        //todo else it's newOrg
-                    }*/
-                }else if($org->getReferent()->getId() === $user->getId() ) { // only referent can update other org attributes
+                }else if($org->getReferent()->getId() === $user->getId() || isset($attributes["admin"])) {
+                    // only referent can update other org attributes //include admin
                     $canSet = true;
                 }
 
@@ -305,7 +316,6 @@ class OrgHandler {
                 }
             }
         }
-
         return $org;
     }
 
@@ -360,12 +370,12 @@ class OrgHandler {
     {
         if($activity->getOrganization() === $org){
             //remove only for activity's creator or org's referent
-            if ($activity->getCreator() === $user || $org->getReferent() === $user ){
+            if ($activity->getCreator() === $user || $org->getReferent() === $user || $user->getRoles()[0] === "ROLE_ADMIN"){
                 $org->removeActivity($activity);
             }
         }
         else { //add only for activity's creator
-            if($activity->getCreator() === $user){
+            if($activity->getCreator() === $user || $user->getRoles()[0] === "ROLE_ADMIN"){
                 $org->addActivity($activity);
             }
         }
@@ -382,16 +392,27 @@ class OrgHandler {
     public function putProject(UserInterface $user, Organization $org, Project $project): Organization
     {
         if ($project->getOrganization() === $org ) {
-            //remove only for project's creator or org's referent
-            if($project->getCreator() === $user || $org->getReferent() === $user){
+            //remove only for project's creator or org's referent and admin
+            if($project->getCreator() === $user || $org->getReferent() === $user || $user->getRoles()[0] === "ROLE_ADMIN"){
                 $org->removeProject($project);
             }
 
-        } else { //add only for project's creator
-            if($project->getCreator() === $user)
+        } else { //add only for project's creator and admin
+            if($project->getCreator() === $user || $user->getRoles()[0] === "ROLE_ADMIN")
             $org->addProject($project);
         }
 
         return $org;
+    }
+
+    private function getSearchCriterias(Array $params): array
+    {
+        $criterias = [];
+        foreach( ["id", "name", "type", "email", "phone", "referent_id", "referent_firstname", "referent_lastname", "referent_email"] as $field ) {
+            if(isset($params[$field])){
+                $criterias[$field] = $params[$field];
+            }
+        }
+        return $criterias;
     }
 }

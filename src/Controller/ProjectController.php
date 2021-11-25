@@ -92,11 +92,13 @@ class ProjectController extends AbstractController
             $this->parameters->addParam("creator", $this->getUser());
 
             //convert Date
-            if($this->parameters->getData('startDate') !== false){
-                $this->parameters->putData("startDate", new DateTime ($this->parameters->getData('startDate')));
+            $startDate = $this->parameters->getData('startDate');
+            if($startDate !== false && $startDate !== "null"){
+                $this->parameters->putData("startDate", new DateTime ($startDate));
             }
-            if($this->parameters->getData('endDate') !== false){
-                $this->parameters->putData("endDate", new DateTime ($this->parameters->getData('endDate')));
+            $endDate = $this->parameters->getData('endDate');
+            if($endDate !== false && $endDate !== "null"){
+                $this->parameters->putData("endDate", new DateTime ($endDate));
             }
 
             //create
@@ -183,18 +185,29 @@ class ProjectController extends AbstractController
             $this->parameters->setData($request);
             $this->parameters->hasData(["id"]);
 
-        //convert date
-            if($this->parameters->getData('startDate') !== false){
-                $this->parameters->putData("startDate", new DateTime ($this->parameters->getData('startDate')));
+            //check if admin access required
+            if($this->parameters->getData("admin")!== false){
+                $this->denyAccessUnlessGranted('ROLE_ADMIN');
+                //change accessTable for access by id
+                $accessTable["access"] = "search";
             }
-            if($this->parameters->getData('endDate') !== false){
-                $this->parameters->putData("endDate", new DateTime ($this->parameters->getData('endDate')));
+
+        //convert date
+            $startDate = $this->parameters->getData('startDate');
+            if($startDate !== false && $startDate !== "null" ){
+                $this->parameters->putData("startDate", new DateTime ($startDate));
+            }
+
+            $endDate = $this->parameters->getData('endDate');
+            if($endDate !== false && $endDate !== "null"){
+                $this->parameters->putData("endDate", new DateTime ($endDate));
             }
 
         //retrieve project targeted
             $projectRepo = $this->entityManager->getRepository(Project::class);
             $project = $projectRepo->findOneBy(["id" => $this->parameters->getData("id")]);
             if(is_null($project))throw new NoFoundException("project id : ".$this->parameters->getData("id"));
+
             /*$project = $this->projectHandler->getProjects(
                 $this->getUser(), [
                     "id" => $this->parameters->getData("id")
@@ -205,9 +218,12 @@ class ProjectController extends AbstractController
         //handle potential link with an org
             $orgId = $this->parameters->getData("organization");
             if($orgId !== false){
-                $org = "null"; //by default for delete linking
-                if( $orgId !== "null"){
-                    $org = $this->orgHandler->getOrgs($this->getUser(), ["id" => $orgId], true)[0];
+                $org = null; //by default for delete linking
+                if( is_numeric( $orgId ) ){
+                    $orgRepo = $this->entityManager->getRepository(Organization::class);
+                    $org = $orgRepo->findOneBy(["id" => $orgId]);
+                 //   dd($this->entityManager->getMetadataFactory()->getMetadataFor(get_class($org))->getName());
+                  //  $org = $this->orgHandler->getOrgs($this->getUser(), ["id" => $orgId], true)[0];
                 }
                 $this->parameters->putData("organization", $org);
             }
@@ -216,10 +232,9 @@ class ProjectController extends AbstractController
             $actId = $this->parameters->getData("activity");
             if($actId !== false){
                 $activity = null;
-                if( is_numeric($actId) ) {
+                if( is_numeric( $actId ) ) {
                     $activityRepo = $this->entityManager->getRepository(Activity::class);
                     $activity = $activityRepo->findOneBy(["id" => $actId]);
-
                 }
                 $this->parameters->putData("activity", $activity);
             }

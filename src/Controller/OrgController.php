@@ -143,6 +143,12 @@ class OrgController extends AbstractController
         try {
             // recover all data's request
             $this->parameters->setData($request);
+
+            //check if admin access required
+            if($this->parameters->getData("admin")!== false){
+                $this->denyAccessUnlessGranted('ROLE_ADMIN');
+            }
+
             $orgs = $this->orgHandler->getOrgs($this->getUser(), $this->parameters->getAllData());
 
             $orgs = $this->orgHandler->withPictures($orgs);
@@ -164,6 +170,13 @@ class OrgController extends AbstractController
         try {
             $this->parameters->setData($request);
             $this->parameters->hasData(["id"]);
+
+            //check if admin access required
+            if($this->parameters->getData("admin")!== false){
+                $this->denyAccessUnlessGranted('ROLE_ADMIN');
+                //change accessTable for access by id
+                $accessTable["access"] = "search";
+            }
 
             //retrieve org object
             $orgRepo = $this->entityManager->getRepository(Organization::class);

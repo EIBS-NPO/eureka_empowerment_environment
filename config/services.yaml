@@ -41,7 +41,7 @@ services:
 #                  method: sendConfirmEmail
 #            }
             
-    App\Services\Secuity\RequestSecurity:
+    App\Services\Security\RequestSecurity:
         tags:
             - {
                   name: kernel.event_listener,

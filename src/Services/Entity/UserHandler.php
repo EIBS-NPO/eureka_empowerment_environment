@@ -2,8 +2,10 @@
 
 namespace App\Services\Entity;
 
+use App\Entity\Activity;
 use App\Entity\GlobalPropertyAttribute;
 use App\Entity\Interfaces\PictorialObject;
+use App\Entity\Project;
 use App\Entity\User;
 use App\Exceptions\BadMediaFileException;
 use App\Exceptions\NoFoundException;
@@ -37,30 +39,30 @@ class UserHandler {
     private FollowingHandler $followingHandler;
     private ParametersValidator $validator;
     private SecurityHandler $securityHandler;
-    private MailHandler $mailer;
     private UserRepository $userRepo;
     private AddressHandler $addressHandler;
+    private OrgHandler $orgHandler;
 
     /**
      * @param EntityManagerInterface $entityManager
      * @param FileHandler $fileHandler
      * @param FollowingHandler $followingHandler
+     * @param OrgHandler $orgHandler
      * @param ParametersValidator $validator
      * @param UserRepository $userRepo
      * @param AddressHandler $addressHandler
      * @param SecurityHandler $securityHandler
-     * @param MailHandler $mailer
      */
-    public function __construct(EntityManagerInterface $entityManager, FileHandler $fileHandler, FollowingHandler $followingHandler, ParametersValidator $validator, UserRepository $userRepo, AddressHandler $addressHandler, SecurityHandler $securityHandler, MailHandler $mailer)
+    public function __construct(EntityManagerInterface $entityManager, FileHandler $fileHandler, FollowingHandler $followingHandler, OrgHandler $orgHandler, ParametersValidator $validator, UserRepository $userRepo, AddressHandler $addressHandler, SecurityHandler $securityHandler)
     {
         $this->entityManager = $entityManager;
         $this->userRepo = $userRepo;
         $this->fileHandler = $fileHandler;
         $this->followingHandler = $followingHandler;
+        $this->orgHandler = $orgHandler;
         $this->validator = $validator;
         $this->addressHandler = $addressHandler;
         $this->securityHandler = $securityHandler;
-        $this->mailer = $mailer;
     }
 
     /**
@@ -68,18 +70,6 @@ class UserHandler {
      */
     public function getUsers(?UserInterface $user, $params, bool $withNotFound=false): array
     {
-        /*if(isset($params["admin"])){
-            $this->denyAccessUnlessGranted('ROLE_ADMIN');
-        })*/
-        //check access
-    /*    if (!isset($params["access"]) ||
-            ($user === null
-                && !preg_match('(^self$|^admin$)', $params["access"])
-            )// or if bad access param
-            || ($params["access"] === "admin" && $user->getRoles()[0] !== "ROLE_ADMIN") // or it's an access param admin with a no admin user
-        ) {
-            $params["access"] = 'self';
-        }*/
         $dataResponse =[];
         if(isset($params["access"])){
             switch($params["access"]){
@@ -96,6 +86,9 @@ class UserHandler {
                     $criterias = $this->getSearchCriterias($params);
                     $dataResponse = $this->userRepo->search($criterias);
                     break;
+                /*case "byFollowinProject":
+                    $dataResponse = $this->userRepo->findFollowersByProject($params["followProject"]);
+                    break;*/
                /* case "byProject":
                     break;
                 case "byOrg":
@@ -114,7 +107,7 @@ class UserHandler {
         foreach($dataResponse as $userData){
             $userData->setIsConfirmed($this->isConfirmed($userData));
 
-            if(is_null($user) || ($params["access"] !== "owned")){
+            if(is_null($user) || ($params["access"] !== "owned" && !isset($params["admin"]))){
                 $userData->setGlobalPropertyAttributes(new ArrayCollection());
             }
         }
@@ -153,11 +146,12 @@ class UserHandler {
 
 
     /**
+     * @param UserInterface|null $currentUer
      * @param User $user
      * @param $params
      * @return User
-     * @throws ViolationException
      * @throws PartialContentException
+     * @throws ViolationException
      */
     public function updateUser(?UserInterface $currentUer, User $user, $params): User
     {
@@ -165,13 +159,26 @@ class UserHandler {
             //check params Validations
             $this->validator->isInvalid(
                 [],
-                ["firstname", "lastname", "phone", "mobile"],
+                ["email", "firstname", "lastname", "phone", "mobile"],
                 User::class);
 
             $user = $this->setUser($currentUer, $user, $params);
 
+            //todo controle owner or admin
             //handle optional address
             if(isset($params["address"]) ) $user = $this->addressHandler->putAddress($user, $params);
+
+            //handle followingActivity
+            if(isset($params["followActivity"])) $user = $this->putFollowingActivity($user, $params["followActivity"]);
+
+            //handle followingProject
+            if(isset($params["followProject"])) $this->followingHandler->putFollower($params["followProject"], $user);
+
+            //handle assigningProject
+            if(isset($params['assigningProject'])) $this->followingHandler->putAssigned($params["assigningProject"], $user);
+
+            //handle assigning in org membership
+            if(isset($params["memberOf"])) $this->orgHandler->putMember($params["memberOf"], $user);
 
         }catch(FileException | BadMediaFileException $e){
             throw new PartialContentException([$user], $e->getMessage());
@@ -205,11 +212,18 @@ class UserHandler {
     public function activation($activationToken):void {
 
         $user = $this->userRepo->findByActivationToken($activationToken);
-
         if(!isset($user[0])){
             throw new NoFoundException("User not found");
         }
         $user = $user[0];
+
+       /* //check if it's an activation after changeEmail
+        $changeEmailGPA = $user->getGPA("user.email.change");
+        if(!$changeEmailGPA->isEmpty()){
+            $user->setEmail($changeEmailGPA[0]->getValue());
+            $this->entityManager->persist($user);
+            $this->entityManager->remove($changeEmailGPA[0]);
+        }*/
 
         //delete activation_token
         $gpa = $user->getGpa("user.token.activation")[0];
@@ -222,23 +236,27 @@ class UserHandler {
      * @param array $params
      * @throws NoFoundException | UnauthorizedHttpException
      */
-    public function resetPassword(array $params){
+    public function resetPassword(array $params) :void {
 
         //check match newPassword and confirmPassword
         if($params['newPassword'] !== $params['confirmPassword']) {
             throw new BadRequestException("new password not confirmed");
         }
-        $userId = explode("U", $params["resetCode"]);
+        $userId = explode("U", $params["resetCode"])[0];
 
-        $user = $this->getUsers(null, ["access"=>"id", "id"=>$userId], true)[0];
+      //  $user = $this->getUsers(null, ["access"=>"search", "id"=>$userId], true)[0];
+        $user = $this->entityManager->getRepository(User::class)->find($userId);
+        if(is_null($user)) throw new NoFoundException("User not found");;
 
         $gpa = $user->getGPA("user.token.resetPassword")[0];
+
         if($gpa->getPropertyValue()[0] !== $params["resetPasswordToken"] || $gpa->getPropertyValue()[1] !== $params["resetCode"]){
             throw new UnauthorizedHttpException("bad credentials");
         }
 
         $user->setPassword($params["newPassword"]);
         $user->setPassword($this->securityHandler->hashPassword($user));
+
         $this->entityManager->flush();
 
         $this->entityManager->remove($gpa);
@@ -247,19 +265,20 @@ class UserHandler {
 
     /**
      * set for an Organisation object the attributes passed in $attributes array
-     * @param UserInterface $currentUser
+     * @param UserInterface|null $currentUser
      * @param User $user
      * @param array $attributes
      * @return User with attributes passed
      * @throws BadMediaFileException
      */
-    private function setUser(UserInterface $currentUser, User $user, array $attributes): User {
-        foreach( ["email", "firstname", "lastname", "password", "phone", "mobile", "pictureFile", "roles"] as $field ) {
+    private function setUser(?UserInterface $currentUser, User $user, array $attributes): User {
+        foreach( ["email", "firstname", "lastname", "password", "phone", "mobile", "pictureFile", "roles"
+                 ] as $field ) {
 
             if (isset($attributes[$field])) {
-                if(preg_match('(^pictureFile$|^roles$)', $field))
+                if(preg_match('(^email|^pictureFile$|^roles$)', $field))
                 {
-                    if($field === "roles"){
+                    if($field === "roles") {
                         if($currentUser->getRoles()[0] === "ROLE_ADMIN"){
                             if($attributes[$field] === "null")$attributes[$field] = "";
                             $user->setRoles([$attributes[$field]]);
@@ -267,10 +286,19 @@ class UserHandler {
                     }
 
                     //handle optional picture
-                    if($field === "pictureFile"){
+                    if($field === "pictureFile") {
                         $pictureFile = $attributes[$field];
                         $this->putPicture($user, $pictureFile);
                     }
+
+                    //handle change Email
+                    if($field === "email") {
+                        $user->setEmail($attributes[$field]);
+                        $this->add_GPA_activationToken($user);
+                        $this->entityManager->persist($user);
+
+                    }
+
                 }else{
                     if($attributes[$field] === "null")$attributes[$field] = null;
                     $setter = 'set' . ucfirst($field);
@@ -291,15 +319,18 @@ class UserHandler {
 
     private function add_GPA_activationToken(User $user): User
     {
-        $gpa = new GlobalPropertyAttribute();
-        $gpa->setPropertyKey("user.token.activation")
-            ->setDescription("a unique token to send by email to confirm the registration")
-            ->setScope("GLOBAL")
-            ->setPropertyValue([md5(uniqid())]);
-        $gpa->setUser($user);
-        $user->addGlobalPropertyAttribute($gpa);
+        //make a new gpa only if user does not have one yet
+        if($user->getGPA("user.token.activation")->isEmpty()){
+            $gpa = new GlobalPropertyAttribute();
+            $gpa->setPropertyKey("user.token.activation")
+                ->setDescription("a unique token to send by email to confirm the email account")
+                ->setScope("USER")
+                ->setPropertyValue([md5(uniqid())]);
+            $gpa->setUser($user);
+            $user->addGlobalPropertyAttribute($gpa);
 
-        $this->entityManager->persist($gpa);
+            $this->entityManager->persist($gpa);
+        }
         return $user;
     }
 
@@ -311,7 +342,7 @@ class UserHandler {
             $gpa = new GlobalPropertyAttribute();
             $gpa->setPropertyKey("user.token.resetPassword")
                 ->setDescription("to renew the password: the first value is a unique token to secure the link send by email, the second value is a secure password. it must be send in the body of the email for secure the transaction with the mail receiver structure is userId+U+password")
-                ->setScope("GLOBAL")
+                ->setScope("USER")
                 ->setPropertyValue([$this->generateUniquePassword(32),$user->getId()."U".$this->generateUniquePassword(8)]);
             $gpa->setUser($user);
             $user->addGlobalPropertyAttribute($gpa);
@@ -347,13 +378,33 @@ class UserHandler {
         return $res;
     }
 
-    private function getSearchCriterias(Array $params){
+    private function putFollowingActivity(User $user, Activity $activity): User
+    {
+        if($user->getFollowingActivities()->contains($activity)){
+            $user->removeFollowingActivity($activity);
+        }else{
+            $user->addFollowingActivity($activity);
+        }
+   //     $this->entityManager->persist($activity);
+        return $user;
+    }
+
+    private function getSearchCriterias(Array $params): array
+    {
         $criterias = [];
-        foreach( ["id", "email", "firstname", "lastname", "phone", "mobile"] as $field ) {
+        foreach( ["id", "email", "firstname", "lastname", "phone", "mobile",
+            "followingActivity_id", "followingProject_object", "followingProject_isFollowing", "followingProject_isAssigning", "memberOf_id"
+                     ] as $field )
+        {
             if(isset($params[$field])){
+                //force boolean type
+                if($params[$field] === "true") $params[$field] = true;
+                if($params[$field] === "false") $params[$field] = false;
+
                 $criterias[$field] = $params[$field];
             }
         }
+
         return $criterias;
     }
 }
