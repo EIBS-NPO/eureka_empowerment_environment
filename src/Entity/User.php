@@ -2,6 +2,8 @@
 
 namespace App\Entity;
 
+use App\Entity\Interfaces\AddressableObject;
+use App\Entity\Interfaces\PictorialObject;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -15,7 +17,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * @UniqueEntity("email", message="this email already exist for user account")
  *
  */
-class User implements UserInterface
+class User implements UserInterface, PictorialObject, AddressableObject
 {
     /**
      * @ORM\Id
@@ -23,9 +25,8 @@ class User implements UserInterface
      * @ORM\Column(type="integer")
      * @Assert\Type(type="numeric", message=" id is not valid")
      */
-    private ?int $id;
+    private ?int $id = null;
 
-    //todo assert?
     /**
      * @ORM\Column(type="json")
      */
@@ -55,7 +56,7 @@ class User implements UserInterface
      * @ORM\Column(type="string", length=50, unique=true)
      * @Assert\NotBlank(message="the email is required")
      * @Assert\Type(type="string", message=" email is not valid string")
-     * @Assert\Email(message="invalid email")
+     * @Assert\Email(message = "The email '{{ value }}' is not a valid email.")
      */
     private ?string $email;
 
@@ -73,7 +74,6 @@ class User implements UserInterface
      */
     private ?string $mobile = null;
 
-    //todo regex check password safety
     /**
      * @ORM\Column(type="string", length=255)
      * @Assert\Type(type="string", message=" password is not valid string")
@@ -81,8 +81,8 @@ class User implements UserInterface
      *     minMessage="the password must be between 6 and 20 characters",
      *     maxMessage="the password must be between 6 and 20 characters"
      * )
-     * @Assert\Regex(pattern="/^(?=.*[a-z])(?=.*\d).{6,}$/i",
-     *     message="the password must be at least 6 characters long and include at least one letter and one number"
+     * @Assert\Regex(pattern="/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,20}$/",
+     *     message="Length between 6 and 20 with 1 upper case, 1 lower case and 1 digit."
      * )
      */
     private ?string $password;
@@ -140,15 +140,15 @@ class User implements UserInterface
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
      */
-    private $picturePath;
+    private $picturePath = null;
 
     /**
      * base64_encode(picture)
      */
-    private $pictureFile;
+    private $pictureFile = null;
 
     /**
-     * @ORM\OneToOne(targetEntity=Address::class, inversedBy="owner", cascade={"persist", "remove"})
+     * @ORM\OneToOne(targetEntity=Address::class, inversedBy="userOwner", cascade={"persist", "remove"})
      */
     private $address;
 
@@ -171,6 +171,18 @@ class User implements UserInterface
      * )
      */
     private $followingProjects;
+
+
+    private bool $isConfirmed = true;
+    /*
+     * @ORM\Column(type="string", length=255, nullable=true)
+     */
+   // private ?String $activationToken = null;
+
+    /*
+     * @ORM\OneToOne(targetEntity=JwtRefreshToken::class, mappedBy="user")
+     */
+ //   private ?JwtRefreshToken $refreshToken = null;
 
     public function __construct()
     {
@@ -196,7 +208,8 @@ class User implements UserInterface
             "firstname" => $this->firstname,
             "lastname" => $this->lastname,
             "email" => $this->email,
-            "roles" => $this->roles[0]
+            "roles" => $this->roles[0],
+            "isConfirmed" => $this->isConfirmed()
         ];
 
         //Check some attributes to see if they are sets
@@ -216,7 +229,15 @@ class User implements UserInterface
             $data["address"] = $this->address->serialize();
         }
 
-        //todo maybe add context read_activity
+        if(!$this->getGPA()->isEmpty()){
+            $data["gpAttributes"] = [];
+            foreach($this->getGpa() as $gpa){
+                $data["gpAttributes"][$gpa->getPropertyKey()] = $gpa->serialize();
+            }
+        }
+
+        //todo envoyer isConfirmed et isActived a plaer dans les attributs by getters
+
        /* if(!$this->followingActivities->isEmpty() && $context !== "read_activity"){
             //$data["followingActivities"] = $this->followingActivities->toArray();
             $data["followingActivities"] = [];
@@ -225,14 +246,6 @@ class User implements UserInterface
             }
         }*/
 
-        //todo deprecated
-        //Check some attributes with contexts to see if they are sets
-        /*if($this->projects && $context != "read_project" && $context != "read_organization"){
-            $data["projects"] = [];
-            foreach($this->projects as $project){
-                array_push($data["projects"], $project->serialize("read_creator"));
-            }
-        }*/
 
         /*if($this->organizations && $context != "read_organization" && $context != "read_project"){
             $data["organization"] = [];
@@ -352,10 +365,28 @@ class User implements UserInterface
     /**
      * @return Collection|GlobalPropertyAttribute[]
      */
-    public function getGPA(): Collection
+    public function getGPA(string $key = null): Collection
     {
-        return $this->globalPropertyAttributes;
+       if(is_null($key)) {
+           return $this->globalPropertyAttributes;
+       }else{
+           $rsl = new ArrayCollection();
+           foreach($this->globalPropertyAttributes as $gpa){
+               if($gpa->getPropertyKey() === $key) $rsl->add($gpa);
+           }
+           return $rsl;
+       }
     }
+
+    /**
+     * @param ArrayCollection $globalPropertyAttributes
+     */
+    public function setGlobalPropertyAttributes(ArrayCollection $globalPropertyAttributes): void
+    {
+        $this->globalPropertyAttributes = $globalPropertyAttributes;
+    }
+
+
 
     public function addGlobalPropertyAttribute(GlobalPropertyAttribute $globalPropertyAttribute): self
     {
@@ -552,7 +583,7 @@ class User implements UserInterface
     /**
      * @return mixed
      */
-    public function getPictureFile()
+    public function getPictureFile() :String
     {
         return $this->pictureFile;
     }
@@ -560,9 +591,10 @@ class User implements UserInterface
     /**
      * @param mixed $pictureFile
      */
-    public function setPictureFile($pictureFile): void
+    public function setPictureFile($pictureFile): self
     {
         $this->pictureFile = $pictureFile;
+        return $this;
     }
 
     public function getAddress(): ?Address
@@ -638,17 +670,18 @@ class User implements UserInterface
         $res = [];
         foreach($this->followingProjects as $following){
             if($following->getIsAssigning() === true ){
-                $res[] = $following->getProject();
+                $res[] = $following->getObject();
             }
         }
         return $res;
     }
 
-    public function getFollowedProjects(){
-        $res = [];
+    public function getFollowedProjects(): ArrayCollection
+    {
+        $res = new ArrayCollection();
         foreach($this->followingProjects as $following){
             if($following->getIsFollowing() === true ){
-                $res[] = $following->getProject();
+                $res[] = $following->getObject();
             }
         }
         return $res;
@@ -670,5 +703,21 @@ class User implements UserInterface
             }
         }
         return $res;
+    }
+
+    /**
+     * @return bool
+     */
+    public function isConfirmed(): bool
+    {
+        return $this->isConfirmed;
+    }
+
+    /**
+     * @param bool $isConfirmed
+     */
+    public function setIsConfirmed(bool $isConfirmed): void
+    {
+        $this->isConfirmed = $isConfirmed;
     }
 }

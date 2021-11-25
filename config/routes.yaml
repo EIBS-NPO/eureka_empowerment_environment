@@ -1,3 +1,10 @@
 #index:
 #    path: /
 #    controller: App\Controller\DefaultController::index
+lexik_jwt_authentication:
+  path:       /login
+  controller: lexik_jwt_authentication::login #controller: App\Controller\SecurityController::login
+
+gesdinet_jwt_refresh_token:
+  path:       /token/refresh
+  controller: gesdinet.jwtrefreshtoken::refresh

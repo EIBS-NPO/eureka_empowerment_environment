@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Interfaces\TrackableObject;
 use App\Repository\FollowingProjectRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -19,35 +20,38 @@ class FollowingProject
      */
     private $id;
 
+
     /**
      * @ORM\ManyToOne(targetEntity=project::class, inversedBy="followers")
      * @ORM\JoinColumn(nullable=false)
      * @Assert\Type(type={"App\Entity\Project", "integer"})
      */
-    private $project;
+    private TrackableObject $object;
 
     /**
      * @ORM\ManyToOne(targetEntity=User::class, inversedBy="followingProjects")
      * @ORM\JoinColumn(nullable=false)
      * @Assert\Type(type={"App\Entity\User", "integer"})
      */
-    private $follower;
+    private UserInterface $follower;
 
     /**
      * @ORM\Column(type="boolean")
      */
-    private $isFollowing;
+    private bool $isFollowing;
 
     /**
      * @ORM\Column(type="boolean")
      */
-    private $isAssigning;
+    private bool $isAssigning;
 
     public function serialize(){
-        $data["projectId"] = $this->project->getId();
+        $data["projectId"] = $this->object->getId();
         $data["followerId"] = $this->follower->getId();
         $data["isFollowing"] = $this->isFollowing;
         $data["isAssigning"] = $this->isAssigning;
+
+        return $data;
     }
 
     public function getId(): ?int
@@ -55,24 +59,24 @@ class FollowingProject
         return $this->id;
     }
 
-    public function getProject(): ?project
+    public function getObject(): TrackableObject
     {
-        return $this->project;
+        return $this->object;
     }
 
-    public function setProject(?project $project): self
+    public function setObject(TrackableObject $object): self
     {
-        $this->project = $project;
+        $this->object = $object;
 
         return $this;
     }
 
-    public function getFollower(): ?User
+    public function getFollower(): UserInterface
     {
         return $this->follower;
     }
 
-    public function setFollower(UserInterface $follower): self
+    public function setFollower( UserInterface $follower): self
     {
         $this->follower = $follower;
 
@@ -101,9 +105,5 @@ class FollowingProject
         $this->isAssigning = $isAssigning;
 
         return $this;
-    }
-
-    public function isStillValid(){
-        return $this->isAssigning || $this->isFollowing;
     }
 }

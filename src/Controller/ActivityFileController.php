@@ -7,12 +7,13 @@ use App\Entity\ActivityFile;
 use App\Entity\User;
 use App\Exceptions\SecurityException;
 use App\Exceptions\ViolationException;
-use App\Service\FileHandler;
-use App\Service\LogService;
-use App\Service\Request\ParametersValidator;
-use App\Service\Request\RequestParameters;
-use App\Service\Request\ResponseHandler;
-use App\Service\Security\RequestSecurity;
+use App\Services\Configuration\ConfigurationHandler;
+use App\Services\FileHandler;
+use App\Services\LogService;
+use App\Services\Request\ParametersValidator;
+use App\Services\Request\RequestParameters;
+use App\Services\Request\ResponseHandler;
+use App\Services\Security\RequestSecurity;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -29,7 +30,6 @@ use Symfony\Component\Routing\Annotation\Route;
  */
 class ActivityFileController extends AbstractController
 {
-    private RequestSecurity $security;
     private RequestParameters $parameters;
     private ResponseHandler $responseHandler;
     private ParametersValidator $validator;
@@ -39,7 +39,6 @@ class ActivityFileController extends AbstractController
 
     /**
      * UserController constructor.
-     * @param RequestSecurity $requestSecurity
      * @param RequestParameters $requestParameters
      * @param ResponseHandler $responseHandler
      * @param ParametersValidator $validator
@@ -47,9 +46,8 @@ class ActivityFileController extends AbstractController
      * @param FileHandler $fileHandler
      * @param LogService $logger
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
+    public function __construct(RequestParameters $requestParameters, ResponseHandler $responseHandler, ParametersValidator $validator, EntityManagerInterface $entityManager, FileHandler $fileHandler, LogService $logger)
     {
-        $this->security = $requestSecurity;
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
         $this->validator = $validator;
@@ -66,12 +64,6 @@ class ActivityFileController extends AbstractController
      */
     public function postFile(Request $request): Response
     {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
         $this->parameters->addParam("creator", $this->getUser());
@@ -150,7 +142,7 @@ class ActivityFileController extends AbstractController
         $this->logger->logEvent($this->getUser(),$activityData->getId(), ActivityFile::class, "uploaded file");
 
         if($activityData->getPicturePath()){
-            $activityData = [$this->fileHandler->loadPicture($activityData)];
+            $activityData = $this->fileHandler->loadPicture($activityData);
         }
 
         //success response
@@ -163,13 +155,8 @@ class ActivityFileController extends AbstractController
      * @return Response|null
      * @Route("/update", name="_put", methods="post")
      */
-    public function updateActivityFile (Request $request) {
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
+    public function updateActivityFile (Request $request): ?Response
+    {
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -214,17 +201,13 @@ class ActivityFileController extends AbstractController
         $this->entityManager->flush();
 
         if($activityData->getPicturePath()){
-            $activityData = [$this->fileHandler->loadPicture($activityData)];
+            $activityData = $this->fileHandler->loadPicture($activityData);
         }
 
         //success response
         return $this->responseHandler->successResponse([$activityData], "read_activity");
     }
 
-
-
-
-    //todo vraiment utilisé?
 
     /**
      * @param Request $request
@@ -233,13 +216,6 @@ class ActivityFileController extends AbstractController
      */
     public function getActivityFile (Request $request)
     {
-        try {
-            $this->security->cleanXSS($request);
-        } catch (SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -264,7 +240,6 @@ class ActivityFileController extends AbstractController
             $activityData = $activityData[0];
             $completName = $activityData->getUniqId() . '_' . $activityData->getFilename();
 
-            //todo a finir!
             if (get_class($activityData) === ActivityFile::class) {
                 try {
                     $this->fileHandler->controlChecksum('/files/Activity/' . $completName, $activityData->getChecksum());
@@ -281,7 +256,7 @@ class ActivityFileController extends AbstractController
             }
 
             if ($activityData->getPicturePath()) {
-                $activityData = [$this->fileHandler->loadPicture($activityData)];
+                $activityData = $this->fileHandler->loadPicture($activityData);
             }
 
             //success response
@@ -297,12 +272,6 @@ class ActivityFileController extends AbstractController
      * @Route("", name="_delete", methods="delete")
      */
     public function removeActivityFile (Request $request){
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -320,7 +289,7 @@ class ActivityFileController extends AbstractController
                 $userData = $repository->findBy(["id" => $this->getUser()->getId()]);
                 $user = $userData[0];
 
-                $activityData = $user->getActivity($this->parameters->getData("id"))[0];
+                $activityData = $user->getActivity($this->parameters->getData("id"));
             } else {//for admin
                 $repository = $this->entityManager->getRepository(Activity::class);
                 $activityData = $repository->findBy(["id" => $this->parameters->getData("id")]);
@@ -341,7 +310,7 @@ class ActivityFileController extends AbstractController
             $this->entityManager->flush();
 
             if($simpleActivity->getPicturePath()){
-                $simpleActivity = [$this->fileHandler->loadPicture($simpleActivity)];
+                $simpleActivity = $this->fileHandler->loadPicture($simpleActivity);
             }
 
             return $this->responseHandler->successResponse([$simpleActivity], "read_activity");
@@ -360,12 +329,6 @@ class ActivityFileController extends AbstractController
      */
     public function downloadPublicFile(Request $request)
     {
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -421,12 +384,6 @@ class ActivityFileController extends AbstractController
      */
     public function downloadFile(Request $request)
     {
-        try{$request = $this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -467,5 +424,17 @@ class ActivityFileController extends AbstractController
         else { return $this->responseHandler->notFoundResponse();}
 
         return $response;
+    }
+
+    /**
+     * @param Request $request
+     * @param ConfigurationHandler $configHandler
+     * @return Response
+     * @Route("/allowed", name="_allowed", methods="get")
+     */
+    public function getAllowedFileFormat(Request $request, ConfigurationHandler $configHandler) :Response{
+
+        $allowedMime = $configHandler->getValue("mime.type.allowed");
+        return $this->responseHandler->successResponse($allowedMime );
     }
 }

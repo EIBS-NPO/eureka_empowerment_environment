@@ -6,11 +6,11 @@ use App\Entity\Organization;
 use App\Entity\User;
 use App\Exceptions\SecurityException;
 use App\Exceptions\ViolationException;
-use App\Service\LogService;
-use App\Service\Request\ParametersValidator;
-use App\Service\Request\RequestParameters;
-use App\Service\Request\ResponseHandler;
-use App\Service\Security\RequestSecurity;
+use App\Services\LogService;
+use App\Services\Request\ParametersValidator;
+use App\Services\Request\RequestParameters;
+use App\Services\Request\ResponseHandler;
+use App\Services\Security\RequestSecurity;
 use Doctrine\ORM\EntityManagerInterface;
 use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -25,7 +25,6 @@ use Symfony\Component\Routing\Annotation\Route;
  */
 class MembershipController extends AbstractController
 {
-    private RequestSecurity $security;
     private RequestParameters $parameters;
     private ResponseHandler $responseHandler;
     protected EntityManagerInterface $entityManager;
@@ -34,15 +33,14 @@ class MembershipController extends AbstractController
 
     /**
      * OrgController constructor.
-     * @param RequestSecurity $requestSecurity
      * @param RequestParameters $requestParameters
      * @param ResponseHandler $responseHandler
      * @param EntityManagerInterface $entityManager
+     * @param ParametersValidator $validator
      * @param LogService $logger
      */
-    public function __construct(RequestSecurity $requestSecurity, RequestParameters $requestParameters, ResponseHandler $responseHandler, EntityManagerInterface $entityManager, ParametersValidator $validator, LogService $logger)
+    public function __construct( RequestParameters $requestParameters, ResponseHandler $responseHandler, EntityManagerInterface $entityManager, ParametersValidator $validator, LogService $logger)
     {
-        $this->security = $requestSecurity;
         $this->parameters = $requestParameters;
         $this->responseHandler = $responseHandler;
         $this->entityManager = $entityManager;
@@ -56,12 +54,6 @@ class MembershipController extends AbstractController
      * @Route("/add", name="_add", methods="put")
      */
     public function addMember(Request $request) :Response {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 
@@ -130,16 +122,11 @@ class MembershipController extends AbstractController
     }
 
     /**
-     * @param Request $insecureRequest
+     * @param Request $request
      * @return Response|null
      * @Route("/remove", name="_remove", methods="put")
      */
     public function removeMember(Request $request){
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
 
         // recover all data's request
         $this->parameters->setData($request);
@@ -196,12 +183,6 @@ class MembershipController extends AbstractController
      * @Route("/public", name="_get", methods="get")
      */
     public function getMembers(Request $request) : Response {
-        try{$this->security->cleanXSS($request);}
-        catch(SecurityException $e) {
-            $this->logger->logError($e, $this->getUser(), "warning");
-            return $this->responseHandler->forbidden();
-        }
-
         // recover all data's request
         $this->parameters->setData($request);
 

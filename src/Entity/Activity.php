@@ -2,18 +2,20 @@
 
 namespace App\Entity;
 
+use App\Entity\Interfaces\PictorialObject;
 use App\Repository\ActivityRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Doctrine\ORM\Mapping\InheritanceType;
+use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * @ORM\Entity(repositoryClass=ActivityRepository::class)
  * @InheritanceType("JOINED")
  */
-class Activity
+class Activity implements PictorialObject
 {
     /**
      * @ORM\Id
@@ -63,12 +65,14 @@ class Activity
 
     /**
      * @ORM\ManyToOne(targetEntity=Project::class, inversedBy="activities")
+     * @ORM\JoinColumn(onDelete="SET NULL")
      * @Assert\Type(type={"App\Entity\Project", "integer"})
      */
     protected ?Project $project = null;
 
     /**
      * @ORM\ManyToOne(targetEntity=Organization::class, inversedBy="activities")
+     * @ORM\JoinColumn(onDelete="SET NULL")
      * @Assert\Type(type={"App\Entity\Organization", "integer"})
      */
     protected ?Organization $organization = null;
@@ -93,6 +97,8 @@ class Activity
      */
     private $followers;
 
+    private bool $isFollowed = false;
+
     public function __construct()
     {
         $this->followers = new ArrayCollection();
@@ -106,7 +112,8 @@ class Activity
             "summary" => $this->summary,
             "postDate" => $this->postDate->format('Y-m-d'),
             "isPublic" => $this->isPublic,
-            "creator" => $this->creator->serialize("read_activity")
+            "creator" => $this->creator->serialize("read_activity"),
+            "isFollowed" => $this->isFollowed
         ];
 
         //Check some attributes to see if they are sets
@@ -133,7 +140,7 @@ class Activity
         return $data;
     }
 
-    public function setFromActivityFile(ActivityFile $activityFile){
+    public function setFromActivityFile(Activity $activityFile){
         $this->isPublic = $activityFile->getIsPublic();
         $this->title = $activityFile->getTitle();
         $this->summary = $activityFile->getSummary();
@@ -261,7 +268,7 @@ class Activity
     /**
      * @return mixed
      */
-    public function getPictureFile()
+    public function getPictureFile() : ?String
     {
         return $this->pictureFile;
     }
@@ -269,9 +276,11 @@ class Activity
     /**
      * @param mixed $pictureFile
      */
-    public function setPictureFile($pictureFile): void
+    public function setPictureFile($pictureFile): self
     {
         $this->pictureFile = $pictureFile;
+
+        return $this;
     }
 
     /**
@@ -282,7 +291,7 @@ class Activity
         return $this->followers;
     }
 
-    public function addFollower(User $follower): self
+    public function addFollower(UserInterface $follower): self
     {
         if (!$this->followers->contains($follower)) {
             $this->followers[] = $follower;
@@ -291,14 +300,13 @@ class Activity
         return $this;
     }
 
-    public function removeFollower(User $follower): self
+    public function removeFollower(UserInterface $follower): self
     {
         $this->followers->removeElement($follower);
 
         return $this;
     }
 
-    //todo retourner si l'activité est suivie par l'utilisateur courant
     public function isFollowByUserId(int $userId){
         $res = false;
         foreach($this->followers as $follower){
@@ -310,10 +318,29 @@ class Activity
     }
 
     /**
+     * @return bool
+     */
+    public function isFollowed(): bool
+    {
+        return $this->isFollowed;
+    }
+
+    /**
+     * @param bool $isFollowed
+     */
+    public function setIsFollowed(bool $isFollowed): void
+    {
+        $this->isFollowed = $isFollowed;
+    }
+
+
+    /*
+     * return if User|Project|Organization have a private to this.Activity.
      * @param $user
      * @return bool
      */
-    public function hasAccess($user){
+    /*public function hasAccess($user): bool
+    {
         $res = false;
         if($this->creator->getId() === $user->getId()){
             $res = true;
@@ -326,5 +353,5 @@ class Activity
         }
 
         return $res;
-    }
+    }*/
 }

@@ -2,9 +2,11 @@
 
 namespace App\Entity;
 
+use App\Entity\Interfaces\AddressableObject;
+use App\Entity\Interfaces\PictorialObject;
+use App\Entity\Interfaces\TrackableObject;
 use App\Repository\OrganizationRepository;
 use Doctrine\Common\Collections\ArrayCollection;
-use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -12,9 +14,9 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * @ORM\Entity(repositoryClass=OrganizationRepository::class)
- * @UniqueEntity("name", message="this organization name already exist")
+ * @UniqueEntity(fields={"name"}, message="this organization name already exist")B
  */
-class Organization
+class Organization implements PictorialObject, AddressableObject //TrackableObject
 {
     /**
      * @ORM\Id
@@ -22,7 +24,7 @@ class Organization
      * @ORM\Column(type="integer")
      * @Assert\Type(type="numeric", message="The id is not valid")
      */
-    private ?int $id;
+    private ?int $id = null;
 
     /**
      * @ORM\Column(type="string", length=50)
@@ -46,6 +48,7 @@ class Organization
     /**
      * @ORM\Column(type="string", length=50)
      * @Assert\NotBlank(message="the email is required")
+     * @Assert\Type(type="string", message=" email is not valid string")
      * @Assert\Email(message="invalid email")
      */
     private $email;
@@ -59,32 +62,53 @@ class Organization
      * @ORM\ManyToOne(targetEntity=User::class, inversedBy="organizations")
      * @ORM\JoinColumn(nullable=false)
      */
-    private ?User $referent;
+    private ?User $referent = null;
 
     /**
      * @ORM\OneToMany(targetEntity=Project::class, mappedBy="organization")
+     * @ORM\JoinColumn(nullable=true)
      */
-    private $projects = null;
+    private $projects = [];
 
     /**
      * @ORM\ManyToMany(targetEntity=User::class, mappedBy="memberOf")
      */
-    private $membership = null;
+    private $membership = [];
 
     /**
      * @ORM\OneToMany(targetEntity=Activity::class, mappedBy="organization")
+     * @Assert\Collection(
+     *     fields={
+     *         @Assert\Type(type="App\Entity\Activity")
+     *     }
+     * )
      */
-    private $activities = null;
+    private $activities = [];
 
     /**
      * @ORM\Column(type="string", length=255, nullable=true)
      */
-    private $picturePath;
+    private $picturePath = null;
 
+    /*
+     * /**
+     * @Assert\Image(
+     *     minWidth = 200,
+     *     maxWidth = 400,
+     *     minHeight = 200,
+     *     maxHeight = 400
+     * )
+     *  /**
+     * @Assert\File(
+     *     maxSize = "1024k",
+     *     mimeTypes = {"application/pdf", "application/x-pdf"},
+     *     mimeTypesMessage = "Please upload a valid PDF"
+     * )
+     */
     /**
      * base64_encode(picture)
      */
-    private $pictureFile;
+    private $pictureFile = null;
 
     /**
      * @ORM\Column(type="json")
@@ -94,19 +118,21 @@ class Organization
     /**
      * @ORM\OneToOne(targetEntity=Address::class, inversedBy="orgOwner", cascade={"persist", "remove"})
      */
-    private $address;
+    private ?Address $address = null;
 
     /**
      * @ORM\Column(type="boolean")
      */
     private $isPartner = false;
 
-    public function __construct()
+    private bool $isAssigned = false;
+
+   /* public function __construct()
     {
-        $this->projects = new ArrayCollection();
-        $this->membership = new ArrayCollection();
-        $this->activities = new ArrayCollection();
-    }
+     //   $this->projects = new ArrayCollection();
+  //      $this->membership = new ArrayCollection();
+    //    $this->activities = new ArrayCollection();
+    }*/
 
     /**
      * Return an array containing object attributes
@@ -121,7 +147,8 @@ class Organization
             "type" => $this->type,
             "name" => $this->name,
             "email" => $this->email,
-            "referent" => $this->referent->serialize()
+            "referent" => $this->referent->serialize(),
+            "isAssigned" => $this->isAssigned
         ];
 
         if($this->isPartner){
@@ -140,7 +167,7 @@ class Organization
             $data["description"] = $this->description;
         }
 
-        if($this->address){
+        if($this->address !== null){
             $data["address"] = $this->address->serialize();
         }
 
@@ -168,19 +195,6 @@ class Organization
                 array_push($data["membership"], $member->serialize());
             }
         }
-
-        //todo deprecated
-        //Check some attributes with contexts to see if they are sets
-        /*if($this->referent && $context != "read_referent"){
-            $data["referent"] = $this->referent->serialize("read_organization");
-        }
-
-        if($this->projects && $context != "read_project" && $context != "read_organization"){
-            $data["projects"] = [];
-            foreach($this->projects as $project){
-                array_push($data["projects"], $project->serialize("read_organization"));
-            }
-        }*/
 
         return $data;
     }
@@ -250,10 +264,8 @@ class Organization
         return $this;
     }
 
-    /**
-     * @return Collection|Project[]
-     */
-    public function getProjects(): Collection
+
+    public function getProjects()
     {
         return $this->projects;
     }
@@ -280,10 +292,8 @@ class Organization
         return $this;
     }
 
-    /**
-     * @return Collection|User[]
-     */
-    public function getMembership(): Collection
+
+    public function getMembership()
     {
         return $this->membership;
     }
@@ -313,29 +323,35 @@ class Organization
     }
 
 
+    /**
+     * @param mixed $activities
+     */
     public function setActivities($activities): void
     {
         $this->activities = $activities;
     }
 
-    public function addActivity(Activity $activity): self
-    {
+    public function addActivity($activity){
         if (!$this->activities->contains($activity)) {
-            $this->activities[] = $activity;
+            $this->activities->add($activity);
+         //   $this->activities[] = $activity;
             $activity->setOrganization($this);
         }
 
         return $this;
     }
 
-    public function removeActivity(Activity $activity): self
-    {
-        if ($this->activities->removeElement($activity)) {
+    public function removeActivity($activity){
+        if ($this->activities->contains($activity)) {
+            $this->activities->removeElement($activity);
+             $activity->setOrganization(null);
+        }
+        /*if ($this->activities->removeElement($activity)) {
             // set the owning side to null (unless already changed)
             if ($activity->getOrganization() === $this) {
                 $activity->setOrganization(null);
             }
-        }
+        }*/
 
         return $this;
     }
@@ -355,7 +371,7 @@ class Organization
     /**
      * @return mixed
      */
-    public function getPictureFile()
+    public function getPictureFile(): ?String
     {
         return $this->pictureFile;
     }
@@ -363,9 +379,11 @@ class Organization
     /**
      * @param mixed $pictureFile
      */
-    public function setPictureFile($pictureFile): void
+    public function setPictureFile($pictureFile): self
     {
         $this->pictureFile = $pictureFile;
+
+        return $this;
     }
 
     public function getDescription(): ?array
@@ -373,6 +391,7 @@ class Organization
         return $this->description;
     }
 
+    //todo array non...
     public function setDescription(array $description): self
     {
         $this->description = $description;
@@ -387,6 +406,7 @@ class Organization
 
     public function setAddress(?Address $address): self
     {
+        $address->setOwnerType("Organization");
         $this->address = $address;
 
         return $this;
@@ -404,7 +424,8 @@ class Organization
         return $this;
     }
 
-    public function isMember($user){
+    public function isMember($user): bool
+    {
         $res = false;
         if($this->referent->getId() === $user->getId()){
             $res = true;
@@ -414,7 +435,16 @@ class Organization
         return $res;
     }
 
-    public function getOnlyPublicActivities(){
+    /**
+     * @param bool $isAssigned
+     */
+    public function setIsAssigned(bool $isAssigned): void
+    {
+        $this->isAssigned = $isAssigned;
+    }
+
+    public function getOnlyPublicActivities(): array
+    {
         $res = [];
         foreach($this->activities as $activity ){
             if($activity->getIsPublic()){

@@ -28,13 +28,30 @@ services:
         resource: '../src/Controller/'
         tags: ['controller.service_arguments']
 
-    App\Service\FileHandler:
+    App\Services\FileHandler:
         arguments:
             $targetDirectory: '%upload_directory%'
 
+
+#    App\Services\Mailer\MailHandler:
+#        tags:
+#            - {
+#                  name: kernel.event_listener,
+#                  event: mail_handler.send_confirm_email,
+#                  method: sendConfirmEmail
+#            }
+            
+    App\Services\Security\RequestSecurity:
+        tags:
+            - {
+                  name: kernel.event_listener,
+                  event: request_security.clean_xss,
+                  method: cleanXSS
+            }
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
-    App\Event\Listener\JWTCreatedListener:
+    App\EventListener\JWTCreatedListener:
         tags:
             - {
                 name: kernel.event_listener,

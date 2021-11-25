@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Interfaces\AddressableObject;
 use App\Repository\AddressRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -87,7 +88,7 @@ class Address
      * @ORM\OneToOne(targetEntity=User::class, mappedBy="address", cascade={"persist", "remove"})
      * @Assert\Type(type={"App\Entity\User", "integer"})
      */
-    private ?User $owner = null;
+    private ?User $userOwner = null;
 
     /**
      * @ORM\OneToOne(targetEntity=Organization::class, mappedBy="address", cascade={"persist", "remove"})
@@ -109,18 +110,21 @@ class Address
         $data = [
             "id" => $this->id,
             "address" => $this->address,
-            "complement" => $this->complement,
             "country" => $this->country,
             "city" => $this->city,
             "zipCode" => $this->zipCode,
         ];
 
-        //Check some attributes to see if they are sets
-        if($this->owner && $context === "read_address"){
-            $data["owner"] = $this->owner->serialize();
+        if($this->address !== null){
+            $data["complement"] = $this->complement;
         }
 
-        if($this->orgOwner && $context === "read_address"){
+        //Check some attributes to see if they are sets
+        if($this->userOwner !== null && $context === "read_address"){
+            $data["owner"] = $this->userOwner->serialize();
+        }
+
+        if($this->orgOwner !== null && $context === "read_address"){
             $data["orgOwner"] = $this->orgOwner->serialize();
         }
 
@@ -216,16 +220,33 @@ class Address
         return $this;
     }
 
-    public function getOwner(): ?User
+    /**
+     * @return User|null
+     */
+    public function getUserOwner(): ?User
     {
-        return $this->owner;
+        return $this->userOwner;
     }
 
-    public function setOwner(?User $owner): self
+    /**
+     * @param User|null $userOwner
+     */
+    public function setUserOwner(?User $userOwner): void
+    {
+        $this->userOwner = $userOwner;
+    }
+
+
+   /* public function getUserOwner(): ?User
+    {
+        return $this->userOwner;
+    }*/
+
+   /* public function setUserOwner(?User $owner): self
     {
         // unset the owning side of the relation if necessary
-        if ($owner === null && $this->owner !== null) {
-            $this->owner->setAddress(null);
+        if ($owner === null && $this->userOwner !== null) {
+            $this->userOwner->setAddress(null);
         }
 
         // set the owning side of the relation if necessary
@@ -236,14 +257,27 @@ class Address
         $this->owner = $owner;
 
         return $this;
-    }
+    }*/
 
     public function getOrgOwner(): ?Organization
     {
         return $this->orgOwner;
     }
 
-    public function setOrgOwner(?Organization $orgOwner): self
+   /* public function setOwner($object): self
+    {
+        $classname = get_class($object);
+        if($classname === User::class){
+            $this->userOwner = $object;
+        }else if($classname === Organization::class){
+            $this->orgOwner = $object;
+        }
+        $this->ownerType = $classname;
+
+        return $this;
+    }*/
+
+   /* public function setOrgOwner(?Organization $orgOwner): self
     {
         // unset the owning side of the relation if necessary
         if ($orgOwner === null && $this->orgOwner !== null) {
@@ -258,7 +292,7 @@ class Address
         $this->orgOwner = $orgOwner;
 
         return $this;
-    }
+    }*/
 
     public function getCity(): ?string
     {

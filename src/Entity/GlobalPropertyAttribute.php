@@ -125,4 +125,18 @@ class GlobalPropertyAttribute
 
         return $this;
     }
+
+    public function serialize() {
+        $data = [
+            "id"=>$this->id,
+            "scope"=>$this->scope,
+        ];
+
+        $dataValue=[];
+       foreach($this->propertyValue as $value){
+           array_push($dataValue, $value);
+       }
+       $data["propertyValue"] = $dataValue;
+        return $data;
+    }
 }

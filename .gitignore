@@ -1,17 +1,9 @@
-
 /.idea
 ###> symfony/framework-bundle ###
 /.env.local
 /var/
 /vendor/
 ###< symfony/framework-bundle ###
-
-###> symfony/phpunit-bridge ###
-.phpunit
-.phpunit.result.cache
-/phpunit.xml
-###< symfony/phpunit-bridge ###
-
 ###> lexik/jwt-authentication-bundle ###
 /config/jwt/*.pem
 ###< lexik/jwt-authentication-bundle ###
@@ -20,3 +12,7 @@
 config/secrets/prod/prod.decrypt.private.php
 
 /public/.htaccess
+###> symfony/phpunit-bridge ###
+.phpunit.result.cache
+/phpunit.xml
+###< symfony/phpunit-bridge ###
