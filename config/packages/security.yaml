@@ -30,7 +30,6 @@ security:
             pattern: ^/login
             user_checker: App\Services\Security\UserChecker
             stateless: true
-            anonymous: true
             json_login:
                 username_path: email
                 check_path: /login
@@ -40,7 +39,6 @@ security:
         refresh:
             pattern:  ^/token/refresh
             stateless: true
-            anonymous: true
 
         register:
                 pattern: ^/user/register
@@ -49,13 +47,14 @@ security:
         public:
                 #pattern: ^/file/allowed|(org|project|activity|activity/download|member|file/download|followActivity|project/team)/public
                 pattern: ^/(user|member|activity|project|org|file/allowed|activity/download|activity/allowed)/public
-                anonymous : true
 
         main:
             pattern: ^/
             user_checker: App\Services\Security\UserChecker
             stateless: true
-            jwt: ~
+            guard:
+                authenticators:
+                    - lexik_jwt_authentication.jwt_token_authenticator
 
 
             # activate different ways to authenticate
