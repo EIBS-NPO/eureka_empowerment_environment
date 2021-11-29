@@ -206,9 +206,9 @@ class ActivityController extends AbstractController
 
 
     /**
+     * @Route("/download", name="_download", methods="get")
      * @param Request $request
      * @return BinaryFileResponse|Response
-     * @Route("/download", name="_download", methods="get")
      */
     public function downloadFile(Request $request)
     {
@@ -216,12 +216,20 @@ class ActivityController extends AbstractController
             // recover all data's request
             $this->parameters->setData($request);
             //check if required params exist
-            $this->parameters->hasData(["id", "access"]);
+            $this->parameters->hasData(["id"]);
 
+            //force search access
             //check if admin access required
-            if($this->parameters->getData("access") === "admin"){
+            if($this->parameters->getData("admin")!== false){
+                //todo deprecated in Symfony 5.3 ?
                 $this->denyAccessUnlessGranted('ROLE_ADMIN');
+                $this->parameters->putData("admin", true);
+              //  $getParams["access"] = "search"; //for allowed admin to access
             }
+           /* if($this->parameters->getData("access") === "admin"){
+                //todo deprecated with Symfony 5.3 ?
+                $this->denyAccessUnlessGranted('ROLE_ADMIN');
+            }*/
 
             $activityFile = $this->activityHandler->getActivities(
                 $this->getUser(),
@@ -261,7 +269,7 @@ class ActivityController extends AbstractController
     /**
      * @param Request $request
      * @return BinaryFileResponse|Response
-     * @Route("/download/public", name="_download", methods="get")
+     * @Route("/download/public", name="public_download", methods="get")
      */
     public function downloadPublic(Request $request)
     {
