@@ -79,14 +79,14 @@ class OrgHandler {
                 if(isset($id)){
                     $dataResponse = $this->orgRepo->findAssignedById($user->getId(), $params['id']);
                 } else{
-                    $dataResponse = $this->orgRepo->findAssigned($user->getId());
+                    $dataResponse = $this->orgRepo->findAssigned($params['id']);
                 }
                 break;
             case "followed":
                 if(isset($id)){
                     $dataResponse = $this->orgRepo->findFollowedById($user->getId(), $params['id']);
                 } else{
-                    $dataResponse = $this->orgRepo->findFollowed($user->getId());
+                    $dataResponse = $this->orgRepo->findFollowed($params['id']);
                 }
                 break;
             case "owned":
