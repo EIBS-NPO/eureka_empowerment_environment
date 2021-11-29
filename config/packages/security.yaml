@@ -1,4 +1,6 @@
 security:
+    enable_authenticator_manager: true
+
     encoders:
         App\Entity\User:
             algorithm: auto
@@ -53,9 +55,7 @@ security:
             pattern: ^/
             user_checker: App\Services\Security\UserChecker
             stateless: true
-            guard:
-                authenticators:
-                    - lexik_jwt_authentication.jwt_token_authenticator
+            jwt: ~
 
 
             # activate different ways to authenticate
