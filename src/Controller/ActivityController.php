@@ -239,7 +239,7 @@ class ActivityController extends AbstractController
 
             $file = $this->activityHandler->loadFile(
                 $activityFile,
-                $this->parameters->getData("access"),
+                $this->parameters->getData("admin"),
                 $this->getUser()
             );
 

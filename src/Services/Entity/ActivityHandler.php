@@ -287,9 +287,9 @@ class ActivityHandler {
      * @param UserInterface|null $user
      * @return string
      */
-    public function loadFile(ActivityFile $activityFile, String $access, UserInterface $user = null): string
+    public function loadFile(ActivityFile $activityFile, String $adminAccess, UserInterface $user = null): string
     {
-        if (!$this->hasAccess($activityFile, $user) && $access !=="admin") {
+        if (!$this->hasAccess($activityFile, $user) && !$adminAccess ) {
             throw new UnauthorizedHttpException("unauthorized file access");
         }
 
