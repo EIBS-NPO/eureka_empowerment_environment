@@ -123,12 +123,12 @@ class ActivityController extends AbstractController
             $this->parameters->setData($request);
 
          $getParams = [];
-         $getParams["access"] = "search"; //force owned access
+         $getParams["access"] = "owned"; //force owned access
      //check if admin access required
          if($this->parameters->getData("admin")!== false){
              $this->denyAccessUnlessGranted('ROLE_ADMIN');
              $getParams["admin"] = true;
-         //    $getParams["access"] = "search"; //for allowed admin to access
+             $getParams["access"] = "search"; //for allowed admin to access
          }
 
     //check if required params exist
