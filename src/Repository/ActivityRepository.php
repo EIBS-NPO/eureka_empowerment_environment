@@ -42,8 +42,8 @@ class ActivityRepository extends ServiceEntityRepository
 
     public function findFollowedById($userId, $activityId){
         return $this->createQueryBuilder('a')
-            ->join('a.followings', 'f' )
-            ->andWhere('f.follower = :userId AND a.id = :activityId')
+            ->join('a.followers', 'f' )
+            ->andWhere('f.id = :userId AND a.id = :activityId')
             ->setParameter('userId', $userId)
             ->setParameter('activityId', $activityId)
             ->getQuery()

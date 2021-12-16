@@ -1,5 +1,6 @@
 /.idea
 ###> symfony/framework-bundle ###
+/.env
 /.env.local
 /var/
 /vendor/
@@ -11,6 +12,7 @@
 /src/uploads
 config/secrets/prod/prod.decrypt.private.php
 
+/public/.htaccess
 ###> symfony/phpunit-bridge ###
 .phpunit.result.cache
 /phpunit.xml

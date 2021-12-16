@@ -86,7 +86,6 @@ class UserRepository extends ServiceEntityRepository
         foreach($criterias as $key => $value){
 
             $orWhere = true;
-         //   $sufix = "";
             $setIdParam = false;
 
 //todo switch more efficient?
@@ -121,8 +120,8 @@ class UserRepository extends ServiceEntityRepository
                 $orWhere = false;
                 $prefix = "memberO.";
                 $setIdParam = true;
-               // $keylike = explode("_", $key)[1];
-                $keylike = "id";
+                $keylike = explode("_", $key)[1];
+              //  $keylike = "id";
             }
             else{
                 $prefix = "u.";

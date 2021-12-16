@@ -64,6 +64,7 @@ class ProjectRepository extends ServiceEntityRepository
     public function search($criterias){
         $qb = $this->createQueryBuilder('p');
 
+        //make potential Inner Join
         if(isset($criterias["creator_id"])
             || isset($criterias["creator_firstname"])
             || isset($criterias["creator_lastname"])
@@ -80,7 +81,19 @@ class ProjectRepository extends ServiceEntityRepository
             if(isset($criterias["follower_id"])) $qb ->join('flwing.follower', "flwer");
         }
 
+        //make potential condition
         foreach($criterias as $key => $value) {
+
+            if($value === "false") $value = false;
+            if($value === "true") $value = true;
+
+            $orWhere = true;
+            $setIdParam = false;
+
+            if(preg_match('(^id$)', $key)){
+                $setIdParam = true;
+            }
+
             if (preg_match('(^creator_id$|^creator_firstname$|^creator_lastname$|^creator_email$)', $key)) {
                 $prefix = "c.";
                 $keylike = explode("_", $key)[1];
@@ -88,9 +101,12 @@ class ProjectRepository extends ServiceEntityRepository
                 $prefix = "o.";
                 $keylike = explode("_", $key)[1];
             }else if (preg_match('(^followings_isAssigning$)', $key)) {
+                $orWhere = false;
                 $prefix = "flwing.";
                 $keylike = explode("_", $key)[1];
             }else if (preg_match('(^follower_id$)', $key)) {
+                $setIdParam = true;
+                $orWhere = false;
                 $prefix = "flwer.";
                 $keylike = explode("_", $key)[1];
             }else {
@@ -98,13 +114,15 @@ class ProjectRepository extends ServiceEntityRepository
                 $keylike = $key;
             }
 
-            $qb->orWhere($prefix.$keylike.' LIKE :'.$keylike)
-                ->setParameter($keylike, '%'.$value.'%');
+            $setIdParam ? $like = "="
+                :  $like = "LIKE";
+
+            $orWhere ? $qb->orWhere($prefix.$keylike.' '.$like.' :'.$keylike)
+                : $qb->andWhere($prefix.$keylike.' '.$like.' :'.$keylike);
+
+            $setIdParam ? $qb->setParameter($keylike, $value)
+                : $qb->setParameter($keylike, '%'.$value.'%');
         }
-/*
-        if(isset($params["assigned_followerId"])){
-            dd($qb->getDQL());
-        }*/
 
         return $qb->getQuery()->getResult();
     }

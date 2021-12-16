@@ -76,17 +76,17 @@ class OrgHandler {
 
         switch($params["access"]){
             case "assigned":
-                if(isset($id)){
-                    $dataResponse = $this->orgRepo->findAssignedById($user->getId(), $params['id']);
-                } else{
+                if(!isset($id)){
                     $dataResponse = $this->orgRepo->findAssigned($user->getId());
+                } else{
+                    $dataResponse = $this->orgRepo->findAssigned($params['id']);
                 }
                 break;
             case "followed":
-                if(isset($id)){
-                    $dataResponse = $this->orgRepo->findFollowedById($user->getId(), $params['id']);
-                } else{
+                if(!isset($id)){
                     $dataResponse = $this->orgRepo->findFollowed($user->getId());
+                } else{
+                    $dataResponse = $this->orgRepo->findFollowed($params['id']);
                 }
                 break;
             case "owned":

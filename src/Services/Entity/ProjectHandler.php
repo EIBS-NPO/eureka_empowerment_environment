@@ -374,7 +374,6 @@ class ProjectHandler
         return $project;
     }
 
-    //todo ajout assigned_id pour récup les projects assigné par user_id
     private function getSearchCriterias(Array $params): array
     {
         $criterias = [];
